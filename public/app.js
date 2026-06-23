@@ -1001,32 +1001,29 @@ function openDrawer(index) {
   const body = $('#drawerBody');
 
   let ctaHtml = '';
+  if (r.ctaLink) {
+    ctaHtml = `<dt>Nút CTA & Liên kết</dt><dd>${ctaPillHtml(r, true)} → <a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></dd>`;
+  } else {
+    ctaHtml = `<dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>`;
+  }
+
   let noteHtml = '';
   if (hasPost) {
-    const hasOldCta = r.parsed?.hasOldCta;
-    if (hasOldCta) {
-      ctaHtml = `
-        <dt>Nút CTA</dt><dd class="muted">Tự động giữ nguyên của bài gốc (đã có CTA)</dd>
-        ${r.ctaLink ? `<dt>Link CTA nháp</dt><dd class="muted">${esc(r.ctaLink)} (Bỏ qua vì giữ nguyên bài gốc)</dd>` : ''}
+    if (State.creativeMode === 'EXISTING_POST') {
+      noteHtml = `
+        <dt>Ghi chú tạo QC</dt>
+        <dd style="color: #2563eb; font-weight: 600;">
+          Dùng đúng bài viết gốc để tạo quảng cáo, không đăng bài mới công khai.
+        </dd>
       `;
-      noteHtml = `<dt>Ghi chú</dt><dd style="color: #ea580c; font-weight: 600;">Bài viết gốc đã có sẵn nút CTA. Tool sẽ giữ nguyên bài gốc không chỉnh sửa.</dd>`;
-    } else if (r.ctaLink && r.ctaLink.toString().trim()) {
-      ctaHtml = `
-        <dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>
-        <dt>Link CTA</dt><dd class="mono"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></dd>
-      `;
-      noteHtml = `<dt>Ghi chú</dt><dd style="color: #2563eb; font-weight: 600;">Bài gốc chưa có CTA. Tool sẽ tự động gắn nút CTA và link website đích.</dd>`;
     } else {
-      ctaHtml = `
-        <dt>Nút CTA</dt><dd class="muted">Không đổi (không có link CTA trong sheet)</dd>
+      noteHtml = `
+        <dt>Ghi chú tạo QC</dt>
+        <dd style="color: #16a34a; font-weight: 600;">
+          Dùng bài gốc để tạo dark post quảng cáo, không đăng bài mới công khai.
+        </dd>
       `;
-      noteHtml = `<dt>Ghi chú</dt><dd style="color: #64748b; font-weight: 600;">Bài viết gốc chưa có CTA và không có link CTA nào trong sheet. Tool sẽ dùng bài gốc làm ad creative giữ nguyên.</dd>`;
     }
-  } else {
-    ctaHtml = `
-      <dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>
-      ${r.ctaLink ? `<dt>Link CTA</dt><dd class="mono"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></dd>` : ''}
-    `;
   }
 
   body.innerHTML = `

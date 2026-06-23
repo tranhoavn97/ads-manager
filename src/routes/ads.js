@@ -343,24 +343,8 @@ router.post('/create', requireAuth, async (req, res) => {
       let creativePayload;
 
       if (hasPost) {
-        // Smart CTA logic:
-        // - Lấy trạng thái đã có CTA từ validate route
-        // - Nếu chưa được validate hoặc không rõ, tự fetch nhanh để xác định
-        let hasOldCta = row.parsed?.hasOldCta;
-        if (hasOldCta === undefined) {
-          try {
-            const ownerPageId = row.parsed.objectStoryId.split('_')[0];
-            const pagesData = await getPages(token);
-            const ownerPage = pagesData.find((p) => p.id === ownerPageId);
-            const postToken = ownerPage?.access_token || token;
-            const postInfo = await checkPostExists(postToken, row.parsed.objectStoryId);
-            hasOldCta = !!(postInfo && postInfo.call_to_action && postInfo.call_to_action.type && postInfo.call_to_action.type !== 'NO_BUTTON');
-          } catch {
-            hasOldCta = false;
-          }
-        }
-
-        const shouldAddCta = !hasOldCta && row.ctaLink && row.ctaLink.toString().trim();
+        const mode = creativeMode || 'NEW_CTA_CREATIVE';
+        const shouldAddCta = (mode !== 'EXISTING_POST') && row.ctaLink && row.ctaLink.toString().trim();
 
         if (shouldAddCta) {
           // BÀI GỐC CHƯA CÓ CTA -> BẮT BUỘC TẠO DARK POST (OBJECT_STORY_SPEC) ĐỂ GẮN CTA VÀ LIÊN KẾT
