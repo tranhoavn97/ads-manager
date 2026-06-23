@@ -387,7 +387,7 @@ function selectAccount(acc, card) {
 //  Bước 3: đọc file Excel/CSV
 // ============================================================
 const HEADER_KEYS = [
-  ['pageLink', ['link page', 'page', 'trang', 'link trang']],
+  ['pageLink', ['link page', 'link trang', 'trang fanpage', 'fanpage', 'page']],
   ['postLink', ['link bai viet', 'bai viet', 'reel', 'anh', 'post', 'link bai', 'bai/reel']],
   ['ctaLink', ['cta', 'website', 'link dich', 'url', 'link den']],
   ['campaignType', ['loai', 'muc tieu', 'objective', 'type']],
