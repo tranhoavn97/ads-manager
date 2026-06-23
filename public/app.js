@@ -499,14 +499,98 @@ function handleFile(file) {
 }
 
 // Kiểm tra nhanh phía client (chưa gọi Facebook)
+// ----- Tách Page ID / Post ID ngay phía trình duyệt (xem trước, không cần đăng nhập) -----
+const FB_HOSTS = new Set(['facebook.com', 'www.facebook.com', 'm.facebook.com',
+  'web.facebook.com', 'fb.com', 'www.fb.com', 'business.facebook.com', 'fb.watch']);
+
+function tryUrl(raw) {
+  let s = (raw ?? '').toString().trim();
+  if (!s) return null;
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  try { return new URL(s); } catch { return null; }
+}
+function isFbHost(url) {
+  return !!url && FB_HOSTS.has(url.hostname.toLowerCase());
+}
+
+// { id, slug, vanity, error }
+function clientParsePageId(input) {
+  const raw = (input ?? '').toString().trim();
+  if (!raw) return { id: null };
+  if (/^\d+$/.test(raw)) return { id: raw };
+  const url = tryUrl(raw);
+  if (!url || !isFbHost(url)) return { id: null, error: 'Link Page không phải domain Facebook hợp lệ' };
+  const pid = url.searchParams.get('id');
+  if (pid && /^\d+$/.test(pid)) return { id: pid };
+  const segs = url.pathname.split('/').filter(Boolean);
+  if (segs[0] === 'pages' && segs.length >= 3 && /^\d+$/.test(segs[segs.length - 1])) return { id: segs[segs.length - 1] };
+  const last = segs[segs.length - 1] || '';
+  const dash = last.match(/-(\d{6,})$/);
+  if (dash) return { id: dash[1] };
+  if (segs.length === 1 && /^\d+$/.test(segs[0])) return { id: segs[0] };
+  if (segs[0] === 'profile.php') return { id: null, error: 'Link profile thiếu id' };
+  if (segs[0]) return { id: null, slug: segs[0], vanity: true };
+  return { id: null };
+}
+
+// { postId, pageIdFromLink, opaque, error }
+function clientParsePostId(input) {
+  const raw = (input ?? '').toString().trim();
+  if (!raw) return { postId: null };
+  const comp = raw.match(/^(\d+)_(\d+)$/);
+  if (comp) return { postId: comp[2], pageIdFromLink: comp[1] };
+  if (/^\d+$/.test(raw)) return { postId: raw };
+  const url = tryUrl(raw);
+  if (!url || !isFbHost(url)) return { postId: null, error: 'Link bài viết không phải domain Facebook hợp lệ' };
+  const segs = url.pathname.split('/').filter(Boolean);
+  const qp = url.searchParams;
+  const numOr = (cand, pid) => {
+    if (/^\d+$/.test(cand)) return { postId: cand, pageIdFromLink: pid && /^\d+$/.test(pid) ? pid : null };
+    if (/^pfbid/i.test(cand)) return { postId: null, opaque: true, error: 'Link pfbid… không chứa ID số. Dùng ID dạng số hoặc {pageId}_{postId}.' };
+    return { postId: null, error: 'ID bài viết không hợp lệ' };
+  };
+  const story = qp.get('story_fbid'); if (story) return numOr(story, qp.get('id'));
+  const fbid = qp.get('fbid'); if (fbid) return numOr(fbid, qp.get('id'));
+  const v = qp.get('v'); if (v) return numOr(v, null);
+  for (const k of ['reel', 'reels']) { const i = segs.indexOf(k); if (i !== -1 && segs[i + 1]) return numOr(segs[i + 1], null); }
+  const pi = segs.indexOf('posts'); if (pi !== -1 && segs[pi + 1]) return numOr(segs[pi + 1], null);
+  const vi = segs.indexOf('videos'); if (vi !== -1 && segs[segs.length - 1]) return numOr(segs[segs.length - 1], null);
+  const lastNum = [...segs].reverse().find((s) => /^\d{5,}$/.test(s));
+  if (lastNum) return numOr(lastNum, null);
+  if (segs.some((s) => /^pfbid/i.test(s))) return { postId: null, opaque: true, error: 'Link pfbid… không chứa ID số. Dùng ID dạng số hoặc {pageId}_{postId}.' };
+  return { postId: null, error: 'Không nhận dạng được bài viết/reel/ảnh từ link' };
+}
+
+function clientParseRow(r) {
+  const parsed = { pageId: null, postId: null, objectStoryId: null, pageVanity: null };
+  const pg = clientParsePageId(r.pageLink);
+  parsed.pageId = pg.id || null;
+  if (pg.vanity) parsed.pageVanity = pg.slug;
+  if (pg.error) r.warnings.push(pg.error);
+
+  if (r.postLink && r.postLink.toString().trim()) {
+    const ps = clientParsePostId(r.postLink);
+    parsed.postId = ps.postId || null;
+    const owner = ps.pageIdFromLink || parsed.pageId;
+    if (owner && ps.postId) parsed.objectStoryId = owner + '_' + ps.postId;
+    if (ps.error) r.warnings.push(ps.error);
+  }
+  r.parsed = parsed;
+}
+
 function clientPreCheck() {
   const required = [['pageLink', 'link Page'], ['campaignName', 'tên chiến dịch'], ['adsetName', 'tên nhóm quảng cáo'],
     ['adName', 'tên quảng cáo'], ['campaignType', 'loại chiến dịch'], ['country', 'quốc gia'], ['budget', 'ngân sách']];
   State.rows.forEach((r) => {
     r.errors = [];
+    r.warnings = [];
+    clientParseRow(r); // tách Page ID / Post ID ngay để xem trước
     const missing = required.filter(([k]) => !r[k]).map(([, l]) => l);
     if (missing.length) { r.status = 'missing'; r.errors = missing.map((m) => 'Thiếu ' + m); }
     else r.status = 'pending';
+    if (r.parsed.pageVanity && !r.parsed.pageId) {
+      r.warnings.push(`Page "@${r.parsed.pageVanity}" là tên (vanity) — cần đăng nhập bằng tài khoản quản lý Page để lấy ID số. Hoặc thay bằng link/ID dạng số.`);
+    }
   });
 }
 
@@ -558,6 +642,12 @@ function renderTable() {
     const tr = document.createElement('tr');
     const pageId = r.parsed?.pageId;
     const objId = r.parsed?.objectStoryId || r.parsed?.postId;
+    const vanity = r.parsed?.pageVanity;
+    const pageCell = pageId
+      ? `<span class="cell-mono">${esc(pageId)}</span>`
+      : (vanity
+        ? `<span class="cell-mono empty" title="Tên vanity — cần đăng nhập để lấy ID số">@${esc(vanity)} · cần đăng nhập</span>`
+        : '<span class="cell-mono empty">chưa có</span>');
     const hasErr = r.errors?.length;
     tr.innerHTML = `
       <td><span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span></td>
@@ -565,7 +655,7 @@ function renderTable() {
       <td><div class="cell-strong">${esc(r.adsetName || '—')}</div><div class="cell-sub">${esc(r.adName || '')}</div></td>
       <td>${esc(r.campaignType || '—')}</td>
       <td>${ctaPillHtml(r)}</td>
-      <td><span class="cell-mono ${pageId ? '' : 'empty'}">${esc(pageId || 'chưa có')}</span></td>
+      <td>${pageCell}</td>
       <td><span class="cell-mono ${objId ? '' : 'empty'}">${esc(objId || 'chưa có')}</span></td>
       <td>${esc(r.country || '—')}</td>
       <td>${esc(r.budget || '—')}</td>
