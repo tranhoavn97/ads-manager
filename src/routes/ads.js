@@ -215,6 +215,9 @@ router.post('/create', requireAuth, async (req, res) => {
       if (budgetLevel === 'campaign') {
         campaignPayload[budgetField] = budgetMinor;
         campaignPayload.bid_strategy = 'LOWEST_COST_WITHOUT_CAP';
+      } else {
+        // Ngân sách ở cấp nhóm: Meta (API mới) bắt buộc khai báo trường này
+        campaignPayload.is_adset_budget_sharing_enabled = false;
       }
       const campaign = await createCampaign(token, adAccountId, campaignPayload);
       result.ids.campaignId = campaign.id;
