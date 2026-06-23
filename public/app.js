@@ -287,7 +287,157 @@ const History = {
 // ============================================================
 init();
 
+function renderLegalPage(path) {
+  let title = '';
+  let contentHtml = '';
+
+  if (path === '/privacy-policy') {
+    title = 'Chính sách quyền riêng tư';
+    contentHtml = `
+      <p>Ứng dụng Ads hỗ trợ người dùng quản lý Fanpage và tạo quảng cáo Facebook theo yêu cầu.</p>
+      <p>Ứng dụng có thể sử dụng Facebook Login để truy cập các quyền cần thiết như danh sách Trang, bài viết Trang và tài khoản quảng cáo.</p>
+      <p>Dữ liệu chỉ được sử dụng để vận hành chức năng mà người dùng yêu cầu.</p>
+      <p>Chúng tôi không bán, chia sẻ hoặc cho thuê dữ liệu cá nhân của người dùng cho bên thứ ba.</p>
+      <p>Người dùng có thể yêu cầu xóa dữ liệu bất kỳ lúc nào bằng cách liên hệ qua email: <a href="mailto:hoatranvn997@gmail.com">hoatranvn997@gmail.com</a>.</p>
+    `;
+  } else if (path === '/terms') {
+    title = 'Điều khoản sử dụng';
+    contentHtml = `
+      <p>Người dùng chịu trách nhiệm với nội dung, ngân sách và chiến dịch quảng cáo được tạo thông qua ứng dụng.</p>
+      <p>Ứng dụng chỉ là công cụ hỗ trợ thao tác với Meta Marketing API.</p>
+      <p>Người dùng cần đảm bảo có quyền hợp lệ với Fanpage, bài viết và tài khoản quảng cáo trước khi sử dụng.</p>
+      <p>Chúng tôi không chịu trách nhiệm với lỗi phát sinh từ chính sách quảng cáo của Meta, lỗi quyền truy cập hoặc dữ liệu nhập sai.</p>
+      <p>Liên hệ hỗ trợ: <a href="mailto:hoatranvn997@gmail.com">hoatranvn997@gmail.com</a>.</p>
+    `;
+  } else if (path === '/delete-data') {
+    title = 'Hướng dẫn xóa dữ liệu người dùng';
+    contentHtml = `
+      <p>Người dùng có thể yêu cầu xóa dữ liệu liên quan đến ứng dụng Ads bằng cách gửi email tới: <a href="mailto:hoatranvn997@gmail.com">hoatranvn997@gmail.com</a>.</p>
+      <p>Email yêu cầu nên bao gồm: tên Facebook, email liên hệ và nội dung yêu cầu xóa dữ liệu.</p>
+      <p>Sau khi nhận yêu cầu, chúng tôi sẽ xử lý trong thời gian sớm nhất.</p>
+      <p>Ngoài ra, người dùng có thể gỡ quyền ứng dụng trong Facebook tại: Cài đặt Facebook > Ứng dụng và trang web.</p>
+    `;
+  }
+
+  document.title = title + ' - Trình tạo quảng cáo Facebook';
+
+  // Inject CSS Styles for clean responsive design
+  const style = document.createElement('style');
+  style.textContent = `
+    body {
+      background-color: #f8fafc !important;
+      color: #1e293b !important;
+      font-family: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: flex !important;
+      justify-content: center !important;
+      align-items: flex-start !important;
+      min-height: 100vh !important;
+    }
+    .legal-container {
+      width: 100%;
+      max-width: 800px;
+      margin: 40px 20px;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      border: 1px solid #e2e8f0;
+      box-sizing: border-box;
+    }
+    .legal-card {
+      padding: 40px;
+    }
+    .legal-back-link {
+      display: inline-flex;
+      align-items: center;
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 24px;
+      transition: color 0.15s ease;
+      font-family: inherit;
+    }
+    .legal-back-link:hover {
+      color: #1d4ed8;
+    }
+    .legal-title {
+      font-size: 32px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-top: 0;
+      margin-bottom: 24px;
+      line-height: 1.25;
+      border-bottom: 2px solid #f1f5f9;
+      padding-bottom: 16px;
+    }
+    .legal-content {
+      font-size: 16px;
+      line-height: 1.8;
+      color: #334155;
+    }
+    .legal-content p {
+      margin-top: 0;
+      margin-bottom: 18px;
+    }
+    .legal-content a {
+      color: #2563eb;
+      text-decoration: none;
+      border-bottom: 1px dotted #2563eb;
+      font-weight: 500;
+    }
+    .legal-content a:hover {
+      color: #1d4ed8;
+      border-bottom-style: solid;
+    }
+    .legal-footer {
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid #f1f5f9;
+      font-size: 14px;
+      color: #64748b;
+      text-align: center;
+    }
+    @media (max-width: 640px) {
+      .legal-container {
+        margin: 20px 10px;
+      }
+      .legal-card {
+        padding: 24px 16px;
+      }
+      .legal-title {
+        font-size: 24px;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+
+  // Replace document body with legal template
+  document.body.className = 'legal-page';
+  document.body.innerHTML = `
+    <div class="legal-container">
+      <div class="legal-card">
+        <a href="/" class="legal-back-link">← Quay lại trang chủ</a>
+        <h1 class="legal-title">${title}</h1>
+        <div class="legal-content">
+          ${contentHtml}
+        </div>
+        <div class="legal-footer">
+          &copy; 2026 Ads App. Bản quyền được bảo lưu.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 async function init() {
+  const path = window.location.pathname;
+  if (['/privacy-policy', '/terms', '/delete-data'].includes(path)) {
+    renderLegalPage(path);
+    return;
+  }
+
   // Hiển thị lỗi đăng nhập nếu có trong URL
   const params = new URLSearchParams(location.search);
   if (params.get('auth_error')) {

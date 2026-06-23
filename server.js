@@ -33,6 +33,11 @@ app.use('/api/ads', adsRouter);
 // Frontend tĩnh (dùng khi chạy server thường; trên Vercel do static routes phục vụ)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Fallback cho các trang điều khoản để tránh lỗi 404 khi F5 ở local
+app.get(['/privacy-policy', '/terms', '/delete-data'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Bắt lỗi chung
 app.use((err, req, res, next) => {
   console.error(err);
