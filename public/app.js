@@ -697,17 +697,31 @@ function clientParsePageId(input) {
   const raw = (input ?? '').toString().trim();
   if (!raw) return { id: null };
   if (/^\d+$/.test(raw)) return { id: raw };
+
+  if (/^[a-zA-Z0-9.]{5,}$/.test(raw) && !raw.includes('/') && !raw.toLowerCase().includes('facebook') && !raw.toLowerCase().includes('fb.com')) {
+    return { id: null, slug: raw, vanity: true };
+  }
+
   const url = tryUrl(raw);
   if (!url || !isFbHost(url)) return { id: null, error: 'Link Page không phải domain Facebook hợp lệ' };
   const pid = url.searchParams.get('id');
   if (pid && /^\d+$/.test(pid)) return { id: pid };
   const segs = url.pathname.split('/').filter(Boolean);
+  
   if (segs[0] === 'pages' && segs.length >= 3 && /^\d+$/.test(segs[segs.length - 1])) return { id: segs[segs.length - 1] };
+  if (segs[0] === 'people' && segs.length >= 3 && /^\d+$/.test(segs[segs.length - 1])) return { id: segs[segs.length - 1] };
+  
   const last = segs[segs.length - 1] || '';
   const dash = last.match(/-(\d{6,})$/);
   if (dash) return { id: dash[1] };
   if (segs.length === 1 && /^\d+$/.test(segs[0])) return { id: segs[0] };
   if (segs[0] === 'profile.php') return { id: null, error: 'Link profile thiếu id' };
+  
+  const ignoredPaths = new Set(['groups', 'events', 'marketplace', 'gaming', 'watch', 'live', 'photos', 'videos', 'reels', 'reel', 'stories', 'ads']);
+  if (ignoredPaths.has(segs[0]?.toLowerCase())) {
+    return { id: null, error: `Link Page không hợp lệ (đường dẫn ${segs[0]} là của hệ thống)` };
+  }
+  
   if (segs[0]) return { id: null, slug: segs[0], vanity: true };
   return { id: null };
 }
@@ -761,16 +775,42 @@ function clientParseRow(r) {
   r.parsed = parsed;
 }
 
+function getStatusIconHtml(r) {
+  const hasErr = r.errors?.length || r.status === 'missing' || r.status === 'permission' || r.status === 'post_error' || r.status === 'create_error';
+  if (hasErr) {
+    const title = esc((r.errors || []).join('\n') || STATUS_LABEL[r.status] || 'Lỗi');
+    return `<div class="status-icon status-error" title="${title}">!</div>`;
+  }
+  if (r.status === 'valid' || r.status === 'created') {
+    const title = esc(STATUS_LABEL[r.status] || 'Hợp lệ');
+    return `<div class="status-icon status-success" title="${title}">✓</div>`;
+  }
+  const title = esc(STATUS_LABEL[r.status] || 'Chưa kiểm tra');
+  return `<div class="status-icon status-pending" title="${title}">?</div>`;
+}
+
 function clientPreCheck() {
-  const required = [['pageLink', 'link Page'], ['campaignName', 'tên chiến dịch'], ['adsetName', 'tên nhóm quảng cáo'],
+  const otherRequired = [['campaignName', 'tên chiến dịch'], ['adsetName', 'tên nhóm quảng cáo'],
     ['adName', 'tên quảng cáo'], ['campaignType', 'loại chiến dịch'], ['country', 'quốc gia'], ['budget', 'ngân sách']];
   State.rows.forEach((r) => {
     r.errors = [];
     r.warnings = [];
     clientParseRow(r); // tách Page ID / Post ID ngay để xem trước
-    const missing = required.filter(([k]) => !r[k]).map(([, l]) => l);
-    if (missing.length) { r.status = 'missing'; r.errors = missing.map((m) => 'Thiếu ' + m); }
-    else r.status = 'pending';
+    
+    const missing = [];
+    if (!r.postLink || r.postLink.toString().trim() === '') {
+      if (!r.pageLink) missing.push('link Page');
+    }
+    otherRequired.forEach(([k, l]) => {
+      if (!r[k]) missing.push(l);
+    });
+
+    if (missing.length) {
+      r.status = 'missing';
+      r.errors = missing.map((m) => 'Thiếu ' + m);
+    } else {
+      r.status = 'pending';
+    }
 
     // Cảnh báo nếu nhập CTA ở chế độ EXISTING_POST
     const hasPost = !!(r.postLink && r.postLink.toString().trim());
@@ -837,21 +877,23 @@ function renderTable() {
     
     if (State.editingRowIndex === r.index) {
       tr.innerHTML = `
-        <td><span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span></td>
+        <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
         <td><input type="text" class="input-inline ad-account-input" value="${esc(r.adAccountId || '')}" placeholder="${esc(State.selectedAccount?.id || '')}"></td>
         <td><input type="text" class="input-inline campaign-name-input" value="${esc(r.campaignName || '')}"></td>
         <td><input type="text" class="input-inline adset-name-input" value="${esc(r.adsetName || '')}"></td>
         <td>
           <div class="budget-edit-group">
             <input type="text" class="input-inline budget-val-input" value="${esc(r.budget || '')}">
-            <select class="select-inline budget-level-input">
-              <option value="adset" ${r.budgetLevel === 'adset' ? 'selected' : ''}>ABO (Nhóm)</option>
-              <option value="campaign" ${r.budgetLevel === 'campaign' ? 'selected' : ''}>CBO (Chiến dịch)</option>
-            </select>
-            <select class="select-inline budget-mode-input">
-              <option value="daily" ${r.budgetMode === 'daily' ? 'selected' : ''}>Hàng ngày</option>
-              <option value="lifetime" ${r.budgetMode === 'lifetime' ? 'selected' : ''}>Trọn đời</option>
-            </select>
+            <div class="budget-options-inline">
+              <select class="select-inline budget-level-input">
+                <option value="adset" ${r.budgetLevel === 'adset' ? 'selected' : ''}>ABO (Nhóm)</option>
+                <option value="campaign" ${r.budgetLevel === 'campaign' ? 'selected' : ''}>CBO (Chiến dịch)</option>
+              </select>
+              <select class="select-inline budget-mode-input">
+                <option value="daily" ${r.budgetMode === 'daily' ? 'selected' : ''}>Hàng ngày</option>
+                <option value="lifetime" ${r.budgetMode === 'lifetime' ? 'selected' : ''}>Trọn đời</option>
+              </select>
+            </div>
           </div>
         </td>
         <td><input type="text" class="input-inline start-date-input" value="${esc(r.startDate || '')}" placeholder="dd/mm/yyyy"></td>
@@ -905,7 +947,7 @@ function renderTable() {
       
     } else {
       tr.innerHTML = `
-        <td><span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span></td>
+        <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
         <td><span class="cell-mono">${esc(r.adAccountId || State.selectedAccount?.id || '—')}</span></td>
         <td><div class="cell-strong">${esc(r.campaignName || '—')}</div></td>
         <td><div class="cell-strong">${esc(r.adsetName || '—')}</div></td>
@@ -960,20 +1002,25 @@ function openDrawer(index) {
 
   let ctaHtml = '';
   let noteHtml = '';
-
   if (hasPost) {
-    if (State.creativeMode === 'EXISTING_POST') {
+    const hasOldCta = r.parsed?.hasOldCta;
+    if (hasOldCta) {
       ctaHtml = `
-        <dt>Nút CTA</dt><dd class="muted">Khóa (giữ nguyên của bài gốc)</dd>
-        <dt>Link CTA</dt><dd class="muted">Khóa (giữ nguyên của bài gốc)</dd>
+        <dt>Nút CTA</dt><dd class="muted">Tự động giữ nguyên của bài gốc (đã có CTA)</dd>
+        ${r.ctaLink ? `<dt>Link CTA nháp</dt><dd class="muted">${esc(r.ctaLink)} (Bỏ qua vì giữ nguyên bài gốc)</dd>` : ''}
       `;
-      noteHtml = `<dt>Ghi chú</dt><dd style="color: #ea580c; font-weight: 600;">Sử dụng đúng bài viết có sẵn. Tool sẽ không tạo bài viết mới, không chèn link và giữ nguyên CTA bài gốc.</dd>`;
-    } else {
+      noteHtml = `<dt>Ghi chú</dt><dd style="color: #ea580c; font-weight: 600;">Bài viết gốc đã có sẵn nút CTA. Tool sẽ giữ nguyên bài gốc không chỉnh sửa.</dd>`;
+    } else if (r.ctaLink && r.ctaLink.toString().trim()) {
       ctaHtml = `
         <dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>
-        ${r.ctaLink ? `<dt>Link CTA</dt><dd class="mono"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></dd>` : ''}
+        <dt>Link CTA</dt><dd class="mono"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></dd>
       `;
-      noteHtml = `<dt>Ghi chú</dt><dd style="color: #2563eb; font-weight: 600;">Dùng bài gốc để tạo dark post quảng cáo, không đăng bài mới công khai.</dd>`;
+      noteHtml = `<dt>Ghi chú</dt><dd style="color: #2563eb; font-weight: 600;">Bài gốc chưa có CTA. Tool sẽ tự động gắn nút CTA và link website đích.</dd>`;
+    } else {
+      ctaHtml = `
+        <dt>Nút CTA</dt><dd class="muted">Không đổi (không có link CTA trong sheet)</dd>
+      `;
+      noteHtml = `<dt>Ghi chú</dt><dd style="color: #64748b; font-weight: 600;">Bài viết gốc chưa có CTA và không có link CTA nào trong sheet. Tool sẽ dùng bài gốc làm ad creative giữ nguyên.</dd>`;
     }
   } else {
     ctaHtml = `

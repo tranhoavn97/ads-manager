@@ -41,6 +41,11 @@ export function parsePageId(input) {
     return { id: raw, slug: null, needsResolve: false, error: null };
   }
 
+  // Nếu chỉ là vanity name / username trực tiếp (không phải URL)
+  if (/^[a-zA-Z0-9.]{5,}$/.test(raw) && !raw.includes('/') && !raw.toLowerCase().includes('facebook') && !raw.toLowerCase().includes('fb.com')) {
+    return { id: null, slug: raw, needsResolve: true, error: null };
+  }
+
   const url = tryParseUrl(raw);
   if (!url || !isFacebookHost(url)) {
     return { id: null, slug: null, needsResolve: false, error: 'Link Page không phải domain Facebook hợp lệ' };
@@ -56,6 +61,11 @@ export function parsePageId(input) {
 
   // /pages/<name>/<id>
   if (segments[0] === 'pages' && segments.length >= 3 && /^\d+$/.test(segments[segments.length - 1])) {
+    return { id: segments[segments.length - 1], slug: null, needsResolve: false, error: null };
+  }
+
+  // /people/<name>/<id>
+  if (segments[0] === 'people' && segments.length >= 3 && /^\d+$/.test(segments[segments.length - 1])) {
     return { id: segments[segments.length - 1], slug: null, needsResolve: false, error: null };
   }
 
@@ -76,6 +86,12 @@ export function parsePageId(input) {
   // /profile.php không có id -> không xác định
   if (segments[0] === 'profile.php') {
     return { id: null, slug: null, needsResolve: false, error: 'Không tìm thấy id trong link profile' };
+  }
+
+  // Các path hệ thống của FB không phải page
+  const ignoredPaths = new Set(['groups', 'events', 'marketplace', 'gaming', 'watch', 'live', 'photos', 'videos', 'reels', 'reel', 'stories', 'ads']);
+  if (ignoredPaths.has(segments[0]?.toLowerCase())) {
+    return { id: null, slug: null, needsResolve: false, error: `Link Page không hợp lệ (đường dẫn ${segments[0]} là của hệ thống)` };
   }
 
   // Vanity name -> cần resolve qua Graph API

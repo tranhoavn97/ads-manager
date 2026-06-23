@@ -218,7 +218,37 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--surface-2)
 .cell-mono.empty { color: var(--st-missing); }
 .cell-strong { font-weight: 600; }
 .cell-sub { color: var(--muted); font-size: 12.5px; }
-.col-status { width: 132px; }
+.col-status { width: 80px; text-align: center; }
+
+/* Status circle icons */
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 1;
+  user-select: none;
+  margin: 0 auto;
+}
+.status-icon.status-error {
+  border: 1.5px solid #ef4444;
+  color: #ef4444;
+  background-color: #fee2e2;
+}
+.status-icon.status-success {
+  border: 1.5px solid #22c55e;
+  color: #22c55e;
+  background-color: #f0fdf4;
+}
+.status-icon.status-pending {
+  border: 1.5px solid #94a3b8;
+  color: #94a3b8;
+  background-color: #f8fafc;
+}
 
 .badge {
   display: inline-flex; align-items: center; gap: 6px;
