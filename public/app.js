@@ -862,6 +862,7 @@ function openDrawer(index) {
   body.innerHTML = `
     <div class="section-label">Dữ liệu</div>
     <dl class="dl">
+      ${hasPost ? `<dt>Chế độ</dt><dd>Sử dụng bài viết có sẵn</dd>` : ''}
       <dt>Chiến dịch</dt><dd>${esc(r.campaignName || '—')}</dd>
       <dt>Nhóm QC</dt><dd>${esc(r.adsetName || '—')}</dd>
       <dt>Quảng cáo</dt><dd>${esc(r.adName || '—')}</dd>
@@ -871,8 +872,12 @@ function openDrawer(index) {
       <dt>Quốc gia</dt><dd>${esc(r.country || '—')}</dd>
       <dt>Ngân sách</dt><dd>${esc(r.budget || '—')} · ${budgetModeLabel(r)} · ${budgetLevelLabel(r)}</dd>
       <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
-      ${hasPost ? `<dt>Bài viết/Reel dùng</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>` : `<dt>Object ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>`}
-      ${isTraffic && hasPost && r.parsed?.hasOldCta ? `<dt>Lưu ý</dt><dd style="color: #ea580c; font-weight: 600;">CTA cũ sẽ được thay bằng link trong sheet</dd>` : ''}
+      ${hasPost ? `
+        <dt>Object Story ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
+        <dt>Ghi chú</dt><dd style="color: #2563eb; font-weight: 600;">Tool sẽ không tạo bài viết mới và không chèn link vào nội dung post.</dd>
+      ` : `
+        <dt>Object ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
+      `}
       ${ids.campaignId ? `<dt>Campaign</dt><dd class="mono">${esc(ids.campaignId)}</dd>` : ''}
       ${ids.adsetId ? `<dt>Ad Set</dt><dd class="mono">${esc(ids.adsetId)}</dd>` : ''}
       ${ids.adId ? `<dt>Ad</dt><dd class="mono">${esc(ids.adId)}</dd>` : ''}
