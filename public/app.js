@@ -16,12 +16,21 @@ const State = {
 
 const STATUS_LABEL = {
   pending: 'Chưa kiểm tra',
-  valid: 'Hợp lệ',
-  missing: 'Thiếu dữ liệu',
-  permission: 'Lỗi quyền',
-  post_error: 'Lỗi post',
-  created: 'Đã tạo thành công',
-  create_error: 'Lỗi khi tạo',
+  verifying: 'Đang xác minh Post ID',
+  verified: 'Đã xác minh bài viết',
+  checking_cta: 'Đang kiểm tra CTA',
+  has_cta: 'Bài đã có CTA',
+  no_cta: 'Bài chưa có CTA',
+  updating_cta: 'Đang cập nhật CTA',
+  updated_cta: 'Đã cập nhật CTA',
+  creating_ad: 'Đang tạo quảng cáo',
+  created: 'Thành công',
+  need_verify: 'Cần kiểm tra lại',
+  missing: 'Lỗi',
+  permission: 'Lỗi',
+  post_error: 'Lỗi',
+  create_error: 'Lỗi',
+  error: 'Lỗi'
 };
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -793,12 +802,19 @@ function clientParseRow(r) {
 }
 
 function getStatusIconHtml(r) {
-  const hasErr = r.errors?.length || r.status === 'missing' || r.status === 'permission' || r.status === 'post_error' || r.status === 'create_error';
-  if (hasErr) {
+  const isErr = r.status === 'error' || r.status === 'missing' || r.status === 'permission' || r.status === 'post_error' || r.status === 'create_error' || r.status === 'need_verify' || (r.errors && r.errors.length > 0);
+  if (isErr) {
     const title = esc((r.errors || []).join('\n') || STATUS_LABEL[r.status] || 'Lỗi');
     return `<div class="status-icon status-error" title="${title}">!</div>`;
   }
-  if (r.status === 'valid' || r.status === 'created') {
+  if (r.status === 'created') {
+    return `<div class="status-icon status-success" title="Thành công">✓</div>`;
+  }
+  if (['verifying', 'checking_cta', 'updating_cta', 'creating_ad'].includes(r.status)) {
+    const title = esc(STATUS_LABEL[r.status] || 'Đang xử lý');
+    return `<div class="status-icon status-active" title="${title}" style="border: 1.5px solid #eab308; color: #eab308; background-color: #fef9c3; animation: pulse 1.5s infinite; text-align: center; vertical-align: middle;">...</div>`;
+  }
+  if (['verified', 'has_cta', 'updated_cta', 'valid'].includes(r.status)) {
     const title = esc(STATUS_LABEL[r.status] || 'Hợp lệ');
     return `<div class="status-icon status-success" title="${title}">✓</div>`;
   }
@@ -998,16 +1014,22 @@ function renderTable() {
         </td>`;
         
       tr.querySelector('.save-btn').addEventListener('click', () => {
+        const newPostLink = tr.querySelector('.post-link-input').value.trim();
+        const newCta = tr.querySelector('.cta-input').value;
+        const newCtaLink = tr.querySelector('.cta-link-input').value.trim();
+        
+        const isModified = newPostLink !== r.postLink || newCta !== r.cta || newCtaLink !== r.ctaLink;
+
         r.pageLink = tr.querySelector('.page-link-input').value.trim();
-        r.postLink = tr.querySelector('.post-link-input').value.trim();
+        r.postLink = newPostLink;
         r.contentMode = tr.querySelector('.content-mode-input').value;
         r.ctaHandling = tr.querySelector('.cta-handling-input').value;
         r.campaignName = tr.querySelector('.campaign-name-input').value.trim();
         r.campaignType = tr.querySelector('.campaign-type-input').value;
         r.adsetName = tr.querySelector('.adset-name-input').value.trim();
         r.adName = tr.querySelector('.ad-name-input').value.trim();
-        r.cta = tr.querySelector('.cta-input').value;
-        r.ctaLink = tr.querySelector('.cta-link-input').value.trim();
+        r.cta = newCta;
+        r.ctaLink = newCtaLink;
         r.budget = tr.querySelector('.budget-val-input').value.trim();
         r.budgetLevel = tr.querySelector('.budget-level-input').value;
         r.budgetMode = tr.querySelector('.budget-mode-input').value;
@@ -1020,10 +1042,20 @@ function renderTable() {
         r.notes = tr.querySelector('.notes-input').value.trim();
         
         State.editingRowIndex = null;
-        clientPreCheck();
-        buildFilters();
-        renderTable();
-        toast('Đã lưu thay đổi', 'ok');
+        
+        if (isModified) {
+          r.status = 'need_verify';
+          r.errors = ['Cần kiểm tra lại bài viết / CTA với Facebook'];
+          r.parsed.verifiedWithGraph = false;
+          buildFilters();
+          renderTable();
+          toast('Đã sửa, vui lòng kiểm tra lại với Facebook', 'warn');
+        } else {
+          clientPreCheck();
+          buildFilters();
+          renderTable();
+          toast('Đã lưu thay đổi', 'ok');
+        }
       });
       
       tr.querySelector('.cancel-btn').addEventListener('click', () => {
@@ -1103,7 +1135,7 @@ function renderTable() {
 }
 
 function updateReady() {
-  const ready = State.rows.filter((r) => r.status === 'valid').length;
+  const ready = State.rows.filter((r) => ['verified', 'has_cta', 'updated_cta', 'valid'].includes(r.status)).length;
   $('#readyCount').textContent = `${ready} dòng sẵn sàng`;
   $('#createBtn').disabled = ready === 0;
 }
@@ -1228,38 +1260,66 @@ function closeDrawer() {
 //  Kiểm tra với Facebook (preview)
 // ============================================================
 async function validateRows() {
-  if (!State.rows.length) return toast('Chưa có dữ liệu', 'err');
+  const targetRows = State.rows.filter((r) => r.status !== 'missing');
+  if (!targetRows.length) return toast('Chưa có dòng hợp lệ nào để kiểm tra', 'err');
+  
   const btn = $('#validateBtn');
   btn.disabled = true; btn.textContent = 'Đang kiểm tra…';
-  Logger.info(`Đang kiểm tra ${State.rows.length} dòng với Facebook…`);
+  Logger.info(`Đang kiểm tra ${targetRows.length} dòng với Facebook…`);
+
   try {
-    const payload = { rows: State.rows.map(stripForSend), creativeMode: State.creativeMode };
-    const { results } = await api('/api/ads/validate', { method: 'POST', body: payload });
-    results.forEach((res) => {
-      const r = State.rows.find((x) => x.index === res.index);
-      if (!r) return;
-      r.status = res.status;
-      r.errors = res.errors;
-      r.warnings = res.warnings;
-      r.parsed = res.parsed;
-      r.normalized = res.normalized;
-    });
-    results.forEach((res) => {
-      if (res.status === 'valid') {
-        if (res.warnings?.length) Logger.warn(`Dòng ${res.index + 1}: hợp lệ — ${res.warnings[0]}`);
-        return;
+    const chunks = [];
+    const concurrency = 5;
+    for (let i = 0; i < targetRows.length; i += concurrency) {
+      chunks.push(targetRows.slice(i, i + concurrency));
+    }
+
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(async (r) => {
+        r.status = 'verifying';
+        r.errors = [];
+        r.warnings = [];
+        renderTable();
+
+        try {
+          const payload = { rows: [stripForSend(r)], creativeMode: State.creativeMode };
+          const { results } = await api('/api/ads/validate', { method: 'POST', body: payload });
+          const res = results?.[0];
+          if (res) {
+            r.status = res.status === 'valid' ? 'verified' : res.status;
+            r.errors = res.errors || [];
+            r.warnings = res.warnings || [];
+            r.parsed = res.parsed || {};
+            r.normalized = res.normalized || {};
+          } else {
+            r.status = 'error';
+            r.errors = ['Không có kết quả xác minh từ API'];
+          }
+        } catch (err) {
+          r.status = 'error';
+          r.errors = [err.message || 'Lỗi kết nối API'];
+        }
+        renderTable();
+      }));
+    }
+
+    targetRows.forEach((r) => {
+      if (r.status === 'verified') {
+        if (r.warnings?.length) Logger.warn(`Dòng ${r.index + 1}: hợp lệ — ${r.warnings[0]}`);
+      } else {
+        Logger.add(`Dòng ${r.index + 1}: ${STATUS_LABEL[r.status] || r.status}${r.errors?.[0] ? ' — ' + r.errors[0] : ''}`,
+          r.status === 'missing' ? 'warn' : 'err');
       }
-      Logger.add(`Dòng ${res.index + 1}: ${STATUS_LABEL[res.status]}${res.errors?.[0] ? ' — ' + res.errors[0] : ''}`,
-        res.status === 'missing' ? 'warn' : 'err');
     });
-    renderTable();
-    const ok = State.rows.filter((r) => r.status === 'valid').length;
+
+    const ok = State.rows.filter((r) => r.status === 'verified').length;
     Logger.add(`Kiểm tra xong: ${ok}/${State.rows.length} dòng hợp lệ.`, ok ? 'ok' : 'warn');
     toast(`Kiểm tra xong: ${ok}/${State.rows.length} dòng hợp lệ`, ok ? 'ok' : 'err');
   } catch (err) {
     toast(err.message, 'err');
   } finally {
     btn.disabled = false; btn.textContent = 'Kiểm tra với Facebook';
+    renderTable();
   }
 }
 
@@ -1282,7 +1342,7 @@ function stripForSend(r) {
 //  Tạo hàng loạt
 // ============================================================
 function confirmCreate() {
-  const ready = State.rows.filter((r) => r.status === 'valid');
+  const ready = State.rows.filter((r) => ['verified', 'has_cta', 'updated_cta', 'valid'].includes(r.status));
   if (!ready.length) return;
   const draft = $('#draftMode').checked;
   const acc = State.selectedAccount;
@@ -1311,55 +1371,106 @@ async function runCreate(rows, draft) {
   const btn = $('#createBtn');
   btn.disabled = true; btn.textContent = 'Đang tạo…';
   Logger.info(`Bắt đầu tạo ${rows.length} quảng cáo · chế độ ${draft ? 'NHÁP (PAUSED)' : 'CHẠY'}.`);
-  try {
-    const payload = {
-      adAccountId: State.selectedAccount.id,
-      currency: State.selectedAccount.currency,
-      draftMode: draft,
-      creativeMode: State.creativeMode,
-      rows: rows.map(stripForSend),
-    };
-    const { results } = await api('/api/ads/create', { method: 'POST', body: payload });
-    let ok = 0, fail = 0;
-    results.forEach((res) => {
-      const r = State.rows.find((x) => x.index === res.index);
-      if (r) {
-        r.status = res.status;
-        r.errors = res.errors?.length ? res.errors : r.errors;
-        r.ids = res.ids;
+
+  const resultsForModal = [];
+  let ok = 0, fail = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    
+    try {
+      // BƯỚC 1: Kiểm tra CTA hiện tại của bài viết gốc
+      r.status = 'checking_cta';
+      r.errors = [];
+      r.warnings = [];
+      renderTable();
+
+      const ctaCheck = await api('/api/ads/check-cta', {
+        method: 'POST',
+        body: { row: stripForSend(r) }
+      });
+
+      if (ctaCheck.hasCta) {
+        r.status = 'has_cta';
+      } else {
+        r.status = 'no_cta';
       }
+      renderTable();
+
+      // BƯỚC 2: Cập nhật CTA cho bài viết gốc nếu chưa có và xử lý CTA = Tự động (AUTO)
+      const ctaHand = r.ctaHandling || 'Tự động';
+      const isAuto = ctaHand === 'Tự động' || ctaHand === 'AUTO';
+      if (r.status === 'no_cta' && isAuto) {
+        r.status = 'updating_cta';
+        renderTable();
+
+        await api('/api/ads/update-cta', {
+          method: 'POST',
+          body: { row: stripForSend(r) }
+        });
+
+        r.status = 'updated_cta';
+        renderTable();
+      }
+
+      // BƯỚC 3: Tạo quảng cáo bằng bài gốc & xác thực creative
+      r.status = 'creating_ad';
+      renderTable();
+
+      const createRes = await api('/api/ads/create', {
+        method: 'POST',
+        body: {
+          row: stripForSend(r),
+          adAccountId: State.selectedAccount.id,
+          currency: State.selectedAccount.currency,
+          draftMode: draft
+        }
+      });
+
+      const res = createRes.result;
+      r.status = res.status;
+      r.errors = res.errors || [];
+      r.ids = res.ids || {};
+
       if (res.status === 'created') {
         ok++;
-        Logger.ok(`✓ Dòng ${res.index + 1}: đã tạo (campaign ${res.ids?.campaignId || '—'}${res.ids?.adId ? ' · ad ' + res.ids.adId : ''}).`);
+        Logger.ok(`✓ Dòng ${r.index + 1}: đã tạo thành công (campaign ${res.ids?.campaignId || '—'}${res.ids?.adId ? ' · ad ' + res.ids.adId : ''}).`);
       } else {
         fail++;
-        Logger.err(`✗ Dòng ${res.index + 1}: ${res.errors?.[0] || 'lỗi không xác định'}`);
+        Logger.err(`✗ Dòng ${r.index + 1}: ${res.errors?.[0] || 'lỗi không xác định'}`);
       }
-      // Luôn lưu lịch sử camp (gồm cả camp lỗi)
-      History.add({
-        ts: Date.now(),
-        campaignName: r?.campaignName || '—',
-        adsetName: r?.adsetName || '',
-        adName: r?.adName || '',
-        type: r?.campaignType || '',
-        cta: ctaForRow(r || {})?.code || '',
-        account: State.selectedAccount?.name || '',
-        draft,
-        status: res.status,
-        ids: res.ids || {},
-        error: res.errors?.[0] || '',
-      });
+
+      resultsForModal.push({ index: r.index, status: res.status, errors: res.errors, ids: res.ids });
+    } catch (err) {
+      fail++;
+      r.status = 'error';
+      r.errors = [err.message || 'Lỗi không xác định trong quá trình tạo'];
+      Logger.err(`✗ Dòng ${r.index + 1}: ${r.errors[0]}`);
+      resultsForModal.push({ index: r.index, status: 'error', errors: r.errors, ids: {} });
+    }
+
+    // Luôn lưu lịch sử camp (gồm cả camp lỗi)
+    History.add({
+      ts: Date.now(),
+      campaignName: r.campaignName || '—',
+      adsetName: r.adsetName || '',
+      adName: r.adName || '',
+      type: r.campaignType || '',
+      cta: ctaForRow(r || {})?.code || '',
+      account: State.selectedAccount?.name || '',
+      draft,
+      status: r.status,
+      ids: r.ids || {},
+      error: r.errors?.[0] || '',
     });
-    Logger.add(`Kết quả tạo: ${ok} thành công, ${fail} lỗi.`, fail ? 'warn' : 'ok');
+
     renderTable();
-    setStep(4);
-    showResults(results, draft);
-  } catch (err) {
-    Logger.err(`Tạo hàng loạt thất bại: ${err.message}`);
-    toast(err.message, 'err');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Tạo hàng loạt';
   }
+
+  Logger.add(`Kết quả tạo: ${ok} thành công, ${fail} lỗi.`, fail ? 'warn' : 'ok');
+  setStep(4);
+  showResults(resultsForModal, draft);
+  btn.disabled = false; btn.textContent = 'Tạo hàng loạt';
 }
 
 function showResults(results, draft) {

@@ -339,3 +339,25 @@ export async function verifyPostDetails(token, objectStoryId) {
     params: { fields: 'id,permalink_url,from,created_time' }
   });
 }
+
+/**
+ * Cập nhật nút kêu gọi hành động (CTA) cho bài đăng hiện có trên trang
+ */
+export async function updatePostCta(token, objectStoryId, ctaType, ctaLink) {
+  const payload = {
+    call_to_action: {
+      type: ctaType
+    }
+  };
+  if (ctaLink) {
+    payload.call_to_action.value = { link: ctaLink };
+  }
+  return call('POST', objectStoryId, { token, data: payload });
+}
+
+/**
+ * Đọc thông tin ad creative từ Meta
+ */
+export async function getAdCreative(token, creativeId, fields = 'id,object_story_id,effective_object_story_id,call_to_action') {
+  return call('GET', creativeId, { token, params: { fields } });
+}
