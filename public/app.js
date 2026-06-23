@@ -10,6 +10,7 @@ const State = {
   rows: [],          // dữ liệu từ file (đã chuẩn hoá khoá)
   filter: 'all',
   search: '',
+  creativeMode: 'NEW_CTA_CREATIVE',
 };
 
 const STATUS_LABEL = {
@@ -479,6 +480,12 @@ function bindEvents() {
   $('#drawerClose').addEventListener('click', closeDrawer);
   $('#drawerScrim').addEventListener('click', closeDrawer);
 
+  $('#creativeMode')?.addEventListener('change', (e) => {
+    State.creativeMode = e.target.value;
+    clientPreCheck();
+    renderTable();
+  });
+
   // Đăng nhập bằng access token
   $('#tokenToggle')?.addEventListener('click', () => {
     const box = $('#tokenBox');
@@ -762,6 +769,16 @@ function clientPreCheck() {
     const missing = required.filter(([k]) => !r[k]).map(([, l]) => l);
     if (missing.length) { r.status = 'missing'; r.errors = missing.map((m) => 'Thiếu ' + m); }
     else r.status = 'pending';
+
+    // Cảnh báo nếu nhập CTA ở chế độ EXISTING_POST
+    const hasPost = !!(r.postLink && r.postLink.toString().trim());
+    if (hasPost && State.creativeMode === 'EXISTING_POST') {
+      const hasCtaInput = (r.ctaLink && r.ctaLink.toString().trim()) || (r.cta && r.cta.toString().trim());
+      if (hasCtaInput) {
+        r.warnings.push('Không thể ghi đè CTA mới khi sử dụng đúng bài viết có sẵn. Tool sẽ giữ nguyên CTA của bài gốc.');
+      }
+    }
+
     if (r.parsed.pageVanity && !r.parsed.pageId) {
       r.warnings.push(`Page "@${r.parsed.pageVanity}" là tên (vanity) — cần đăng nhập bằng tài khoản quản lý Page để lấy ID số. Hoặc thay bằng link/ID dạng số.`);
     }
@@ -856,25 +873,48 @@ function openDrawer(index) {
   if (!r) return;
   $('#drawerTitle').textContent = `Dòng ${index + 1} · ${STATUS_LABEL[r.status]}`;
   const ids = r.ids || {};
-  const isTraffic = resolveTypeId(r?.campaignType) === 'traffic';
   const hasPost = !!(r?.postLink && r?.postLink.toString().trim());
   const body = $('#drawerBody');
+
+  let ctaHtml = '';
+  let noteHtml = '';
+
+  if (hasPost) {
+    if (State.creativeMode === 'EXISTING_POST') {
+      ctaHtml = `
+        <dt>Nút CTA</dt><dd class="muted">Khóa (giữ nguyên của bài gốc)</dd>
+        <dt>Link CTA</dt><dd class="muted">Khóa (giữ nguyên của bài gốc)</dd>
+      `;
+      noteHtml = `<dt>Ghi chú</dt><dd style="color: #ea580c; font-weight: 600;">Sử dụng đúng bài viết có sẵn. Tool sẽ không tạo bài viết mới, không chèn link và giữ nguyên CTA bài gốc.</dd>`;
+    } else {
+      ctaHtml = `
+        <dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>
+        ${r.ctaLink ? `<dt>Link CTA</dt><dd class="mono"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></dd>` : ''}
+      `;
+      noteHtml = `<dt>Ghi chú</dt><dd style="color: #2563eb; font-weight: 600;">Dùng bài gốc để tạo dark post quảng cáo, không đăng bài mới công khai.</dd>`;
+    }
+  } else {
+    ctaHtml = `
+      <dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>
+      ${r.ctaLink ? `<dt>Link CTA</dt><dd class="mono"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></dd>` : ''}
+    `;
+  }
+
   body.innerHTML = `
     <div class="section-label">Dữ liệu</div>
     <dl class="dl">
-      ${hasPost ? `<dt>Chế độ</dt><dd>Sử dụng bài viết có sẵn</dd>` : ''}
+      ${hasPost ? `<dt>Chế độ</dt><dd>${State.creativeMode === 'EXISTING_POST' ? 'Sử dụng đúng bài viết có sẵn' : 'Tạo bản quảng cáo mới có CTA'}</dd>` : ''}
       <dt>Chiến dịch</dt><dd>${esc(r.campaignName || '—')}</dd>
       <dt>Nhóm QC</dt><dd>${esc(r.adsetName || '—')}</dd>
       <dt>Quảng cáo</dt><dd>${esc(r.adName || '—')}</dd>
       <dt>Loại</dt><dd>${esc(r.campaignType || '—')}</dd>
-      <dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>
-      ${r.ctaLink ? `<dt>Link CTA</dt><dd class="mono"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></dd>` : ''}
+      ${ctaHtml}
       <dt>Quốc gia</dt><dd>${esc(r.country || '—')}</dd>
       <dt>Ngân sách</dt><dd>${esc(r.budget || '—')} · ${budgetModeLabel(r)} · ${budgetLevelLabel(r)}</dd>
       <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
       ${hasPost ? `
         <dt>Object Story ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
-        <dt>Ghi chú</dt><dd style="color: #2563eb; font-weight: 600;">Dùng bài gốc để tạo dark post quảng cáo, không đăng bài mới công khai.</dd>
+        ${noteHtml}
       ` : `
         <dt>Object ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
       `}
@@ -909,7 +949,7 @@ async function validateRows() {
   btn.disabled = true; btn.textContent = 'Đang kiểm tra…';
   Logger.info(`Đang kiểm tra ${State.rows.length} dòng với Facebook…`);
   try {
-    const payload = { rows: State.rows.map(stripForSend) };
+    const payload = { rows: State.rows.map(stripForSend), creativeMode: State.creativeMode };
     const { results } = await api('/api/ads/validate', { method: 'POST', body: payload });
     results.forEach((res) => {
       const r = State.rows.find((x) => x.index === res.index);
@@ -989,6 +1029,7 @@ async function runCreate(rows, draft) {
       adAccountId: State.selectedAccount.id,
       currency: State.selectedAccount.currency,
       draftMode: draft,
+      creativeMode: State.creativeMode,
       rows: rows.map(stripForSend),
     };
     const { results } = await api('/api/ads/create', { method: 'POST', body: payload });
