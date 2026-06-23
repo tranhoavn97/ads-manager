@@ -103,6 +103,12 @@ App đã được cấu hình sẵn cho Vercel (serverless): `api/index.js` (đi
 
 > Lưu ý: phiên lưu trong cookie đã ký (tối đa 8 giờ). Vì token Facebook nằm trong cookie phía trình duyệt nên **bắt buộc** chạy HTTPS (`SECURE_COOKIES=true`) — Vercel đã là HTTPS.
 
+### Đăng nhập bằng Access Token (không cần OAuth)
+
+Ở màn hình đăng nhập, bấm **“hoặc đăng nhập bằng Access Token”**, dán token (lấy từ **Graph API Explorer** hoặc **System User**) rồi bấm **Dùng token**. App gọi `/me` để xác thực rồi lưu vào cookie phiên.
+
+Cách này **bỏ qua toàn bộ cấu hình OAuth** — không cần `FB_REDIRECT_URI`, không cần khai báo Valid OAuth Redirect URIs, không chờ App Review. Chỉ cần token có đủ các quyền: `ads_management`, `ads_read`, `pages_show_list`, `pages_read_engagement`, `pages_manage_ads`. Rất tiện cho tool cá nhân.
+
 ---
 
 ## 6. Định dạng file sheet

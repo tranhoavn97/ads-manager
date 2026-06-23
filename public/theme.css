@@ -97,6 +97,23 @@ html, body {
 .step.active { background: rgba(0, 113, 227, .10); }
 .step.active .num { background: var(--primary); }
 
+/* ---------- Đăng nhập bằng access token ---------- */
+.token-login { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
+.token-toggle {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--primary); font: inherit; font-size: 13.5px; font-weight: 600;
+}
+.token-toggle:hover { text-decoration: underline; }
+.token-box { margin-top: 12px; }
+.token-label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+.token-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.token-row input {
+  flex: 1 1 280px; min-width: 0; font: inherit; font-size: 14px;
+  padding: 11px 14px; border: 1px solid var(--border-strong); border-radius: 12px;
+  background: var(--surface); color: var(--ink);
+}
+.token-row input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(0, 113, 227, .15); }
+
 /* ---------- 2. Pill nhận biết nút CTA ---------- */
 .cta-pill {
   display: inline-flex; align-items: center; gap: 6px;

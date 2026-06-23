@@ -311,6 +311,15 @@ function bindEvents() {
   $('#drawerClose').addEventListener('click', closeDrawer);
   $('#drawerScrim').addEventListener('click', closeDrawer);
 
+  // Đăng nhập bằng access token
+  $('#tokenToggle')?.addEventListener('click', () => {
+    const box = $('#tokenBox');
+    box.classList.toggle('hidden');
+    if (!box.classList.contains('hidden')) $('#tokenInput').focus();
+  });
+  $('#tokenBtn')?.addEventListener('click', loginWithToken);
+  $('#tokenInput')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginWithToken(); });
+
   // Dock dưới cùng: tab, thu gọn, xoá
   $('#dockToggle').addEventListener('click', () => toggleDock());
   $$('.dock-tab').forEach((btn) => {
@@ -353,6 +362,26 @@ async function onLoggedIn() {
 async function logout() {
   await api('/api/auth/logout', { method: 'POST' });
   location.reload();
+}
+
+// Đăng nhập trực tiếp bằng access token (không qua OAuth)
+async function loginWithToken() {
+  const token = $('#tokenInput').value.trim();
+  if (!token) return toast('Vui lòng nhập access token', 'err');
+  const btn = $('#tokenBtn');
+  btn.disabled = true; btn.textContent = 'Đang kiểm tra…';
+  Logger.info('Đăng nhập bằng access token…');
+  try {
+    const { user } = await api('/api/auth/token', { method: 'POST', body: { token } });
+    State.user = user;
+    $('#tokenInput').value = '';
+    Logger.ok(`Đăng nhập thành công: ${user?.name || 'token'}.`);
+    onLoggedIn();
+  } catch (err) {
+    toast(err.message, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Dùng token';
+  }
 }
 
 // ============================================================

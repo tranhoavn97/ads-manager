@@ -77,6 +77,23 @@ router.get('/callback', async (req, res) => {
   }
 });
 
+// Đăng nhập trực tiếp bằng access token (khỏi cần OAuth)
+router.post('/token', async (req, res) => {
+  const raw = (req.body?.token ?? '').toString().trim();
+  if (!raw) {
+    return res.status(400).json({ error: 'Vui lòng nhập access token.' });
+  }
+  try {
+    const me = await getMe(raw); // xác thực token bằng cách gọi /me
+    req.session.fbToken = raw;
+    req.session.user = { id: me.id, name: me.name };
+    res.json({ ok: true, user: req.session.user });
+  } catch (err) {
+    const msg = err instanceof MetaApiError ? err.message : 'Token không hợp lệ hoặc đã hết hạn.';
+    res.status(401).json({ error: msg });
+  }
+});
+
 router.get('/status', (req, res) => {
   res.json({
     loggedIn: Boolean(req.session.fbToken),
