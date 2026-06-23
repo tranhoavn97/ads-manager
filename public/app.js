@@ -902,45 +902,42 @@ function renderTable() {
     if (State.editingRowIndex === r.index) {
       tr.innerHTML = `
         <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
-        <td><input type="text" class="input-inline ad-account-input" value="${esc(r.adAccountId || '')}" placeholder="${esc(State.selectedAccount?.id || '')}"></td>
-        <td><input type="text" class="input-inline campaign-name-input" value="${esc(r.campaignName || '')}"></td>
-        <td><input type="text" class="input-inline adset-name-input" value="${esc(r.adsetName || '')}"></td>
-        <td>
-          <div class="budget-edit-group">
-            <input type="text" class="input-inline budget-val-input" value="${esc(r.budget || '')}">
-            <div class="budget-options-inline">
-              <select class="select-inline budget-level-input">
-                <option value="adset" ${r.budgetLevel === 'adset' ? 'selected' : ''}>ABO (Nhóm)</option>
-                <option value="campaign" ${r.budgetLevel === 'campaign' ? 'selected' : ''}>CBO (Chiến dịch)</option>
-              </select>
-              <select class="select-inline budget-mode-input">
-                <option value="daily" ${r.budgetMode === 'daily' ? 'selected' : ''}>Hàng ngày</option>
-                <option value="lifetime" ${r.budgetMode === 'lifetime' ? 'selected' : ''}>Trọn đời</option>
-              </select>
-            </div>
-          </div>
-        </td>
-        <td>
-          <input type="text" class="input-inline start-date-input" value="${esc(r.startDate || '')}" placeholder="dd/mm/yyyy" style="margin-bottom: 4px;">
-          <input type="text" class="input-inline start-time-input" value="${esc(r.startTimeRaw || '')}" placeholder="08:00" style="font-size: 11px; padding: 2px 4px;">
-        </td>
+        <!-- Link Page -->
+        <td><input type="text" class="input-inline page-link-input" value="${esc(r.pageLink || '')}" placeholder="Link Page"></td>
+        <!-- Bài viết & Chế độ -->
         <td>
           <input type="text" class="input-inline post-link-input" value="${esc(r.postLink || '')}" placeholder="Link bài viết" style="margin-bottom: 6px;">
           <div style="display: flex; gap: 4px;">
             <select class="select-inline content-mode-input" style="flex: 1; font-size: 11px; padding: 2px;">
-              <option value="Sử dụng bài viết có sẵn" ${r.contentMode === 'Sử dụng bài viết có sẵn' ? 'selected' : ''}>Bài viết có sẵn</option>
+              <option value="Sử dụng bài viết có sẵn" ${r.contentMode === 'Sử dụng bài viết có sẵn' || r.contentMode === 'EXISTING_POST' ? 'selected' : ''}>Bài viết có sẵn</option>
+              <option value="Tạo bản quảng cáo mới có CTA" ${r.contentMode === 'Tạo bản quảng cáo mới có CTA' || r.contentMode === 'NEW_CTA_CREATIVE' ? 'selected' : ''}>Tạo bài mới</option>
             </select>
             <select class="select-inline cta-handling-input" style="flex: 1; font-size: 11px; padding: 2px;">
-              <option value="Tự động" ${r.ctaHandling === 'Tự động' || !r.ctaHandling ? 'selected' : ''}>CTA: Tự động</option>
-              <option value="Giữ CTA hiện tại" ${r.ctaHandling === 'Giữ CTA hiện tại' ? 'selected' : ''}>CTA: Giữ nguyên</option>
-              <option value="Không dùng CTA" ${r.ctaHandling === 'Không dùng CTA' ? 'selected' : ''}>CTA: Không dùng</option>
+              <option value="Tự động" ${r.ctaHandling === 'Tự động' || !r.ctaHandling || r.ctaHandling === 'AUTO' ? 'selected' : ''}>CTA: Tự động</option>
+              <option value="Giữ CTA hiện tại" ${r.ctaHandling === 'Giữ CTA hiện tại' || r.ctaHandling === 'KEEP_CURRENT' ? 'selected' : ''}>CTA: Giữ nguyên</option>
+              <option value="Không dùng CTA" ${r.ctaHandling === 'Không dùng CTA' || r.ctaHandling === 'NO_CTA' ? 'selected' : ''}>CTA: Không dùng</option>
             </select>
           </div>
         </td>
+        <!-- Chiến dịch & Loại -->
+        <td>
+          <input type="text" class="input-inline campaign-name-input" value="${esc(r.campaignName || '')}" style="margin-bottom: 4px;">
+          <select class="select-inline campaign-type-input" style="font-size: 11px; padding: 2px;">
+            <option value="Tin nhắn" ${r.campaignType === 'Tin nhắn' || r.campaignType === 'tin_nhan' ? 'selected' : ''}>Tin nhắn</option>
+            <option value="Tương tác" ${r.campaignType === 'Tương tác' || r.campaignType === 'tuong_tac' ? 'selected' : ''}>Tương tác</option>
+            <option value="Traffic" ${r.campaignType === 'Traffic' || r.campaignType === 'traffic' ? 'selected' : ''}>Traffic</option>
+            <option value="Lead" ${r.campaignType === 'Lead' || r.campaignType === 'lead' ? 'selected' : ''}>Lead</option>
+            <option value="Doanh số" ${r.campaignType === 'Doanh số' || r.campaignType === 'doanh_so' ? 'selected' : ''}>Doanh số</option>
+          </select>
+        </td>
+        <!-- Nhóm QC -->
+        <td><input type="text" class="input-inline adset-name-input" value="${esc(r.adsetName || '')}"></td>
+        <!-- Quảng cáo -->
         <td><input type="text" class="input-inline ad-name-input" value="${esc(r.adName || '')}"></td>
+        <!-- Nút & Liên kết -->
         <td>
           <div class="cta-edit-group">
-            <select class="select-inline cta-input">
+            <select class="select-inline cta-input" style="margin-bottom: 4px;">
               <option value="NO_BUTTON" ${r.cta === 'NO_BUTTON' ? 'selected' : ''}>Không nút</option>
               <option value="SHOP_NOW" ${r.cta === 'SHOP_NOW' ? 'selected' : ''}>Mua ngay</option>
               <option value="SEND_MESSAGE" ${r.cta === 'SEND_MESSAGE' ? 'selected' : ''}>Gửi tin nhắn</option>
@@ -952,6 +949,47 @@ function renderTable() {
             <input type="text" class="input-inline cta-link-input" value="${esc(r.ctaLink || '')}" placeholder="Link CTA">
           </div>
         </td>
+        <!-- Ngân sách -->
+        <td>
+          <div class="budget-edit-group">
+            <input type="text" class="input-inline budget-val-input" value="${esc(r.budget || '')}" style="margin-bottom: 4px;">
+            <div class="budget-options-inline" style="display: flex; gap: 2px;">
+              <select class="select-inline budget-level-input" style="flex: 1; font-size: 11px; padding: 2px;">
+                <option value="adset" ${r.budgetLevel === 'adset' ? 'selected' : ''}>ABO (Nhóm)</option>
+                <option value="campaign" ${r.budgetLevel === 'campaign' ? 'selected' : ''}>CBO (Chiến dịch)</option>
+              </select>
+              <select class="select-inline budget-mode-input" style="flex: 1; font-size: 11px; padding: 2px;">
+                <option value="daily" ${r.budgetMode === 'daily' ? 'selected' : ''}>Hàng ngày</option>
+                <option value="lifetime" ${r.budgetMode === 'lifetime' ? 'selected' : ''}>Trọn đời</option>
+              </select>
+            </div>
+          </div>
+        </td>
+        <!-- Thời gian -->
+        <td>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; gap: 2px;">
+              <input type="text" class="input-inline start-date-input" value="${esc(r.startDate || '')}" placeholder="Bắt đầu" title="Ngày bắt đầu (dd/mm/yyyy)">
+              <input type="text" class="input-inline start-time-input" value="${esc(r.startTimeRaw || '')}" placeholder="Giờ" title="Giờ bắt đầu (hh:mm)">
+            </div>
+            <div style="display: flex; gap: 2px;">
+              <input type="text" class="input-inline end-date-input" value="${esc(r.endDate || '')}" placeholder="Kết thúc" title="Ngày kết thúc (dd/mm/yyyy)">
+              <input type="text" class="input-inline end-time-input" value="${esc(r.endTimeRaw || '')}" placeholder="Giờ" title="Giờ kết thúc (hh:mm)">
+            </div>
+          </div>
+        </td>
+        <!-- Quốc gia -->
+        <td><input type="text" class="input-inline country-input" value="${esc(r.country || '')}"></td>
+        <!-- Trạng thái -->
+        <td>
+          <select class="select-inline status-input">
+            <option value="Bật" ${r.statusRaw === 'Bật' || r.statusRaw === 'ACTIVE' || r.statusRaw === 'active' || r.statusRaw === '1' ? 'selected' : ''}>Bật</option>
+            <option value="Tạm dừng" ${r.statusRaw === 'Tạm dừng' || r.statusRaw === 'PAUSED' || r.statusRaw === 'paused' || r.statusRaw === '0' || !r.statusRaw ? 'selected' : ''}>Tạm dừng</option>
+          </select>
+        </td>
+        <!-- Ghi chú -->
+        <td><input type="text" class="input-inline notes-input" value="${esc(r.notes || '')}"></td>
+        <!-- Thao tác -->
         <td>
           <div class="action-btn-group">
             <button class="save-btn" title="Lưu">✓</button>
@@ -960,20 +998,26 @@ function renderTable() {
         </td>`;
         
       tr.querySelector('.save-btn').addEventListener('click', () => {
-        r.adAccountId = tr.querySelector('.ad-account-input').value.trim() || null;
+        r.pageLink = tr.querySelector('.page-link-input').value.trim();
+        r.postLink = tr.querySelector('.post-link-input').value.trim();
+        r.contentMode = tr.querySelector('.content-mode-input').value;
+        r.ctaHandling = tr.querySelector('.cta-handling-input').value;
         r.campaignName = tr.querySelector('.campaign-name-input').value.trim();
+        r.campaignType = tr.querySelector('.campaign-type-input').value;
         r.adsetName = tr.querySelector('.adset-name-input').value.trim();
+        r.adName = tr.querySelector('.ad-name-input').value.trim();
+        r.cta = tr.querySelector('.cta-input').value;
+        r.ctaLink = tr.querySelector('.cta-link-input').value.trim();
         r.budget = tr.querySelector('.budget-val-input').value.trim();
         r.budgetLevel = tr.querySelector('.budget-level-input').value;
         r.budgetMode = tr.querySelector('.budget-mode-input').value;
         r.startDate = tr.querySelector('.start-date-input').value.trim();
         r.startTimeRaw = tr.querySelector('.start-time-input').value.trim();
-        r.postLink = tr.querySelector('.post-link-input').value.trim();
-        r.contentMode = tr.querySelector('.content-mode-input').value;
-        r.ctaHandling = tr.querySelector('.cta-handling-input').value;
-        r.adName = tr.querySelector('.ad-name-input').value.trim();
-        r.cta = tr.querySelector('.cta-input').value;
-        r.ctaLink = tr.querySelector('.cta-link-input').value.trim();
+        r.endDate = tr.querySelector('.end-date-input').value.trim();
+        r.endTimeRaw = tr.querySelector('.end-time-input').value.trim();
+        r.country = tr.querySelector('.country-input').value.trim();
+        r.statusRaw = tr.querySelector('.status-input').value;
+        r.notes = tr.querySelector('.notes-input').value.trim();
         
         State.editingRowIndex = null;
         clientPreCheck();
@@ -990,17 +1034,11 @@ function renderTable() {
     } else {
       tr.innerHTML = `
         <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
-        <td><span class="cell-mono">${esc(r.adAccountId || State.selectedAccount?.id || '—')}</span></td>
-        <td><div class="cell-strong">${esc(r.campaignName || '—')}</div></td>
-        <td><div class="cell-strong">${esc(r.adsetName || '—')}</div></td>
+        <!-- Link Page -->
         <td>
-          <div class="cell-strong">${esc(r.budget || '—')}</div>
-          <div class="cell-sub">${r.budgetLevel === 'campaign' ? 'CBO (Chiến dịch)' : 'ABO (Nhóm)'} · ${r.budgetMode === 'lifetime' ? 'Trọn đời' : 'Hàng ngày'}</div>
+          <div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.pageLink || '')}">${esc(r.pageLink || '—')}</div>
         </td>
-        <td>
-          <div>${esc(r.startDate || '—')}</div>
-          ${r.startTimeRaw ? `<div class="cell-sub" style="font-size: 11px;">Giờ: ${esc(r.startTimeRaw)}</div>` : ''}
-        </td>
+        <!-- Bài viết & Chế độ -->
         <td>
           <div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.postLink || '')}">${esc(r.postLink || '—')}</div>
           <div class="cell-sub" style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">
@@ -1008,11 +1046,41 @@ function renderTable() {
             <span class="chip-sm" style="background-color: var(--bg-hover); font-size: 11px; padding: 2px 6px; border-radius: 4px;">CTA: ${esc(r.ctaHandling || 'Tự động')}</span>
           </div>
         </td>
+        <!-- Chiến dịch & Loại -->
+        <td>
+          <div class="cell-strong">${esc(r.campaignName || '—')}</div>
+          <div class="cell-sub" style="font-size: 11px; color: var(--text-muted);">${esc(r.campaignType || '—')}</div>
+        </td>
+        <!-- Nhóm QC -->
+        <td><div class="cell-strong">${esc(r.adsetName || '—')}</div></td>
+        <!-- Quảng cáo -->
         <td><div class="cell-strong">${esc(r.adName || '—')}</div></td>
+        <!-- Nút & Liên kết -->
         <td>
           <div>${ctaPillHtml(r)}</div>
           ${r.ctaLink ? `<div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.ctaLink)}"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></div>` : ''}
         </td>
+        <!-- Ngân sách -->
+        <td>
+          <div class="cell-strong">${esc(r.budget || '—')}</div>
+          <div class="cell-sub">${r.budgetLevel === 'campaign' ? 'CBO (Chiến dịch)' : 'ABO (Nhóm)'} · ${r.budgetMode === 'lifetime' ? 'Trọn đời' : 'Hàng ngày'}</div>
+        </td>
+        <!-- Thời gian -->
+        <td>
+          <div>Bắt đầu: ${esc(r.startDate || '—')} ${r.startTimeRaw ? esc(r.startTimeRaw) : ''}</div>
+          ${r.endDate ? `<div>Kết thúc: ${esc(r.endDate)} ${r.endTimeRaw ? esc(r.endTimeRaw) : ''}</div>` : ''}
+        </td>
+        <!-- Quốc gia -->
+        <td><div class="cell-strong">${esc(r.country || '—')}</div></td>
+        <!-- Trạng thái -->
+        <td>
+          <span class="chip-sm ${r.statusRaw === 'Bật' || r.statusRaw === 'ACTIVE' || r.statusRaw === 'active' || r.statusRaw === '1' ? 'ok' : 'bad'}">${esc(r.statusRaw || 'Tạm dừng')}</span>
+        </td>
+        <!-- Ghi chú -->
+        <td>
+          <div class="cell-sub" style="max-width: 150px; max-height: 40px; overflow: auto;" title="${esc(r.notes || '')}">${esc(r.notes || '—')}</div>
+        </td>
+        <!-- Thao tác -->
         <td>
           <div class="action-btn-group">
             <button class="edit-btn" data-i="${r.index}">Sửa</button>

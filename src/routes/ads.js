@@ -7,7 +7,7 @@ import {
 } from '../meta-api.js';
 import { parsePageId, parsePostId, buildObjectStoryId, normalizeFbUrl } from '../parsers.js';
 import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, resolveContentMode, resolveCtaHandling, ROW_STATUS } from '../validators.js';
-import { resolveCampaignType, resolveCta } from '../campaign-mapper.js';
+import { resolveCampaignType, resolveCta, defaultCtaForType } from '../campaign-mapper.js';
 
 const router = express.Router();
 
@@ -219,8 +219,9 @@ router.post('/validate', requireAuth, async (req, res) => {
                       warnings.push('Bài viết gốc đã có sẵn CTA. Link CTA và Nút CTA trong Excel sẽ được bỏ qua.');
                     }
                   } else {
-                    if (!row.ctaLink || !row.ctaLink.toString().trim()) {
-                      errors.push('Bài gốc chưa có CTA. Vui lòng nhập Link CTA trong Excel để thử gắn nút.');
+                    const needsLink = ctype && ctype.needsLink;
+                    if (needsLink && (!row.ctaLink || !row.ctaLink.toString().trim())) {
+                      errors.push('Bài gốc chưa có CTA. Chiến dịch yêu cầu Link CTA để gắn nút.');
                       if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
                     }
                   }
@@ -381,7 +382,7 @@ router.post('/create', requireAuth, async (req, res) => {
             if (hasOldCta) {
               if (row.ctaLink && row.ctaLink.toString().trim()) {
                 // Bài đã có CTA nhưng có điền link -> gán/ghi đè link theo sheet
-                const targetCta = resolveCta(row.cta)?.code || 'SHOP_NOW';
+                const targetCta = resolveCta(row.cta)?.code || defaultCtaForType(ctype.id)?.code || 'SHOP_NOW';
                 creativePayload = {
                   name: `${row.adName} - creative`,
                   object_story_id: row.parsed.objectStoryId,
@@ -401,17 +402,23 @@ router.post('/create', requireAuth, async (req, res) => {
               }
             } else {
               // Bài chưa có CTA -> Lấy nút và link từ Excel, thử cập nhật CTA cho bài gốc bằng cách override call_to_action
-              const targetCta = resolveCta(row.cta)?.code || 'SHOP_NOW';
-              creativePayload = {
-                name: `${row.adName} - creative`,
-                object_story_id: row.parsed.objectStoryId,
-                call_to_action: {
-                  type: targetCta,
-                  value: {
-                    link: row.ctaLink
-                  }
+              const targetCta = resolveCta(row.cta)?.code || defaultCtaForType(ctype.id)?.code || 'SHOP_NOW';
+              if (targetCta && targetCta !== 'NO_BUTTON') {
+                const callToAction = { type: targetCta };
+                if (row.ctaLink && row.ctaLink.toString().trim()) {
+                  callToAction.value = { link: row.ctaLink };
                 }
-              };
+                creativePayload = {
+                  name: `${row.adName} - creative`,
+                  object_story_id: row.parsed.objectStoryId,
+                  call_to_action: callToAction
+                };
+              } else {
+                creativePayload = {
+                  name: `${row.adName} - creative`,
+                  object_story_id: row.parsed.objectStoryId
+                };
+              }
             }
           } else {
             // KEEP_CURRENT hoặc NO_CTA
