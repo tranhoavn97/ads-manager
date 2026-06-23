@@ -174,8 +174,8 @@ export function resolveBudgetLevel(input) {
 
 export function resolveContentMode(input) {
   const n = stripAccents(input);
-  if (n.includes('co san') || n.includes('sử dụng bài viết có sẵn') || n.includes('existing')) {
-    return 'EXISTING_POST';
+  if (n.includes('strict') || n.includes('goc') || n.includes('dung dung') || n.includes('co san') || n.includes('existing')) {
+    return 'EXISTING_POST_STRICT';
   }
   return 'NEW_CTA_CREATIVE';
 }
@@ -218,9 +218,10 @@ export function validateRow(row) {
   need(row.contentMode, 'chế độ nội dung');
   need(row.ctaHandling, 'xử lý CTA');
   need(row.pageLink, 'link Page');
+  need(row.postLink, 'link bài viết');
 
-  if (mode === 'EXISTING_POST') {
-    need(row.postLink, 'link bài viết');
+  if (mode === 'NEW_CTA_CREATIVE') {
+    need(row.ctaLink, 'link CTA');
   }
 
   need(row.campaignName, 'tên chiến dịch');
@@ -240,9 +241,8 @@ export function validateRow(row) {
   } else if (ctype) {
     normalized.campaignType = ctype;
     
-    // Loại cần website nhưng thiếu link CTA (chỉ check khi ctaHandling = AUTO)
-    const isTraffic = ctype.id === 'traffic';
-    const needsLink = ctype.needsLink || (isTraffic && mode === 'EXISTING_POST');
+    // Loại cần website nhưng thiếu link CTA (chỉ check khi ctaHandling = AUTO và không phải chế độ dùng bài gốc)
+    const needsLink = ctype.needsLink && mode !== 'EXISTING_POST_STRICT';
     if (needsLink && ctaHand === 'AUTO' && (!row.ctaLink || row.ctaLink.toString().trim() === '')) {
       errors.push(`Loại "${ctype.label}" cần link CTA (website đích) nhưng đang để trống`);
     }

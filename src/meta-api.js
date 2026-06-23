@@ -336,7 +336,7 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
 export async function verifyPostDetails(token, objectStoryId) {
   return call('GET', objectStoryId, {
     token,
-    params: { fields: 'id,permalink_url,from,created_time' }
+    params: { fields: 'id,permalink_url,from,created_time,call_to_action,message,object_id,type,attachments{media,type,target}' }
   });
 }
 
@@ -360,4 +360,19 @@ export async function updatePostCta(token, objectStoryId, ctaType, ctaLink) {
  */
 export async function getAdCreative(token, creativeId, fields = 'id,object_story_id,effective_object_story_id,call_to_action') {
   return call('GET', creativeId, { token, params: { fields } });
+}
+
+/**
+ * Tải ảnh lên thư viện của tài khoản quảng cáo từ một URL từ xa
+ */
+export async function uploadAdImageFromUrl(token, adAccountId, imageUrl) {
+  const data = await call('POST', actPath(adAccountId, 'adimages'), {
+    token,
+    data: { url: imageUrl }
+  });
+  const keys = Object.keys(data?.images || {});
+  if (keys.length > 0) {
+    return data.images[keys[0]].hash;
+  }
+  throw new Error('Không lấy được hash ảnh từ Meta API.');
 }

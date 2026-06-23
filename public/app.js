@@ -830,8 +830,6 @@ function clientPreCheck() {
     ['campaignType', 'loại chiến dịch'],
     ['country', 'quốc gia'],
     ['budget', 'ngân sách'],
-    ['contentMode', 'chế độ nội dung'],
-    ['ctaHandling', 'xử lý CTA'],
     ['budgetMode', 'loại ngân sách'],
     ['startDate', 'ngày bắt đầu'],
     ['statusRaw', 'trạng thái']
@@ -847,9 +845,15 @@ function clientPreCheck() {
     
     const missing = [];
     if (!r.pageLink) missing.push('link Page');
-    if (r.contentMode === 'Sử dụng bài viết có sẵn' && (!r.postLink || r.postLink.toString().trim() === '')) {
+    if (!r.postLink || r.postLink.toString().trim() === '') {
       missing.push('link bài viết');
     }
+    
+    const isNewCta = r.contentMode === 'Tạo bản quảng cáo mới có CTA' || r.contentMode === 'NEW_CTA_CREATIVE';
+    if (isNewCta && (!r.ctaLink || r.ctaLink.toString().trim() === '')) {
+      missing.push('link CTA');
+    }
+
     otherRequired.forEach(([k, l]) => {
       if (!r[k]) missing.push(l);
     });
@@ -925,7 +929,7 @@ function renderTable() {
           <input type="text" class="input-inline post-link-input" value="${esc(r.postLink || '')}" placeholder="Link bài viết" style="margin-bottom: 6px;">
           <div style="display: flex; gap: 4px;">
             <select class="select-inline content-mode-input" style="flex: 1; font-size: 11px; padding: 2px;">
-              <option value="Sử dụng bài viết có sẵn" ${r.contentMode === 'Sử dụng bài viết có sẵn' || r.contentMode === 'EXISTING_POST' ? 'selected' : ''}>Bài viết có sẵn</option>
+              <option value="Sử dụng bài viết có sẵn" ${r.contentMode === 'Sử dụng bài viết có sẵn' || r.contentMode === 'EXISTING_POST_STRICT' ? 'selected' : ''}>Bài viết có sẵn</option>
               <option value="Tạo bản quảng cáo mới có CTA" ${r.contentMode === 'Tạo bản quảng cáo mới có CTA' || r.contentMode === 'NEW_CTA_CREATIVE' ? 'selected' : ''}>Tạo bài mới</option>
             </select>
             <select class="select-inline cta-handling-input" style="flex: 1; font-size: 11px; padding: 2px;">
@@ -1160,7 +1164,7 @@ function openDrawer(index) {
 
   let noteHtml = '';
   const mode = r.contentMode || 'Sử dụng bài viết có sẵn';
-  const isExisting = mode === 'Sử dụng bài viết có sẵn' || r.parsed?.contentMode === 'EXISTING_POST';
+  const isExisting = mode === 'Sử dụng bài viết có sẵn' || r.parsed?.contentMode === 'EXISTING_POST_STRICT';
   const ctaHand = r.ctaHandling || 'Tự động';
 
   if (hasPost) {
@@ -1379,42 +1383,9 @@ async function runCreate(rows, draft) {
     const r = rows[i];
     
     try {
-      // BƯỚC 1: Kiểm tra CTA hiện tại của bài viết gốc
-      r.status = 'checking_cta';
+      r.status = 'creating_ad';
       r.errors = [];
       r.warnings = [];
-      renderTable();
-
-      const ctaCheck = await api('/api/ads/check-cta', {
-        method: 'POST',
-        body: { row: stripForSend(r) }
-      });
-
-      if (ctaCheck.hasCta) {
-        r.status = 'has_cta';
-      } else {
-        r.status = 'no_cta';
-      }
-      renderTable();
-
-      // BƯỚC 2: Cập nhật CTA cho bài viết gốc nếu chưa có và xử lý CTA = Tự động (AUTO)
-      const ctaHand = r.ctaHandling || 'Tự động';
-      const isAuto = ctaHand === 'Tự động' || ctaHand === 'AUTO';
-      if (r.status === 'no_cta' && isAuto) {
-        r.status = 'updating_cta';
-        renderTable();
-
-        await api('/api/ads/update-cta', {
-          method: 'POST',
-          body: { row: stripForSend(r) }
-        });
-
-        r.status = 'updated_cta';
-        renderTable();
-      }
-
-      // BƯỚC 3: Tạo quảng cáo bằng bài gốc & xác thực creative
-      r.status = 'creating_ad';
       renderTable();
 
       const createRes = await api('/api/ads/create', {
