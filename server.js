@@ -1,5 +1,5 @@
 import express from 'express';
-import session from 'express-session';
+import cookieSession from 'cookie-session';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './src/config.js';
@@ -12,18 +12,16 @@ const app = express();
 
 app.use(express.json({ limit: '10mb' }));
 
+// Phiên lưu trong cookie đã ký (stateless) — chạy được trên serverless (Vercel)
+// vì không phụ thuộc bộ nhớ của một instance cụ thể.
 app.use(
-  session({
-    name: 'fb_bulk_ads.sid',
-    secret: config.sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: config.secureCookies,
-      maxAge: 1000 * 60 * 60 * 8, // 8 giờ
-    },
+  cookieSession({
+    name: 'fb_bulk_ads',
+    keys: [config.sessionSecret],
+    maxAge: 1000 * 60 * 60 * 8, // 8 giờ
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.secureCookies,
   })
 );
 
@@ -32,7 +30,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/accounts', accountsRouter);
 app.use('/api/ads', adsRouter);
 
-// Frontend tĩnh
+// Frontend tĩnh (dùng khi chạy server thường; trên Vercel do static routes phục vụ)
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Bắt lỗi chung
@@ -41,12 +39,18 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Lỗi máy chủ nội bộ: ' + err.message });
 });
 
-app.listen(config.port, () => {
-  console.log('==================================================');
-  console.log('  Trình tạo quảng cáo Facebook hàng loạt');
-  console.log(`  Đang chạy tại: http://localhost:${config.port}`);
-  console.log('==================================================');
-  if (!config.appId || config.appId.startsWith('your_')) {
-    console.log('  [!] Chưa cấu hình FB_APP_ID / FB_APP_SECRET trong .env');
-  }
-});
+// Chỉ tự lắng nghe khi chạy như server thường (local/Render…).
+// Trên Vercel, app được nạp qua api/index.js nên KHÔNG gọi listen.
+if (!process.env.VERCEL) {
+  app.listen(config.port, () => {
+    console.log('==================================================');
+    console.log('  Trình tạo quảng cáo Facebook hàng loạt');
+    console.log(`  Đang chạy tại: http://localhost:${config.port}`);
+    console.log('==================================================');
+    if (!config.appId || config.appId.startsWith('your_')) {
+      console.log('  [!] Chưa cấu hình FB_APP_ID / FB_APP_SECRET trong .env');
+    }
+  });
+}
+
+export default app;

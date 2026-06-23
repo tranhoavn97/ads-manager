@@ -85,7 +85,8 @@ router.get('/status', (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
+  req.session = null; // cookie-session: gán null để xoá cookie phiên
+  res.json({ ok: true });
 });
 
 // Middleware bắt buộc đăng nhập cho các route cần token
