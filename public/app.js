@@ -186,6 +186,12 @@ function resolveCtaCode(input) {
   return CTA_BY_NORM[n] || null;
 }
 function ctaForRow(row) {
+  const isTraffic = resolveTypeId(row?.campaignType) === 'traffic';
+  const hasPost = !!(row?.postLink && row?.postLink.toString().trim());
+  if (isTraffic && hasPost) {
+    return { code: 'SHOP_NOW', label: CTA_LABELS['SHOP_NOW'] || 'Mua ngay', custom: true };
+  }
+
   const override = resolveCtaCode(row?.cta);
   if (override) return { code: override, label: CTA_LABELS[override] || override, custom: true };
   const id = resolveTypeId(row?.campaignType);
@@ -850,6 +856,8 @@ function openDrawer(index) {
   if (!r) return;
   $('#drawerTitle').textContent = `Dòng ${index + 1} · ${STATUS_LABEL[r.status]}`;
   const ids = r.ids || {};
+  const isTraffic = resolveTypeId(r?.campaignType) === 'traffic';
+  const hasPost = !!(r?.postLink && r?.postLink.toString().trim());
   const body = $('#drawerBody');
   body.innerHTML = `
     <div class="section-label">Dữ liệu</div>
@@ -859,10 +867,12 @@ function openDrawer(index) {
       <dt>Quảng cáo</dt><dd>${esc(r.adName || '—')}</dd>
       <dt>Loại</dt><dd>${esc(r.campaignType || '—')}</dd>
       <dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>
+      ${r.ctaLink ? `<dt>Link CTA</dt><dd class="mono"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></dd>` : ''}
       <dt>Quốc gia</dt><dd>${esc(r.country || '—')}</dd>
       <dt>Ngân sách</dt><dd>${esc(r.budget || '—')} · ${budgetModeLabel(r)} · ${budgetLevelLabel(r)}</dd>
       <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
-      <dt>Object ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
+      ${hasPost ? `<dt>Bài viết/Reel dùng</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>` : `<dt>Object ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>`}
+      ${isTraffic && hasPost && r.parsed?.hasOldCta ? `<dt>Lưu ý</dt><dd style="color: #ea580c; font-weight: 600;">CTA cũ sẽ được thay bằng link trong sheet</dd>` : ''}
       ${ids.campaignId ? `<dt>Campaign</dt><dd class="mono">${esc(ids.campaignId)}</dd>` : ''}
       ${ids.adsetId ? `<dt>Ad Set</dt><dd class="mono">${esc(ids.adsetId)}</dd>` : ''}
       ${ids.adId ? `<dt>Ad</dt><dd class="mono">${esc(ids.adId)}</dd>` : ''}

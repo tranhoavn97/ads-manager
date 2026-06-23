@@ -148,7 +148,17 @@ export async function scrapePageId(slug) {
 
 // Kiểm tra bài viết có tồn tại / dùng được không
 export async function checkPostExists(token, objectStoryId) {
-  return call('GET', objectStoryId, { token, params: { fields: 'id' } });
+  try {
+    return await call('GET', objectStoryId, {
+      token,
+      params: { fields: 'id,call_to_action,message,object_id,type,attachments{media,type,target}' }
+    });
+  } catch (err) {
+    if (err instanceof MetaApiError && (err.code === 100 || err.message.includes('fields') || err.message.includes('parameter'))) {
+      return await call('GET', objectStoryId, { token, params: { fields: 'id' } });
+    }
+    throw err;
+  }
 }
 
 // --------- Tạo Campaign / Ad Set / Creative / Ad ---------

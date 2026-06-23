@@ -116,9 +116,9 @@ router.post('/validate', requireAuth, async (req, res) => {
 
     // 3) Post / Object ID (nếu có link bài viết)
     if (row.postLink && row.postLink.toString().trim()) {
-      // Loại cần website (Traffic/Doanh số) + có link CTA -> sẽ dùng quảng cáo link, bỏ qua reel/bài viết
       const ctype = resolveCampaignType(row.campaignType);
-      const willUseLink = !!(ctype && ctype.needsLink && row.ctaLink && row.ctaLink.toString().trim());
+      const isTraffic = ctype && ctype.id === 'traffic';
+      const willUseLink = !!(ctype && ctype.needsLink && !isTraffic && row.ctaLink && row.ctaLink.toString().trim());
       const postRes = parsePostId(row.postLink);
       if (postRes.error) {
         if (willUseLink) {
@@ -131,14 +131,25 @@ router.post('/validate', requireAuth, async (req, res) => {
         parsed.postId = postRes.postId;
         const ownerPageId = postRes.pageIdFromLink || parsed.pageId;
         parsed.objectStoryId = buildObjectStoryId(ownerPageId, postRes.postId);
-        // Loại Traffic/Doanh số: dùng link website, không cần kiểm tra reel
+        
+        // Loại Traffic: dùng bài viết có sẵn cần kiểm tra và bắt buộc có link CTA
+        if (isTraffic) {
+          if (!row.ctaLink || !row.ctaLink.toString().trim()) {
+            errors.push('Thiếu link CTA để gắn nút Mua ngay');
+            if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
+          }
+        }
+
         if (willUseLink) {
           warnings.push(`Loại "${ctype.label}" sẽ tạo quảng cáo LINK tới website (${row.ctaLink}); reel/bài viết được bỏ qua.`);
         } else if (parsed.objectStoryId) {
           const ownerPage = owned.pages.find((p) => p.id === ownerPageId);
           const postToken = ownerPage?.access_token || req.session.fbToken;
           try {
-            await checkPostExists(postToken, parsed.objectStoryId);
+            const postInfo = await checkPostExists(postToken, parsed.objectStoryId);
+            if (postInfo && postInfo.call_to_action && postInfo.call_to_action.type && postInfo.call_to_action.type !== 'NO_BUTTON') {
+              parsed.hasOldCta = true;
+            }
           } catch (err) {
             const code = err instanceof MetaApiError ? err.code : null;
             // Lỗi quyền đọc bài: chỉ cảnh báo (không chặn) để vẫn cho tạo
@@ -251,10 +262,12 @@ router.post('/create', requireAuth, async (req, res) => {
       result.ids.adsetId = adset.id;
 
       // 3) AD CREATIVE
-      // Loại cần website (Traffic/Doanh số) + có link CTA -> ưu tiên quảng cáo LINK (bỏ qua boost post/reel),
-      // vì reel/bài viết thường không boost được và mục tiêu là kéo về website.
-      const useLink = row.ctaLink && (ctype.needsLink || !row.parsed?.objectStoryId);
+      const isTraffic = ctype && ctype.id === 'traffic';
+      const hasPost = !!row.parsed?.objectStoryId;
+      const useLink = row.ctaLink && (ctype.needsLink && !isTraffic || !hasPost);
+      let creative;
       let creativePayload;
+
       if (useLink) {
         // Quảng cáo link tới website — CTA lấy từ sheet nếu có, không thì mặc định theo loại
         const ctaOverride = resolveCta(row.cta);
@@ -267,14 +280,93 @@ router.post('/create', requireAuth, async (req, res) => {
           name: `${row.adName} - creative`,
           object_story_spec: { page_id: pageId, link_data },
         };
+        creative = await createAdCreative(token, adAccountId, creativePayload);
       } else if (row.parsed?.objectStoryId) {
-        // Quảng cáo từ bài viết/reel có sẵn (boost)
-        creativePayload = { name: `${row.adName} - creative`, object_story_id: row.parsed.objectStoryId };
+        if (isTraffic) {
+          if (!row.ctaLink || !row.ctaLink.toString().trim()) {
+            throw new RowError('Thiếu link CTA để gắn nút Mua ngay', ROW_STATUS.POST_ERROR);
+          }
+          // 5. Thử tạo creative bằng cách dùng object_story_id và truyền call_to_action trực tiếp
+          creativePayload = {
+            name: `${row.adName} - creative`,
+            object_story_id: row.parsed.objectStoryId,
+            call_to_action: {
+              type: 'SHOP_NOW',
+              value: {
+                link: row.ctaLink,
+              }
+            }
+          };
+          try {
+            creative = await createAdCreative(token, adAccountId, creativePayload);
+          } catch (err) {
+            console.log("Không thể override CTA trên object_story_id trực tiếp, bắt đầu fallback sang object_story_spec. Chi tiết lỗi:", err.message);
+            
+            // 6. Fallback sang tạo object_story_spec mới
+            let postInfo;
+            try {
+              const ownerPageId = row.parsed.objectStoryId.split('_')[0];
+              const pagesData = await getPages(token);
+              const ownerPage = pagesData.find((p) => p.id === ownerPageId);
+              const postToken = ownerPage?.access_token || token;
+              postInfo = await checkPostExists(postToken, row.parsed.objectStoryId);
+            } catch (fetchErr) {
+              console.log("Lấy thông tin bài viết thất bại, dùng thông tin cơ bản:", fetchErr.message);
+              postInfo = { id: row.parsed.objectStoryId.split('_')[1] };
+            }
+
+            const isVideo = postInfo.type === 'video' || 
+                            postInfo.attachments?.data?.[0]?.type?.includes('video') ||
+                            (postInfo.object_id && /^\d+$/.test(postInfo.object_id) && String(postInfo.object_id).length > 5);
+
+            if (isVideo) {
+              const videoId = postInfo.object_id || postInfo.attachments?.data?.[0]?.target?.id || postInfo.id;
+              creativePayload = {
+                name: `${row.adName} - creative`,
+                object_story_spec: {
+                  page_id: pageId,
+                  video_data: {
+                    video_id: videoId,
+                    message: postInfo.message || row.adName,
+                    call_to_action: {
+                      type: 'SHOP_NOW',
+                      value: {
+                        link: row.ctaLink,
+                      }
+                    }
+                  }
+                }
+              };
+            } else {
+              const pictureUrl = postInfo.attachments?.data?.[0]?.media?.image?.src || undefined;
+              creativePayload = {
+                name: `${row.adName} - creative`,
+                object_story_spec: {
+                  page_id: pageId,
+                  link_data: {
+                    link: row.ctaLink,
+                    message: postInfo.message || row.adName,
+                    picture: pictureUrl,
+                    call_to_action: {
+                      type: 'SHOP_NOW',
+                      value: {
+                        link: row.ctaLink,
+                      }
+                    }
+                  }
+                }
+              };
+            }
+            creative = await createAdCreative(token, adAccountId, creativePayload);
+          }
+        } else {
+          // Quảng cáo từ bài viết/reel có sẵn (boost) cho các mục tiêu khác
+          creativePayload = { name: `${row.adName} - creative`, object_story_id: row.parsed.objectStoryId };
+          creative = await createAdCreative(token, adAccountId, creativePayload);
+        }
       } else {
         throw new RowError('Thiếu cả bài viết lẫn link CTA để tạo nội dung quảng cáo', ROW_STATUS.POST_ERROR);
       }
-
-      const creative = await createAdCreative(token, adAccountId, creativePayload);
       result.ids.creativeId = creative.id;
 
       // 4) AD
