@@ -874,7 +874,7 @@ function openDrawer(index) {
       <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
       ${hasPost ? `
         <dt>Object Story ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
-        <dt>Ghi chú</dt><dd style="color: #2563eb; font-weight: 600;">Tool sẽ không tạo bài viết mới và không chèn link vào nội dung post.</dd>
+        <dt>Ghi chú</dt><dd style="color: #2563eb; font-weight: 600;">Dùng bài gốc để tạo dark post quảng cáo, không đăng bài mới công khai.</dd>
       ` : `
         <dt>Object ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
       `}

@@ -300,8 +300,77 @@ router.post('/create', requireAuth, async (req, res) => {
           try {
             creative = await createAdCreative(token, adAccountId, creativePayload);
           } catch (err) {
-            console.log("Không thể override CTA trên object_story_id trực tiếp. Chi tiết lỗi:", err.message);
-            throw new RowError('Meta không cho gắn CTA mới trực tiếp vào bài viết có sẵn này. Vui lòng dùng bài viết hỗ trợ CTA hoặc tạo creative dark post riêng.', ROW_STATUS.POST_ERROR);
+            console.log("Không thể override CTA trên object_story_id trực tiếp, chuyển sang fallback tạo dark post. Chi tiết lỗi:", err.message);
+            
+            // Dò thông tin bài viết cũ
+            let postInfo;
+            try {
+              const ownerPageId = row.parsed.objectStoryId.split('_')[0];
+              const pagesData = await getPages(token);
+              const ownerPage = pagesData.find((p) => p.id === ownerPageId);
+              const postToken = ownerPage?.access_token || token;
+              postInfo = await checkPostExists(postToken, row.parsed.objectStoryId);
+            } catch (fetchErr) {
+              console.log("Lấy thông tin bài viết thất bại:", fetchErr.message);
+              throw new RowError('Không lấy được thông tin media từ bài viết gốc để tạo dark post: ' + fetchErr.message, ROW_STATUS.POST_ERROR);
+            }
+
+            // Nếu không có postInfo hoặc thiếu dữ liệu cần thiết
+            if (!postInfo || (!postInfo.id && !postInfo.object_id)) {
+              throw new RowError('Không lấy được thông tin media từ bài viết gốc để tạo dark post', ROW_STATUS.POST_ERROR);
+            }
+
+            const isVideo = postInfo.type === 'video' || 
+                            postInfo.attachments?.data?.[0]?.type?.includes('video') ||
+                            (postInfo.object_id && /^\d+$/.test(postInfo.object_id) && String(postInfo.object_id).length > 5);
+
+            if (isVideo) {
+              const videoId = postInfo.object_id || postInfo.attachments?.data?.[0]?.target?.id || postInfo.id;
+              if (!videoId) {
+                throw new RowError('Không lấy được video ID từ bài viết gốc để tạo dark post', ROW_STATUS.POST_ERROR);
+              }
+              creativePayload = {
+                name: `${row.adName} - creative`,
+                object_story_spec: {
+                  page_id: pageId,
+                  video_data: {
+                    video_id: videoId,
+                    message: postInfo.message || '',
+                    call_to_action: {
+                      type: 'SHOP_NOW',
+                      value: {
+                        link: row.ctaLink,
+                      }
+                    }
+                  }
+                }
+              };
+            } else {
+              const pictureUrl = postInfo.attachments?.data?.[0]?.media?.image?.src || undefined;
+              creativePayload = {
+                name: `${row.adName} - creative`,
+                object_story_spec: {
+                  page_id: pageId,
+                  link_data: {
+                    link: row.ctaLink,
+                    message: postInfo.message || '',
+                    picture: pictureUrl,
+                    call_to_action: {
+                      type: 'SHOP_NOW',
+                      value: {
+                        link: row.ctaLink,
+                      }
+                    }
+                  }
+                }
+              };
+            }
+            
+            try {
+              creative = await createAdCreative(token, adAccountId, creativePayload);
+            } catch (fallbackErr) {
+              throw new RowError('Tạo dark post thất bại: ' + fallbackErr.message, ROW_STATUS.CREATE_ERROR);
+            }
           }
         } else {
           // Quảng cáo từ bài viết/reel có sẵn (boost) cho các mục tiêu khác
