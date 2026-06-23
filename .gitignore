@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Biến môi trường & bí mật — KHÔNG commit
+.env
+.env.local
+*.local
+
+# Log & cache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+.cache/
+
+# Hệ điều hành / trình soạn thảo
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Riêng tư của Claude Code (tùy chọn giữ lại launch.json nếu muốn)
+.claude/settings.local.json

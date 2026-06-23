@@ -1,0 +1,20 @@
+{
+  "name": "fb-bulk-ads",
+  "version": "1.0.0",
+  "description": "Web tool tiếng Việt để lên quảng cáo Facebook hàng loạt từ file Excel/Google Sheet bằng Meta Marketing API",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-session": "^1.18.1"
+  }
+}

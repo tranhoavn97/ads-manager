@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DEMO · Trình tạo quảng cáo Facebook hàng loạt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="demo.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    /* Chỉ dùng cho trang DEMO — không ảnh hưởng giao diện thật */
+    .demo-banner{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      margin:14px auto 0; max-width:1180px; padding:10px 16px;
+      border:1px dashed #f59e0b; background:#fffbeb; color:#92400e;
+      border-radius:12px; font-size:13.5px; font-weight:500;
+    }
+    .demo-banner b{ font-weight:700; }
+    .demo-banner .demo-pill{
+      background:#f59e0b; color:#fff; font-weight:700; font-size:11px;
+      letter-spacing:.5px; padding:3px 8px; border-radius:999px;
+    }
+
+    /* ===== Thanh tiến trình tạo hàng loạt (trong modal) ===== */
+    .progress-wrap{ margin:14px 0 4px; }
+    .progress-track{
+      height:14px; background:#e5e7eb; border-radius:999px; overflow:hidden;
+      display:flex; box-shadow:inset 0 1px 2px rgba(0,0,0,.08);
+    }
+    .progress-seg{ height:100%; transition:width .2s; }
+    .progress-seg.ok{ background:#22c55e; }
+    .progress-seg.err{ background:#ef4444; }
+    .progress-seg.pending{ background:#cbd5e1; opacity:.5; }
+    .progress-meta{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:13.5px; }
+    .progress-meta .cp-ok{ color:#16a34a; font-weight:700; }
+    .progress-meta .cp-fail{ color:#dc2626; font-weight:700; }
+    .progress-current{ margin-top:8px; font-size:12.5px; color:#64748b; min-height:18px; }
+    .progress-current.err{ color:#dc2626; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+      <div class="brand-text">
+        <strong>Lên quảng cáo hàng loạt</strong>
+        <span>Facebook · Meta Marketing API</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div id="userBadge" class="user-badge hidden">
+        <span class="dot"></span>
+        <span id="userName">—</span>
+        <button id="logoutBtn" class="link-btn">Đăng xuất</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Banner chế độ DEMO -->
+  <div class="demo-banner">
+    <span class="demo-pill">DEMO</span>
+    <span><b>Chế độ thử nghiệm giao diện</b> — toàn bộ dữ liệu là giả lập, <b>không</b> gọi Facebook và <b>không</b> tạo quảng cáo thật. Dùng để test luồng giao diện.</span>
+  </div>
+
+  <!-- Thanh các bước -->
+  <nav class="stepper" id="stepper">
+    <div class="step" data-step="1"><span class="num">1</span> Đăng nhập</div>
+    <div class="step" data-step="2"><span class="num">2</span> Chọn tài khoản</div>
+    <div class="step" data-step="3"><span class="num">3</span> Tải file & kiểm tra</div>
+    <div class="step" data-step="4"><span class="num">4</span> Tạo hàng loạt</div>
+  </nav>
+
+  <main class="container">
+
+    <!-- Thông báo lỗi đăng nhập -->
+    <div id="authError" class="alert alert-error hidden"></div>
+
+    <!-- BƯỚC 1: ĐĂNG NHẬP -->
+    <section id="view-login" class="view">
+      <div class="hero-card">
+        <h1>Tạo hàng trăm quảng cáo từ một file Excel.</h1>
+        <p>Tải lên file Excel hoặc Google Sheet, hệ thống tự đọc Page ID, Post ID, kiểm tra quyền từng dòng rồi tạo campaign, nhóm quảng cáo và quảng cáo qua Meta Marketing API — có màn hình kiểm tra trước khi chạy.</p>
+        <a id="loginBtn" class="btn btn-primary btn-lg" href="#">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>
+          Đăng nhập với Facebook for Business
+        </a>
+        <p class="fineprint"><strong>(Demo)</strong> Bấm nút trên để giả lập đăng nhập. Quyền yêu cầu khi chạy thật: <code>ads_management</code>, <code>ads_read</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code>, <code>pages_manage_ads</code>.</p>
+      </div>
+    </section>
+
+    <!-- BƯỚC 2: CHỌN TÀI KHOẢN -->
+    <section id="view-account" class="view hidden">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Chọn tài khoản quảng cáo</h2>
+          <p class="muted">Quảng cáo sẽ được tạo trong tài khoản bạn chọn.</p>
+        </div>
+        <div id="adAccountList" class="account-grid">
+          <div class="loading">Đang tải danh sách tài khoản…</div>
+        </div>
+        <div class="panel-foot">
+          <button id="toUploadBtn" class="btn btn-primary" disabled>Tiếp tục</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- BƯỚC 3 & 4: TẢI FILE, KIỂM TRA, TẠO -->
+    <section id="view-work" class="view hidden">
+
+      <div id="uploadZone" class="panel upload-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Tải file dữ liệu</h2>
+            <p class="muted">Hỗ trợ <strong>.xlsx</strong>, <strong>.xls</strong>, <strong>.csv</strong>. Google Sheet: chọn <em>File → Download → Microsoft Excel (.xlsx)</em>.</p>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="sampleBtn" class="btn btn-secondary">Dùng dữ liệu mẫu (demo)</button>
+            <button id="templateBtn" class="btn btn-ghost">Tải file mẫu</button>
+          </div>
+        </div>
+
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden />
+          <div class="dropzone-inner">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+            <strong>Kéo thả file vào đây hoặc bấm để chọn</strong>
+            <span class="muted">Dòng đầu tiên là tiêu đề cột — hoặc bấm “Dùng dữ liệu mẫu (demo)”.</span>
+          </div>
+        </label>
+        <div id="fileMeta" class="file-meta hidden"></div>
+      </div>
+
+      <!-- Khu bảng dữ liệu -->
+      <div id="tableZone" class="panel table-panel hidden">
+        <div class="toolbar">
+          <div class="filters" id="statusFilters"></div>
+          <div class="toolbar-right">
+            <input type="search" id="searchInput" class="search" placeholder="Tìm theo tên chiến dịch, quảng cáo…" />
+            <button id="validateBtn" class="btn btn-secondary">Kiểm tra với Facebook</button>
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table class="data-table" id="dataTable">
+            <thead>
+              <tr>
+                <th class="col-status">Trạng thái</th>
+                <th>Chiến dịch</th>
+                <th>Nhóm QC / Quảng cáo</th>
+                <th>Loại</th>
+                <th>Nút CTA</th>
+                <th>Page ID</th>
+                <th>Post / Object ID</th>
+                <th>Quốc gia</th>
+                <th>Ngân sách</th>
+                <th>Chi tiết</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="action-bar">
+          <label class="switch">
+            <input type="checkbox" id="draftMode" checked />
+            <span class="track"><span class="thumb"></span></span>
+            <span class="switch-label">Chế độ nháp — tạo nhưng <strong>không bật</strong> quảng cáo (PAUSED)</span>
+          </label>
+          <div class="action-right">
+            <span id="readyCount" class="muted">0 dòng sẵn sàng</span>
+            <button id="createBtn" class="btn btn-primary" disabled>Tạo hàng loạt</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Ngăn chi tiết dòng -->
+  <aside id="detailDrawer" class="drawer hidden">
+    <div class="drawer-head">
+      <strong id="drawerTitle">Chi tiết dòng</strong>
+      <button id="drawerClose" class="link-btn">Đóng</button>
+    </div>
+    <div id="drawerBody" class="drawer-body"></div>
+  </aside>
+  <div id="drawerScrim" class="scrim hidden"></div>
+
+  <!-- Hộp xác nhận / kết quả tạo -->
+  <div id="modalScrim" class="scrim hidden">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><strong id="modalTitle">Xác nhận tạo quảng cáo</strong></div>
+      <div id="modalBody" class="modal-body"></div>
+      <div id="modalFoot" class="modal-foot"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Dock cố định dưới cùng: thanh loading + nhật ký + lịch sử camp -->
+  <footer id="dock" class="dock collapsed">
+    <div id="dockLoader" class="dock-loader"><div class="bar"></div></div>
+    <div class="dock-strip">
+      <span class="dock-status">
+        <span class="log-dot" id="logDot"></span>
+        <span id="dockStatus">Sẵn sàng</span>
+      </span>
+      <div class="dock-tabs">
+        <button class="dock-tab active" data-tab="log">
+          Nhật ký <span id="logErrBadge" class="log-errbadge hidden">0</span>
+        </button>
+        <button class="dock-tab" data-tab="history">
+          Lịch sử camp <span id="histCount" class="dock-count">0</span>
+        </button>
+      </div>
+      <div class="dock-actions">
+        <button id="dockClear" class="log-btn" title="Xoá">Xoá</button>
+        <button id="dockToggle" class="log-btn" title="Thu gọn/mở rộng">▴</button>
+      </div>
+    </div>
+    <div class="dock-body" id="dockBody">
+      <div id="logBody" class="dock-panel log-body"></div>
+      <div id="histBody" class="dock-panel hist-body hidden"></div>
+    </div>
+  </footer>
+
+  <script src="demo.js"></script>
+</body>
+</html>

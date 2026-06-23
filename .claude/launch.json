@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "demo-ui",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["demo-server.cjs"],
+      "port": 4173
+    }
+  ]
+}
