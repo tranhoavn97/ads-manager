@@ -76,13 +76,53 @@ export function resolveAdStatus(input, draftMode) {
 
 function parseNumber(input) {
   if (input == null) return NaN;
-  const s = input.toString().replace(/[^\d.,]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+  let s = input.toString().trim();
+  if (!s) return NaN;
+
+  // Nếu chứa cả dấu phẩy và dấu chấm (vd: 1,200,000.50 hoặc 1.200.000,50)
+  if (s.includes(',') && s.includes('.')) {
+    if (s.indexOf(',') < s.indexOf('.')) {
+      // Định dạng tiếng Anh: phẩy là phân cách nghìn, chấm là thập phân
+      s = s.replace(/,/g, '');
+    } else {
+      // Định dạng tiếng Việt/Đức: chấm là phân cách nghìn, phẩy là thập phân
+      s = s.replace(/\./g, '').replace(',', '.');
+    }
+  } else if (s.includes(',')) {
+    // Chỉ chứa dấu phẩy (vd: 200,000 hoặc 1,5)
+    // Nếu dấu phẩy ở vị trí chia hết cho 3 chữ số từ hàng đơn vị (phân cách nghìn)
+    // Ví dụ: 200,000 -> 200000. Nhưng 1,5 -> 1.5
+    const parts = s.split(',');
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      s = s.replace(/,/g, '');
+    } else {
+      s = s.replace(',', '.');
+    }
+  } else if (s.includes('.')) {
+    // Chỉ chứa dấu chấm (vd: 200.000 hoặc 1.5)
+    const parts = s.split('.');
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      s = s.replace(/\./g, '');
+    }
+  }
+
+  // Loại bỏ mọi ký tự không phải số, dấu trừ hoặc dấu chấm thập phân
+  s = s.replace(/[^\d.\-]/g, '');
   return parseFloat(s);
 }
 
 function parseDate(input) {
   if (!input) return null;
   const s = input.toString().trim();
+
+  // Hỗ trợ số serial ngày của Excel (ví dụ 46195)
+  if (/^\d{5}(\.\d+)?$/.test(s)) {
+    const serial = parseFloat(s);
+    const baseDate = new Date(Date.UTC(1899, 11, 30));
+    const dt = new Date(baseDate.getTime() + serial * 24 * 60 * 60 * 1000);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
   // dd/mm/yyyy hoặc dd-mm-yyyy
   const dmy = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
   if (dmy) {
