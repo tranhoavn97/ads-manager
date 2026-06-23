@@ -18,6 +18,8 @@ const State = {
   rows: [],          // dữ liệu từ file (đã chuẩn hoá khoá)
   filter: 'all',
   search: '',
+  creativeMode: 'NEW_CTA_CREATIVE',
+  editingRowIndex: null,
 };
 
 const STATUS_LABEL = {
@@ -172,7 +174,22 @@ function ctaForType(input) {
   return id ? CTA_BY_TYPE[id] : null;
 }
 function ctaPillHtml(input, withCode = false) {
-  const cta = ctaForType(input);
+  const campaignType = typeof input === 'object' ? input.campaignType : input;
+  const ctaOverride = typeof input === 'object' ? input.cta : null;
+  
+  let cta = ctaForType(campaignType);
+  if (ctaOverride && ctaOverride !== 'NO_BUTTON') {
+    cta = { label: ctaOverride, code: ctaOverride, cls: 'cta-other' };
+    if (ctaOverride === 'SHOP_NOW') cta = { label: 'Mua ngay', code: 'SHOP_NOW', cls: 'cta-shop' };
+    if (ctaOverride === 'SEND_MESSAGE') cta = { label: 'Gửi tin nhắn', code: 'SEND_MESSAGE', cls: 'cta-message' };
+    if (ctaOverride === 'LEARN_MORE') cta = { label: 'Tìm hiểu thêm', code: 'LEARN_MORE', cls: 'cta-learn' };
+    if (ctaOverride === 'SIGN_UP') cta = { label: 'Đăng ký', code: 'SIGN_UP', cls: 'cta-signup' };
+    if (ctaOverride === 'BOOK_NOW') cta = { label: 'Đặt ngay', code: 'BOOK_NOW', cls: 'cta-book' };
+    if (ctaOverride === 'APPLY_NOW') cta = { label: 'Nộp đơn', code: 'APPLY_NOW', cls: 'cta-apply' };
+  } else if (ctaOverride === 'NO_BUTTON') {
+    return '<span class="cta-pill cta-none">CTA: —</span>';
+  }
+  
   if (!cta) return '<span class="cta-pill cta-none">CTA: —</span>';
   return `<span class="cta-pill ${cta.cls}" title="Nút kêu gọi hành động hiển thị trên quảng cáo">${esc(cta.label)}</span>` +
     (withCode ? ` <span class="cta-code">${esc(cta.code)}</span>` : '');
@@ -387,9 +404,13 @@ function selectAccount(acc, card) {
 //  Bước 3: đọc file Excel/CSV
 // ============================================================
 const HEADER_KEYS = [
+  ['adAccountId', ['tai khoan quang cao', 'tai khoan', 'ad account', 'ad_account', 'account_id', 'account']],
   ['pageLink', ['link page', 'link trang', 'trang fanpage', 'fanpage', 'page']],
   ['postLink', ['link bai viet', 'bai viet', 'reel', 'anh', 'post', 'link bai', 'bai/reel']],
-  ['ctaLink', ['cta', 'website', 'link dich', 'url', 'link den']],
+  ['cta', ['nut cta', 'nut keu goi', 'keu goi', 'call to action', 'cta button', 'nut hanh dong']],
+  ['ctaLink', ['cta', 'website', 'link dich', 'url', 'link den', 'link cta']],
+  ['budgetMode', ['loai ngan sach', 'kieu ngan sach', 'ngan sach loai', 'hang ngay tron doi']],
+  ['budgetLevel', ['cap ngan sach', 'ngan sach cap', 'cbo']],
   ['campaignType', ['loai', 'muc tieu', 'objective', 'type']],
   ['campaignName', ['ten chien dich', 'chien dich', 'campaign']],
   ['adsetName', ['nhom quang cao', 'ad set', 'adset', 'nhom']],
@@ -535,21 +556,107 @@ function renderTable() {
 
   rows.forEach((r) => {
     const tr = document.createElement('tr');
-    const pageId = r.parsed?.pageId;
-    const objId = r.parsed?.objectStoryId || r.parsed?.postId;
     const hasErr = r.errors?.length;
-    tr.innerHTML = `
-      <td><span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span></td>
-      <td><div class="cell-strong">${esc(r.campaignName || '—')}</div></td>
-      <td><div class="cell-strong">${esc(r.adsetName || '—')}</div><div class="cell-sub">${esc(r.adName || '')}</div></td>
-      <td>${esc(r.campaignType || '—')}</td>
-      <td>${ctaPillHtml(r.campaignType)}</td>
-      <td><span class="cell-mono ${pageId ? '' : 'empty'}">${esc(pageId || 'chưa có')}</span></td>
-      <td><span class="cell-mono ${objId ? '' : 'empty'}">${esc(objId || 'chưa có')}</span></td>
-      <td>${esc(r.country || '—')}</td>
-      <td>${esc(r.budget || '—')}</td>
-      <td><button class="detail-btn ${hasErr ? 'has-err' : ''}" data-i="${r.index}">${hasErr ? 'Xem lỗi' : 'Chi tiết'}</button></td>`;
-    tr.querySelector('.detail-btn').addEventListener('click', () => openDrawer(r.index));
+    
+    if (State.editingRowIndex === r.index) {
+      tr.innerHTML = `
+        <td><span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span></td>
+        <td><input type="text" class="input-inline ad-account-input" value="${esc(r.adAccountId || '')}" placeholder="${esc(State.selectedAccount?.id || '')}"></td>
+        <td><input type="text" class="input-inline campaign-name-input" value="${esc(r.campaignName || '')}"></td>
+        <td><input type="text" class="input-inline adset-name-input" value="${esc(r.adsetName || '')}"></td>
+        <td>
+          <div class="budget-edit-group">
+            <input type="text" class="input-inline budget-val-input" value="${esc(r.budget || '')}">
+            <select class="select-inline budget-level-input">
+              <option value="adset" ${r.budgetLevel === 'adset' ? 'selected' : ''}>ABO (Nhóm)</option>
+              <option value="campaign" ${r.budgetLevel === 'campaign' ? 'selected' : ''}>CBO (Chiến dịch)</option>
+            </select>
+            <select class="select-inline budget-mode-input">
+              <option value="daily" ${r.budgetMode === 'daily' ? 'selected' : ''}>Hàng ngày</option>
+              <option value="lifetime" ${r.budgetMode === 'lifetime' ? 'selected' : ''}>Trọn đời</option>
+            </select>
+          </div>
+        </td>
+        <td><input type="text" class="input-inline start-date-input" value="${esc(r.startDate || '')}" placeholder="dd/mm/yyyy"></td>
+        <td><input type="text" class="input-inline post-link-input" value="${esc(r.postLink || '')}" placeholder="Link bài viết"></td>
+        <td><input type="text" class="input-inline ad-name-input" value="${esc(r.adName || '')}"></td>
+        <td>
+          <div class="cta-edit-group">
+            <select class="select-inline cta-input">
+              <option value="NO_BUTTON" ${r.cta === 'NO_BUTTON' ? 'selected' : ''}>Không nút</option>
+              <option value="SHOP_NOW" ${r.cta === 'SHOP_NOW' ? 'selected' : ''}>Mua ngay</option>
+              <option value="SEND_MESSAGE" ${r.cta === 'SEND_MESSAGE' ? 'selected' : ''}>Gửi tin nhắn</option>
+              <option value="LEARN_MORE" ${r.cta === 'LEARN_MORE' ? 'selected' : ''}>Tìm hiểu thêm</option>
+              <option value="SIGN_UP" ${r.cta === 'SIGN_UP' ? 'selected' : ''}>Đăng ký</option>
+              <option value="BOOK_NOW" ${r.cta === 'BOOK_NOW' ? 'selected' : ''}>Đặt ngay</option>
+              <option value="APPLY_NOW" ${r.cta === 'APPLY_NOW' ? 'selected' : ''}>Nộp đơn</option>
+            </select>
+            <input type="text" class="input-inline cta-link-input" value="${esc(r.ctaLink || '')}" placeholder="Link CTA">
+          </div>
+        </td>
+        <td>
+          <div class="action-btn-group">
+            <button class="save-btn" title="Lưu">✓</button>
+            <button class="cancel-btn" title="Hủy">x</button>
+          </div>
+        </td>`;
+        
+      tr.querySelector('.save-btn').addEventListener('click', () => {
+        r.adAccountId = tr.querySelector('.ad-account-input').value.trim() || null;
+        r.campaignName = tr.querySelector('.campaign-name-input').value.trim();
+        r.adsetName = tr.querySelector('.adset-name-input').value.trim();
+        r.budget = tr.querySelector('.budget-val-input').value.trim();
+        r.budgetLevel = tr.querySelector('.budget-level-input').value;
+        r.budgetMode = tr.querySelector('.budget-mode-input').value;
+        r.startDate = tr.querySelector('.start-date-input').value.trim();
+        r.postLink = tr.querySelector('.post-link-input').value.trim();
+        r.adName = tr.querySelector('.ad-name-input').value.trim();
+        r.cta = tr.querySelector('.cta-input').value;
+        r.ctaLink = tr.querySelector('.cta-link-input').value.trim();
+        
+        State.editingRowIndex = null;
+        clientPreCheck();
+        buildFilters();
+        renderTable();
+        toast('Đã lưu thay đổi', 'ok');
+      });
+      
+      tr.querySelector('.cancel-btn').addEventListener('click', () => {
+        State.editingRowIndex = null;
+        renderTable();
+      });
+      
+    } else {
+      tr.innerHTML = `
+        <td><span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span></td>
+        <td><span class="cell-mono">${esc(r.adAccountId || State.selectedAccount?.id || '—')}</span></td>
+        <td><div class="cell-strong">${esc(r.campaignName || '—')}</div></td>
+        <td><div class="cell-strong">${esc(r.adsetName || '—')}</div></td>
+        <td>
+          <div class="cell-strong">${esc(r.budget || '—')}</div>
+          <div class="cell-sub">${r.budgetLevel === 'campaign' ? 'CBO (Chiến dịch)' : 'ABO (Nhóm)'} · ${r.budgetMode === 'lifetime' ? 'Trọn đời' : 'Hàng ngày'}</div>
+        </td>
+        <td>${esc(r.startDate || '—')}</td>
+        <td><div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.postLink || '')}">${esc(r.postLink || '—')}</div></td>
+        <td><div class="cell-strong">${esc(r.adName || '—')}</div></td>
+        <td>
+          <div>${ctaPillHtml(r)}</div>
+          ${r.ctaLink ? `<div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.ctaLink)}"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></div>` : ''}
+        </td>
+        <td>
+          <div class="action-btn-group">
+            <button class="edit-btn" data-i="${r.index}">Sửa</button>
+            <button class="detail-btn ${hasErr ? 'has-err' : ''}" data-i="${r.index}">Chi tiết</button>
+          </div>
+        </td>`;
+        
+      tr.querySelector('.edit-btn').addEventListener('click', () => {
+        State.editingRowIndex = r.index;
+        renderTable();
+      });
+      
+      tr.querySelector('.detail-btn').addEventListener('click', () => openDrawer(r.index));
+    }
     body.appendChild(tr);
   });
 

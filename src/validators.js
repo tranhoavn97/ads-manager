@@ -173,7 +173,9 @@ export function validateRow(row) {
     return true;
   };
 
-  need(row.pageLink, 'link Page');
+  if (!row.postLink || row.postLink.toString().trim() === '') {
+    need(row.pageLink, 'link Page');
+  }
   need(row.campaignName, 'tên chiến dịch');
   need(row.adsetName, 'tên nhóm quảng cáo');
   need(row.adName, 'tên quảng cáo');

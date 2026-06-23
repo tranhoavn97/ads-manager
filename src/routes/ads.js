@@ -80,45 +80,34 @@ router.post('/validate', requireAuth, async (req, res) => {
     }
 
     // 1) Page ID
-    const pageRes = parsePageId(row.pageLink);
-    if (pageRes.error) {
-      errors.push(pageRes.error);
-    } else if (pageRes.needsResolve) {
-      const key = pageRes.slug.toLowerCase();
-      const normKey = key.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
-      if (slugCache.has(key)) {
-        parsed.pageId = slugCache.get(key);
-      } else if (owned.usernameMap.has(key) || owned.usernameMap.has(normKey)) {
-        // Khớp với Page bạn quản lý (đáng tin cậy nhất)
-        parsed.pageId = owned.usernameMap.get(key) || owned.usernameMap.get(normKey);
-        slugCache.set(key, parsed.pageId);
-      } else {
-        // Thử Graph API, nếu bị chặn thì dò ID từ trang công khai
-        let resolvedId = null;
-        try {
-          const r = await resolvePageSlug(req.session.fbToken, pageRes.slug);
-          resolvedId = r.id;
-        } catch { /* Graph API thường chặn tra theo tên */ }
-        if (!resolvedId) resolvedId = await scrapePageId(pageRes.slug);
-        if (resolvedId) {
-          parsed.pageId = resolvedId;
-          slugCache.set(key, resolvedId);
+    if (row.pageLink && row.pageLink.toString().trim()) {
+      const pageRes = parsePageId(row.pageLink);
+      if (pageRes.error) {
+        errors.push(pageRes.error);
+      } else if (pageRes.needsResolve) {
+        const key = pageRes.slug.toLowerCase();
+        const normKey = key.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+        if (slugCache.has(key)) {
+          parsed.pageId = slugCache.get(key);
+        } else if (owned.usernameMap.has(key) || owned.usernameMap.has(normKey)) {
+          parsed.pageId = owned.usernameMap.get(key) || owned.usernameMap.get(normKey);
+          slugCache.set(key, parsed.pageId);
         } else {
-          errors.push(`Không lấy được Page ID từ tên "${pageRes.slug}". Hãy thay cột Link Page bằng ID Page dạng số (hoặc link có ID số).`);
+          let resolvedId = null;
+          try {
+            const r = await resolvePageSlug(req.session.fbToken, pageRes.slug);
+            resolvedId = r.id;
+          } catch {}
+          if (!resolvedId) resolvedId = await scrapePageId(pageRes.slug);
+          if (resolvedId) {
+            parsed.pageId = resolvedId;
+            slugCache.set(key, resolvedId);
+          } else {
+            errors.push(`Không lấy được Page ID từ tên "${pageRes.slug}". Hãy thay cột Link Page bằng ID Page dạng số (hoặc link có ID số).`);
+          }
         }
-      }
-    } else {
-      parsed.pageId = pageRes.id;
-    }
-
-    // 2) Kiểm tra Page thuộc tài khoản đang đăng nhập
-    if (parsed.pageId) {
-      if (!owned.idSet.has(parsed.pageId)) {
-        errors.push('Page không thuộc tài khoản Facebook đang đăng nhập (không quản lý Page này).');
-        if (status === ROW_STATUS.VALID) status = ROW_STATUS.PERMISSION;
-      } else if (!owned.advertiseSet.has(parsed.pageId)) {
-        errors.push('Tài khoản không có quyền ADVERTISE trên Page này.');
-        if (status === ROW_STATUS.VALID) status = ROW_STATUS.PERMISSION;
+      } else {
+        parsed.pageId = pageRes.id;
       }
     }
 
@@ -140,41 +129,55 @@ router.post('/validate', requireAuth, async (req, res) => {
       } else {
         if (willUseLink) {
           warnings.push(`Loại "${ctype.label}" sẽ tạo quảng cáo LINK tới website (${row.ctaLink}); reel/bài viết được bỏ qua.`);
-        } else if (parsed.pageId) {
-          const ownerPage = owned.pages.find((p) => p.id === parsed.pageId);
-          const postToken = ownerPage?.access_token || req.session.fbToken;
+        } else {
+          let pageId = parsed.pageId || postRes.pageIdFromLink;
+          const postToken = req.session.fbToken;
           
-          let resolved = null;
-          let resolveErrorMsg = null;
-          
-          try {
-            resolved = await resolvePostFromGraph(postToken, parsed.pageId, row.postLink, postRes.postId, postRes.kind);
-          } catch (err) {
-            resolveErrorMsg = err.message;
+          if (!pageId && postRes.postId) {
+            try {
+              const postObj = await verifyPostDetails(postToken, postRes.postId);
+              if (postObj && postObj.from?.id) {
+                pageId = postObj.from.id;
+              }
+            } catch (e) {}
           }
           
-          if (resolved) {
-            let verified = null;
+          if (pageId) {
+            parsed.pageId = pageId;
+            const ownerPage = owned.pages.find((p) => p.id === parsed.pageId);
+            const tokenToUse = ownerPage?.access_token || postToken;
+            
+            let resolved = null;
+            let resolveErrorMsg = null;
+            
             try {
-              verified = await verifyPostDetails(postToken, resolved.objectStoryId);
+              resolved = await resolvePostFromGraph(tokenToUse, parsed.pageId, row.postLink, postRes.postId, postRes.kind);
             } catch (err) {
-              resolveErrorMsg = `Lỗi gọi API xác thực: ${err.message}`;
+              resolveErrorMsg = err.message;
             }
             
-            if (verified) {
-              const isIdMatch = verified.id === resolved.objectStoryId;
-              const isPageMatch = verified.from?.id === parsed.pageId;
-              const isUrlMatch = isPermalinkMatch(verified.permalink_url, row.postLink, postRes.postId);
+            if (resolved) {
+              let verified = null;
+              try {
+                verified = await verifyPostDetails(tokenToUse, resolved.objectStoryId);
+              } catch (err) {
+                resolveErrorMsg = `Lỗi gọi API xác thực: ${err.message}`;
+              }
               
-              if (isIdMatch && isPageMatch && isUrlMatch) {
-                parsed.postId = resolved.postId;
-                parsed.videoId = resolved.videoId;
-                parsed.objectStoryId = resolved.objectStoryId;
-                parsed.sourceObjectId = resolved.sourceObjectId;
-                parsed.permalinkUrl = verified.permalink_url;
-                parsed.verifiedWithGraph = true;
+              if (verified) {
+                const isIdMatch = verified.id === resolved.objectStoryId;
+                const isPageMatch = verified.from?.id === parsed.pageId;
+                const isUrlMatch = isPermalinkMatch(verified.permalink_url, row.postLink, postRes.postId);
                 
-                console.log(`[VERIFIED POST ID RESOLUTION] SUCCESS
+                if (isIdMatch && isPageMatch && isUrlMatch) {
+                  parsed.postId = resolved.postId;
+                  parsed.videoId = resolved.videoId;
+                  parsed.objectStoryId = resolved.objectStoryId;
+                  parsed.sourceObjectId = resolved.sourceObjectId;
+                  parsed.permalinkUrl = verified.permalink_url;
+                  parsed.verifiedWithGraph = true;
+                  
+                  console.log(`[VERIFIED POST ID RESOLUTION] SUCCESS
 - URL đầu vào: ${row.postLink}
 - Page ID: ${parsed.pageId}
 - ID parse từ URL: ${postRes.postId}
@@ -182,25 +185,25 @@ router.post('/validate', requireAuth, async (req, res) => {
 - Post ID Meta trả về: ${resolved.postId}
 - Object Story ID cuối cùng: ${resolved.objectStoryId}
 - Kết quả xác minh: Hợp lệ (Đã khớp với Graph API)`);
-                
-                if (verified.call_to_action && verified.call_to_action.type && verified.call_to_action.type !== 'NO_BUTTON') {
-                  parsed.hasOldCta = true;
+                  
+                  if (verified.call_to_action && verified.call_to_action.type && verified.call_to_action.type !== 'NO_BUTTON') {
+                    parsed.hasOldCta = true;
+                  }
+                } else {
+                  let reasons = [];
+                  if (!isIdMatch) reasons.push(`ID (${verified.id}) khác với ${resolved.objectStoryId}`);
+                  if (!isPageMatch) reasons.push(`Page (${verified.from?.id}) khác với ${parsed.pageId}`);
+                  if (!isUrlMatch) reasons.push(`URL (${verified.permalink_url}) không khớp đầu vào`);
+                  resolveErrorMsg = `Xác minh thất bại: ${reasons.join(', ')}`;
                 }
-              } else {
-                let reasons = [];
-                if (!isIdMatch) reasons.push(`ID (${verified.id}) khác với ${resolved.objectStoryId}`);
-                if (!isPageMatch) reasons.push(`Page (${verified.from?.id}) khác với ${parsed.pageId}`);
-                if (!isUrlMatch) reasons.push(`URL (${verified.permalink_url}) không khớp đầu vào`);
-                resolveErrorMsg = `Xác minh thất bại: ${reasons.join(', ')}`;
               }
             }
-          }
-          
-          if (!parsed.verifiedWithGraph) {
-            errors.push("Không xác định được Post ID thật từ link này. Tool sẽ không tự ghép Page ID với Video ID.");
-            if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
             
-            console.log(`[VERIFIED POST ID RESOLUTION] FAILED
+            if (!parsed.verifiedWithGraph) {
+              errors.push("Không xác định được Post ID thật từ link này. Tool sẽ không tự ghép Page ID với Video ID.");
+              if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
+              
+              console.log(`[VERIFIED POST ID RESOLUTION] FAILED
 - URL đầu vào: ${row.postLink}
 - Page ID: ${parsed.pageId}
 - ID parse từ URL: ${postRes.postId || 'Không có'}
@@ -208,23 +211,35 @@ router.post('/validate', requireAuth, async (req, res) => {
 - Post ID Meta trả về: Không có
 - Object Story ID cuối cùng: Không có
 - Kết quả xác minh: Thất bại (${resolveErrorMsg || 'Không tìm thấy bài viết trùng khớp trên Page'})`);
-          } else {
-            if (mode === 'EXISTING_POST') {
-              const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
-              if (hasCtaInput) {
-                warnings.push('Không thể ghi đè CTA mới khi sử dụng đúng bài viết có sẵn. Tool sẽ giữ nguyên CTA của bài gốc.');
-              }
             } else {
-              if (!row.ctaLink || !row.ctaLink.toString().trim()) {
-                errors.push('Thiếu link CTA để gắn nút Mua ngay');
-                if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
+              if (mode === 'EXISTING_POST') {
+                const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
+                if (hasCtaInput) {
+                  warnings.push('Không thể ghi đè CTA mới khi sử dụng đúng bài viết có sẵn. Tool sẽ giữ nguyên CTA của bài gốc.');
+                }
+              } else {
+                if (!row.ctaLink || !row.ctaLink.toString().trim()) {
+                  errors.push('Thiếu link CTA để gắn nút Mua ngay');
+                  if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
+                }
               }
             }
+          } else {
+            errors.push('Thiếu Page ID để thực hiện xác thực bài viết.');
+            if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
           }
-        } else {
-          errors.push('Thiếu Page ID để thực hiện xác thực bài viết.');
-          if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
         }
+      }
+    }
+
+    // 2) Kiểm tra Page thuộc tài khoản đang đăng nhập (chạy sau khi đã resolve qua pageLink hoặc postLink)
+    if (parsed.pageId) {
+      if (!owned.idSet.has(parsed.pageId)) {
+        errors.push('Page không thuộc tài khoản Facebook đang đăng nhập (không quản lý Page này).');
+        if (status === ROW_STATUS.VALID) status = ROW_STATUS.PERMISSION;
+      } else if (!owned.advertiseSet.has(parsed.pageId)) {
+        errors.push('Tài khoản không có quyền ADVERTISE trên Page này.');
+        if (status === ROW_STATUS.VALID) status = ROW_STATUS.PERMISSION;
       }
     }
 
@@ -293,7 +308,8 @@ router.post('/create', requireAuth, async (req, res) => {
         // Ngân sách ở cấp nhóm: Meta (API mới) bắt buộc khai báo trường này
         campaignPayload.is_adset_budget_sharing_enabled = false;
       }
-      const campaign = await createCampaign(token, adAccountId, campaignPayload);
+      const targetAdAccountId = row.adAccountId || adAccountId;
+      const campaign = await createCampaign(token, targetAdAccountId, campaignPayload);
       result.ids.campaignId = campaign.id;
 
       // 2) AD SET (đặt ngân sách ở đây nếu chọn cấp nhóm)
@@ -321,7 +337,7 @@ router.post('/create', requireAuth, async (req, res) => {
         adsetPayload.promoted_object = { page_id: pageId };
       }
 
-      const adset = await createAdSet(token, adAccountId, adsetPayload);
+      const adset = await createAdSet(token, targetAdAccountId, adsetPayload);
       result.ids.adsetId = adset.id;
 
       // 3) AD CREATIVE
@@ -339,7 +355,7 @@ router.post('/create', requireAuth, async (req, res) => {
           object_story_id: row.parsed.objectStoryId
         };
         // Tuyệt đối không truyền object_story_spec, call_to_action, link_data, video_data hay bất cứ trường nào khác
-        creative = await createAdCreative(token, adAccountId, creativePayload);
+        creative = await createAdCreative(token, targetAdAccountId, creativePayload);
       } else if (hasPost && mode === 'NEW_CTA_CREATIVE') {
         // CHẾ ĐỘ B: TẠO QUẢNG CÁO CÓ CTA MỚI (DARK POST FALLBACK)
         if (!row.ctaLink || !row.ctaLink.toString().trim()) {
@@ -359,7 +375,7 @@ router.post('/create', requireAuth, async (req, res) => {
         };
         
         try {
-          creative = await createAdCreative(token, adAccountId, creativePayload);
+          creative = await createAdCreative(token, targetAdAccountId, creativePayload);
         } catch (err) {
           console.log("Không thể override CTA trên object_story_id trực tiếp, chuyển sang fallback tạo dark post. Chi tiết lỗi:", err.message);
           
@@ -427,7 +443,7 @@ router.post('/create', requireAuth, async (req, res) => {
           }
           
           try {
-            creative = await createAdCreative(token, adAccountId, creativePayload);
+            creative = await createAdCreative(token, targetAdAccountId, creativePayload);
           } catch (fallbackErr) {
             throw new RowError('Tạo dark post thất bại: ' + fallbackErr.message, ROW_STATUS.CREATE_ERROR);
           }
@@ -446,7 +462,7 @@ router.post('/create', requireAuth, async (req, res) => {
             name: `${row.adName} - creative`,
             object_story_spec: { page_id: pageId, link_data },
           };
-          creative = await createAdCreative(token, adAccountId, creativePayload);
+          creative = await createAdCreative(token, targetAdAccountId, creativePayload);
         } else {
           throw new RowError('Thiếu cả bài viết lẫn link CTA để tạo nội dung quảng cáo', ROW_STATUS.POST_ERROR);
         }
@@ -454,7 +470,7 @@ router.post('/create', requireAuth, async (req, res) => {
       result.ids.creativeId = creative.id;
 
       // 4) AD
-      const ad = await createAd(token, adAccountId, {
+      const ad = await createAd(token, targetAdAccountId, {
         name: row.adName,
         adset_id: adset.id,
         creative: { creative_id: creative.id },
