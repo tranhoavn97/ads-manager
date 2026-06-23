@@ -1067,12 +1067,21 @@ function openDrawer(index) {
     if (isExisting) {
       if (ctaHand === 'Tự động') {
         if (r.parsed?.hasOldCta) {
-          noteHtml = `
-            <dt>Ghi chú tạo QC</dt>
-            <dd style="color: #2563eb; font-weight: 600;">
-              Bài viết đã có sẵn nút và link CTA. Giữ nguyên bài gốc không chỉnh sửa.
-            </dd>
-          `;
+          if (r.ctaLink) {
+            noteHtml = `
+              <dt>Ghi chú tạo QC</dt>
+              <dd style="color: #ea580c; font-weight: 600;">
+                Bài viết gốc đã có sẵn nút CTA. Hệ thống sẽ thử gán/ghi đè link theo sheet. Nếu thất bại sẽ báo lỗi.
+              </dd>
+            `;
+          } else {
+            noteHtml = `
+              <dt>Ghi chú tạo QC</dt>
+              <dd style="color: #2563eb; font-weight: 600;">
+                Bài viết đã có sẵn nút và link CTA. Giữ nguyên bài gốc không chỉnh sửa.
+              </dd>
+            `;
+          }
         } else {
           noteHtml = `
             <dt>Ghi chú tạo QC</dt>

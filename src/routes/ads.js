@@ -379,11 +379,26 @@ router.post('/create', requireAuth, async (req, res) => {
             }
 
             if (hasOldCta) {
-              // Bài đã có CTA -> Giữ nguyên nút và link CTA của bài gốc
-              creativePayload = {
-                name: `${row.adName} - creative`,
-                object_story_id: row.parsed.objectStoryId
-              };
+              if (row.ctaLink && row.ctaLink.toString().trim()) {
+                // Bài đã có CTA nhưng có điền link -> gán/ghi đè link theo sheet
+                const targetCta = resolveCta(row.cta)?.code || 'SHOP_NOW';
+                creativePayload = {
+                  name: `${row.adName} - creative`,
+                  object_story_id: row.parsed.objectStoryId,
+                  call_to_action: {
+                    type: targetCta,
+                    value: {
+                      link: row.ctaLink
+                    }
+                  }
+                };
+              } else {
+                // Bài đã có CTA và URL -> giữ nguyên nút và link của bài gốc
+                creativePayload = {
+                  name: `${row.adName} - creative`,
+                  object_story_id: row.parsed.objectStoryId
+                };
+              }
             } else {
               // Bài chưa có CTA -> Lấy nút và link từ Excel, thử cập nhật CTA cho bài gốc bằng cách override call_to_action
               const targetCta = resolveCta(row.cta)?.code || 'SHOP_NOW';
