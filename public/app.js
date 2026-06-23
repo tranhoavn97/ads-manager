@@ -1270,7 +1270,10 @@ function stripForSend(r) {
     campaignName: r.campaignName, adsetName: r.adsetName, adName: r.adName,
     campaignType: r.campaignType, country: r.country, budget: r.budget,
     budgetMode: r.budgetMode, budgetLevel: r.budgetLevel,
-    startDate: r.startDate, endDate: r.endDate, statusRaw: r.statusRaw,
+    startDate: r.startDate, startTimeRaw: r.startTimeRaw,
+    endDate: r.endDate, endTimeRaw: r.endTimeRaw,
+    statusRaw: r.statusRaw, notes: r.notes,
+    contentMode: r.contentMode, ctaHandling: r.ctaHandling,
     parsed: r.parsed, normalized: r.normalized,
   };
 }
