@@ -113,13 +113,37 @@ export async function getPages(token) {
   return data.data || [];
 }
 
-// Lấy ID số của Page từ tên vanity (slug)
+// Lấy ID số của Page từ tên vanity (slug) qua Graph API
 export async function resolvePageSlug(token, slug) {
   const data = await call('GET', encodeURIComponent(slug), {
     token,
     params: { fields: 'id,name' },
   });
   return data; // { id, name }
+}
+
+// Dò Page ID số từ trang công khai (m.facebook.com) khi Graph API bị chặn.
+// Trả về chuỗi ID hoặc null.
+export async function scrapePageId(slug) {
+  const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
+  const url = `https://m.facebook.com/${encodeURIComponent(slug)}`;
+  try {
+    const res = await axios.get(url, {
+      headers: { 'User-Agent': ua, 'Accept-Language': 'vi-VN,vi;q=0.9', Accept: 'text/html' },
+      timeout: 15000,
+      maxRedirects: 5,
+    });
+    const html = String(res.data || '');
+    const m =
+      html.match(/"pageID":"?(\d{6,})"?/) ||
+      html.match(/"delegate_page":\s*\{\s*"id":\s*"(\d{6,})"/) ||
+      html.match(/"entity_id":"(\d{6,})"/) ||
+      html.match(/fb:\/\/page\/\?id=(\d{6,})/) ||
+      html.match(/"pageID"\s*:\s*(\d{6,})/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
 }
 
 // Kiểm tra bài viết có tồn tại / dùng được không

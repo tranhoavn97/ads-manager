@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireAuth } from './auth.js';
 import {
-  getPages, resolvePageSlug, checkPostExists,
+  getPages, resolvePageSlug, scrapePageId, checkPostExists,
   createCampaign, createAdSet, createAdCreative, createAd,
   MetaApiError,
 } from '../meta-api.js';
@@ -80,12 +80,18 @@ router.post('/validate', requireAuth, async (req, res) => {
         parsed.pageId = owned.usernameMap.get(key);
         slugCache.set(key, parsed.pageId);
       } else {
+        // Thử Graph API, nếu bị chặn thì dò ID từ trang công khai
+        let resolvedId = null;
         try {
           const r = await resolvePageSlug(req.session.fbToken, pageRes.slug);
-          parsed.pageId = r.id;
-          slugCache.set(key, r.id);
-        } catch {
-          errors.push(`Không lấy được Page ID từ tên "${pageRes.slug}". Tên (vanity) chỉ tra được khi bạn đăng nhập bằng tài khoản quản lý Page này. Nếu không, hãy thay bằng link/ID Page dạng số.`);
+          resolvedId = r.id;
+        } catch { /* Graph API thường chặn tra theo tên */ }
+        if (!resolvedId) resolvedId = await scrapePageId(pageRes.slug);
+        if (resolvedId) {
+          parsed.pageId = resolvedId;
+          slugCache.set(key, resolvedId);
+        } else {
+          errors.push(`Không lấy được Page ID từ tên "${pageRes.slug}". Hãy thay cột Link Page bằng ID Page dạng số (hoặc link có ID số).`);
         }
       }
     } else {
