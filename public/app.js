@@ -611,14 +611,14 @@ const HEADER_KEYS = [
   ['ctaHandling', ['xu ly cta', 'xu ly', 'cta handling', 'handle cta']],
   ['ctaLink', ['link cta', 'website', 'link dich', 'url', 'link den', 'cta link']],
   ['cta', ['nut cta', 'nut keu goi', 'keu goi', 'call to action', 'cta button', 'nut hanh dong']],
+  ['campaignType', ['loai chien dich', 'loai', 'muc tieu', 'objective', 'type']],
   ['campaignName', ['ten chien dich', 'chien dich', 'campaign']],
   ['adsetName', ['ten nhom quang cao', 'nhom quang cao', 'ad set', 'adset', 'nhom']],
   ['adName', ['ten quang cao', 'quang cao', 'ad name']],
-  ['campaignType', ['loai chien dich', 'loai', 'muc tieu', 'objective', 'type']],
   ['country', ['quoc gia', 'nuoc', 'country', 'location']],
-  ['budget', ['ngan sach', 'budget', 'chi phi']],
   ['budgetMode', ['loai ngan sach', 'kieu ngan sach', 'ngan sach loai', 'hang ngay tron doi']],
   ['budgetLevel', ['cap ngan sach', 'ngan sach cap', 'cbo']],
+  ['budget', ['ngan sach', 'budget', 'chi phi']],
   ['startDate', ['ngay bat dau', 'bat dau', 'start date', 'start']],
   ['startTimeRaw', ['gio bat dau', 'start time', 'time start']],
   ['endDate', ['ngay ket thuc', 'ket thuc', 'end date', 'end']],
@@ -633,7 +633,15 @@ function removeAccents(s) {
 }
 
 function matchHeader(header) {
-  const h = removeAccents(header);
+  const h = removeAccents(header).trim();
+  if (!h) return null;
+  
+  // 1. Khớp chính xác hoàn toàn (Exact match) trước
+  for (const [key, tokens] of HEADER_KEYS) {
+    if (tokens.some((t) => t === h)) return key;
+  }
+  
+  // 2. Khớp một phần (Substring match) sau
   for (const [key, tokens] of HEADER_KEYS) {
     if (tokens.some((t) => h.includes(t))) return key;
   }
