@@ -6,7 +6,7 @@ import {
   MetaApiError, resolvePostFromGraph, verifyPostDetails, isPermalinkMatch,
 } from '../meta-api.js';
 import { parsePageId, parsePostId, buildObjectStoryId, normalizeFbUrl } from '../parsers.js';
-import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, ROW_STATUS } from '../validators.js';
+import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, resolveContentMode, resolveCtaHandling, ROW_STATUS } from '../validators.js';
 import { resolveCampaignType, resolveCta } from '../campaign-mapper.js';
 
 const router = express.Router();
@@ -115,7 +115,8 @@ router.post('/validate', requireAuth, async (req, res) => {
     if (row.postLink && row.postLink.toString().trim()) {
       const ctype = resolveCampaignType(row.campaignType);
       const isTraffic = ctype && ctype.id === 'traffic';
-      const mode = creativeMode || 'NEW_CTA_CREATIVE';
+      const mode = base.normalized?.contentMode || creativeMode || 'NEW_CTA_CREATIVE';
+      const ctaHand = base.normalized?.ctaHandling || 'AUTO';
       const willUseLink = !!(ctype && ctype.needsLink && !isTraffic && row.ctaLink && row.ctaLink.toString().trim());
       const postRes = parsePostId(row.postLink);
       
@@ -211,9 +212,23 @@ router.post('/validate', requireAuth, async (req, res) => {
 - Kết quả xác minh: Thất bại (${resolveErrorMsg || 'Không tìm thấy bài viết trùng khớp trên Page'})`);
             } else {
               if (mode === 'EXISTING_POST') {
-                const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
-                if (hasCtaInput) {
-                  warnings.push('Không thể ghi đè CTA mới khi sử dụng đúng bài viết có sẵn. Tool sẽ giữ nguyên CTA của bài gốc.');
+                if (ctaHand === 'AUTO') {
+                  if (parsed.hasOldCta) {
+                    const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
+                    if (hasCtaInput) {
+                      warnings.push('Bài viết gốc đã có sẵn CTA. Link CTA và Nút CTA trong Excel sẽ được bỏ qua.');
+                    }
+                  } else {
+                    if (!row.ctaLink || !row.ctaLink.toString().trim()) {
+                      errors.push('Bài gốc chưa có CTA. Vui lòng nhập Link CTA trong Excel để thử gắn nút.');
+                      if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
+                    }
+                  }
+                } else {
+                  const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
+                  if (hasCtaInput) {
+                    warnings.push('Bỏ qua Link CTA và Nút CTA trong Excel do lựa chọn xử lý CTA.');
+                  }
                 }
               } else {
                 if (!row.ctaLink || !row.ctaLink.toString().trim()) {
@@ -343,88 +358,141 @@ router.post('/create', requireAuth, async (req, res) => {
       let creativePayload;
 
       if (hasPost) {
-        const mode = creativeMode || 'NEW_CTA_CREATIVE';
-        const shouldAddCta = (mode !== 'EXISTING_POST') && row.ctaLink && row.ctaLink.toString().trim();
+        const mode = row.parsed?.contentMode || row.contentMode || creativeMode || 'NEW_CTA_CREATIVE';
+        const ctaHand = row.parsed?.ctaHandling || row.ctaHandling || 'AUTO';
 
-        if (shouldAddCta) {
-          // BÀI GỐC CHƯA CÓ CTA -> BẮT BUỘC TẠO DARK POST (OBJECT_STORY_SPEC) ĐỂ GẮN CTA VÀ LIÊN KẾT
-          const targetCta = resolveCta(row.cta)?.code || 'SHOP_NOW'; // mặc định SHOP_NOW
-          
-          // Lấy thông tin media từ bài gốc
-          let postInfo;
-          try {
-            const ownerPageId = row.parsed.objectStoryId.split('_')[0];
-            const pagesData = await getPages(token);
-            const ownerPage = pagesData.find((p) => p.id === ownerPageId);
-            const postToken = ownerPage?.access_token || token;
-            postInfo = await checkPostExists(postToken, row.parsed.objectStoryId);
-          } catch (fetchErr) {
-            console.log("Lấy thông tin bài viết thất bại:", fetchErr.message);
-            throw new RowError('Không lấy được thông tin media từ bài viết gốc để tạo dark post: ' + fetchErr.message, ROW_STATUS.POST_ERROR);
-          }
-
-          if (!postInfo || (!postInfo.id && !postInfo.object_id)) {
-            throw new RowError('Không lấy được thông tin media từ bài viết gốc để tạo dark post', ROW_STATUS.POST_ERROR);
-          }
-
-          const isVideo = postInfo.type === 'video' || 
-                          postInfo.attachments?.data?.[0]?.type?.includes('video') ||
-                          (postInfo.object_id && /^\d+$/.test(postInfo.object_id) && String(postInfo.object_id).length > 5);
-
-          if (isVideo) {
-            const videoId = postInfo.object_id || postInfo.attachments?.data?.[0]?.target?.id || postInfo.id;
-            if (!videoId) {
-              throw new RowError('Không lấy được video ID từ bài viết gốc để tạo dark post', ROW_STATUS.POST_ERROR);
+        if (mode === 'EXISTING_POST') {
+          // CHẾ ĐỘ: DÙNG ĐÚNG BÀI VIẾT CÓ SẴN (Không tạo dark post, không tạo bài mới, không đổi Post ID)
+          if (ctaHand === 'AUTO') {
+            let hasOldCta = row.parsed?.hasOldCta;
+            if (hasOldCta === undefined) {
+              try {
+                const ownerPageId = row.parsed.objectStoryId.split('_')[0];
+                const pagesData = await getPages(token);
+                const ownerPage = pagesData.find((p) => p.id === ownerPageId);
+                const postToken = ownerPage?.access_token || token;
+                const postInfo = await checkPostExists(postToken, row.parsed.objectStoryId);
+                hasOldCta = !!(postInfo && postInfo.call_to_action && postInfo.call_to_action.type && postInfo.call_to_action.type !== 'NO_BUTTON');
+              } catch {
+                hasOldCta = false;
+              }
             }
-            creativePayload = {
-              name: `${row.adName} - creative`,
-              object_story_spec: {
-                page_id: pageId,
-                video_data: {
-                  video_id: videoId,
-                  message: postInfo.message || '',
-                  call_to_action: {
-                    type: targetCta,
-                    value: {
-                      link: row.ctaLink,
-                    }
+
+            if (hasOldCta) {
+              // Bài đã có CTA -> Giữ nguyên nút và link CTA của bài gốc
+              creativePayload = {
+                name: `${row.adName} - creative`,
+                object_story_id: row.parsed.objectStoryId
+              };
+            } else {
+              // Bài chưa có CTA -> Lấy nút và link từ Excel, thử cập nhật CTA cho bài gốc bằng cách override call_to_action
+              const targetCta = resolveCta(row.cta)?.code || 'SHOP_NOW';
+              creativePayload = {
+                name: `${row.adName} - creative`,
+                object_story_id: row.parsed.objectStoryId,
+                call_to_action: {
+                  type: targetCta,
+                  value: {
+                    link: row.ctaLink
                   }
                 }
-              }
-            };
+              };
+            }
           } else {
-            const pictureUrl = postInfo.attachments?.data?.[0]?.media?.image?.src || undefined;
+            // KEEP_CURRENT hoặc NO_CTA
             creativePayload = {
               name: `${row.adName} - creative`,
-              object_story_spec: {
-                page_id: pageId,
-                link_data: {
-                  link: row.ctaLink,
-                  message: postInfo.message || '',
-                  picture: pictureUrl,
-                  call_to_action: {
-                    type: targetCta,
-                    value: {
-                      link: row.ctaLink,
-                    }
-                  }
-                }
-              }
+              object_story_id: row.parsed.objectStoryId
             };
           }
-          
+
           try {
             creative = await createAdCreative(token, targetAdAccountId, creativePayload);
-          } catch (fallbackErr) {
-            throw new RowError('Tạo dark post thất bại: ' + fallbackErr.message, ROW_STATUS.CREATE_ERROR);
+          } catch (err) {
+            throw new RowError('Không thể tạo quảng cáo với bài viết gốc: ' + err.message, ROW_STATUS.CREATE_ERROR);
           }
         } else {
-          // CHẾ ĐỘ A: BÀI GỐC ĐÃ CÓ SẴN NÚT CTA HOẶC KHÔNG CÓ LINK CTA -> GIỮ NGUYÊN BÀI GỐC
-          creativePayload = {
-            name: `${row.adName} - creative`,
-            object_story_id: row.parsed.objectStoryId
-          };
-          creative = await createAdCreative(token, targetAdAccountId, creativePayload);
+          // CHẾ ĐỘ: TẠO BẢN QUẢNG CÁO MỚI CÓ CTA (NEW_CTA_CREATIVE) - Tạo dark post bằng object_story_spec
+          const shouldAddCta = row.ctaLink && row.ctaLink.toString().trim();
+
+          if (shouldAddCta) {
+            const targetCta = resolveCta(row.cta)?.code || 'SHOP_NOW';
+            
+            // Lấy thông tin media từ bài gốc
+            let postInfo;
+            try {
+              const ownerPageId = row.parsed.objectStoryId.split('_')[0];
+              const pagesData = await getPages(token);
+              const ownerPage = pagesData.find((p) => p.id === ownerPageId);
+              const postToken = ownerPage?.access_token || token;
+              postInfo = await checkPostExists(postToken, row.parsed.objectStoryId);
+            } catch (fetchErr) {
+              console.log("Lấy thông tin bài viết thất bại:", fetchErr.message);
+              throw new RowError('Không lấy được thông tin media từ bài viết gốc để tạo dark post: ' + fetchErr.message, ROW_STATUS.POST_ERROR);
+            }
+
+            if (!postInfo || (!postInfo.id && !postInfo.object_id)) {
+              throw new RowError('Không lấy được thông tin media từ bài viết gốc để tạo dark post', ROW_STATUS.POST_ERROR);
+            }
+
+            const isVideo = postInfo.type === 'video' || 
+                            postInfo.attachments?.data?.[0]?.type?.includes('video') ||
+                            (postInfo.object_id && /^\d+$/.test(postInfo.object_id) && String(postInfo.object_id).length > 5);
+
+            if (isVideo) {
+              const videoId = postInfo.object_id || postInfo.attachments?.data?.[0]?.target?.id || postInfo.id;
+              if (!videoId) {
+                throw new RowError('Không lấy được video ID từ bài viết gốc để tạo dark post', ROW_STATUS.POST_ERROR);
+              }
+              creativePayload = {
+                name: `${row.adName} - creative`,
+                object_story_spec: {
+                  page_id: pageId,
+                  video_data: {
+                    video_id: videoId,
+                    message: postInfo.message || '',
+                    call_to_action: {
+                      type: targetCta,
+                      value: {
+                        link: row.ctaLink,
+                      }
+                    }
+                  }
+                }
+              };
+            } else {
+              const pictureUrl = postInfo.attachments?.data?.[0]?.media?.image?.src || undefined;
+              creativePayload = {
+                name: `${row.adName} - creative`,
+                object_story_spec: {
+                  page_id: pageId,
+                  link_data: {
+                    link: row.ctaLink,
+                    message: postInfo.message || '',
+                    picture: pictureUrl,
+                    call_to_action: {
+                      type: targetCta,
+                      value: {
+                        link: row.ctaLink,
+                      }
+                    }
+                  }
+                }
+              };
+            }
+            
+            try {
+              creative = await createAdCreative(token, targetAdAccountId, creativePayload);
+            } catch (fallbackErr) {
+              throw new RowError('Tạo dark post thất bại: ' + fallbackErr.message, ROW_STATUS.CREATE_ERROR);
+            }
+          } else {
+            creativePayload = {
+              name: `${row.adName} - creative`,
+              object_story_id: row.parsed.objectStoryId
+            };
+            creative = await createAdCreative(token, targetAdAccountId, creativePayload);
+          }
         }
       } else {
         // BÀI VIẾT KHÔNG CÓ SẴN (QUẢNG CÁO LINK LÀM MỚI TỪ ĐẦU)

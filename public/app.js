@@ -607,19 +607,24 @@ const HEADER_KEYS = [
   ['adAccountId', ['tai khoan quang cao', 'tai khoan', 'ad account', 'ad_account', 'account_id', 'account']],
   ['pageLink', ['link page', 'link trang', 'trang fanpage', 'fanpage', 'page']],
   ['postLink', ['link bai viet', 'bai viet', 'reel', 'anh', 'post', 'link bai', 'bai/reel']],
+  ['contentMode', ['che do noi dung', 'che do', 'noidung', 'content mode']],
+  ['ctaHandling', ['xu ly cta', 'xu ly', 'cta handling', 'handle cta']],
+  ['ctaLink', ['link cta', 'website', 'link dich', 'url', 'link den', 'cta link']],
   ['cta', ['nut cta', 'nut keu goi', 'keu goi', 'call to action', 'cta button', 'nut hanh dong']],
-  ['ctaLink', ['cta', 'website', 'link dich', 'url', 'link den', 'link cta']],
-  ['budgetMode', ['loai ngan sach', 'kieu ngan sach', 'ngan sach loai', 'hang ngay tron doi']],
-  ['budgetLevel', ['cap ngan sach', 'ngan sach cap', 'cbo']],
-  ['campaignType', ['loai', 'muc tieu', 'objective', 'type']],
   ['campaignName', ['ten chien dich', 'chien dich', 'campaign']],
-  ['adsetName', ['nhom quang cao', 'ad set', 'adset', 'nhom']],
+  ['adsetName', ['ten nhom quang cao', 'nhom quang cao', 'ad set', 'adset', 'nhom']],
   ['adName', ['ten quang cao', 'quang cao', 'ad name']],
+  ['campaignType', ['loai chien dich', 'loai', 'muc tieu', 'objective', 'type']],
   ['country', ['quoc gia', 'nuoc', 'country', 'location']],
   ['budget', ['ngan sach', 'budget', 'chi phi']],
-  ['startDate', ['ngay bat dau', 'bat dau', 'start']],
-  ['endDate', ['ngay ket thuc', 'ket thuc', 'end']],
+  ['budgetMode', ['loai ngan sach', 'kieu ngan sach', 'ngan sach loai', 'hang ngay tron doi']],
+  ['budgetLevel', ['cap ngan sach', 'ngan sach cap', 'cbo']],
+  ['startDate', ['ngay bat dau', 'bat dau', 'start date', 'start']],
+  ['startTimeRaw', ['gio bat dau', 'start time', 'time start']],
+  ['endDate', ['ngay ket thuc', 'ket thuc', 'end date', 'end']],
+  ['endTimeRaw', ['gio ket thuc', 'end time', 'time end']],
   ['statusRaw', ['trang thai', 'status']],
+  ['notes', ['ghi chu', 'notes', 'note']],
 ];
 
 function removeAccents(s) {
@@ -756,6 +761,10 @@ function clientParsePostId(input) {
 
 function clientParseRow(r) {
   const parsed = { pageId: null, postId: null, objectStoryId: null, pageVanity: null };
+  
+  if (!r.contentMode) r.contentMode = 'Sử dụng bài viết có sẵn';
+  if (!r.ctaHandling) r.ctaHandling = 'Tự động';
+
   const pg = clientParsePageId(r.pageLink);
   parsed.pageId = pg.id || null;
   if (pg.vanity) parsed.pageVanity = pg.slug;
@@ -790,16 +799,32 @@ function getStatusIconHtml(r) {
 }
 
 function clientPreCheck() {
-  const otherRequired = [['campaignName', 'tên chiến dịch'], ['adsetName', 'tên nhóm quảng cáo'],
-    ['adName', 'tên quảng cáo'], ['campaignType', 'loại chiến dịch'], ['country', 'quốc gia'], ['budget', 'ngân sách']];
+  const otherRequired = [
+    ['campaignName', 'tên chiến dịch'],
+    ['adsetName', 'tên nhóm quảng cáo'],
+    ['adName', 'tên quảng cáo'],
+    ['campaignType', 'loại chiến dịch'],
+    ['country', 'quốc gia'],
+    ['budget', 'ngân sách'],
+    ['contentMode', 'chế độ nội dung'],
+    ['ctaHandling', 'xử lý CTA'],
+    ['budgetMode', 'loại ngân sách'],
+    ['startDate', 'ngày bắt đầu'],
+    ['statusRaw', 'trạng thái']
+  ];
   State.rows.forEach((r) => {
     r.errors = [];
     r.warnings = [];
+    
+    if (!r.contentMode) r.contentMode = 'Sử dụng bài viết có sẵn';
+    if (!r.ctaHandling) r.ctaHandling = 'Tự động';
+
     clientParseRow(r); // tách Page ID / Post ID ngay để xem trước
     
     const missing = [];
-    if (!r.postLink || r.postLink.toString().trim() === '') {
-      if (!r.pageLink) missing.push('link Page');
+    if (!r.pageLink) missing.push('link Page');
+    if (r.contentMode === 'Sử dụng bài viết có sẵn' && (!r.postLink || r.postLink.toString().trim() === '')) {
+      missing.push('link bài viết');
     }
     otherRequired.forEach(([k, l]) => {
       if (!r[k]) missing.push(l);
@@ -810,15 +835,6 @@ function clientPreCheck() {
       r.errors = missing.map((m) => 'Thiếu ' + m);
     } else {
       r.status = 'pending';
-    }
-
-    // Cảnh báo nếu nhập CTA ở chế độ EXISTING_POST
-    const hasPost = !!(r.postLink && r.postLink.toString().trim());
-    if (hasPost && State.creativeMode === 'EXISTING_POST') {
-      const hasCtaInput = (r.ctaLink && r.ctaLink.toString().trim()) || (r.cta && r.cta.toString().trim());
-      if (hasCtaInput) {
-        r.warnings.push('Không thể ghi đè CTA mới khi sử dụng đúng bài viết có sẵn. Tool sẽ giữ nguyên CTA của bài gốc.');
-      }
     }
 
     if (r.parsed.pageVanity && !r.parsed.pageId) {
@@ -896,8 +912,23 @@ function renderTable() {
             </div>
           </div>
         </td>
-        <td><input type="text" class="input-inline start-date-input" value="${esc(r.startDate || '')}" placeholder="dd/mm/yyyy"></td>
-        <td><input type="text" class="input-inline post-link-input" value="${esc(r.postLink || '')}" placeholder="Link bài viết"></td>
+        <td>
+          <input type="text" class="input-inline start-date-input" value="${esc(r.startDate || '')}" placeholder="dd/mm/yyyy" style="margin-bottom: 4px;">
+          <input type="text" class="input-inline start-time-input" value="${esc(r.startTimeRaw || '')}" placeholder="08:00" style="font-size: 11px; padding: 2px 4px;">
+        </td>
+        <td>
+          <input type="text" class="input-inline post-link-input" value="${esc(r.postLink || '')}" placeholder="Link bài viết" style="margin-bottom: 6px;">
+          <div style="display: flex; gap: 4px;">
+            <select class="select-inline content-mode-input" style="flex: 1; font-size: 11px; padding: 2px;">
+              <option value="Sử dụng bài viết có sẵn" ${r.contentMode === 'Sử dụng bài viết có sẵn' ? 'selected' : ''}>Bài viết có sẵn</option>
+            </select>
+            <select class="select-inline cta-handling-input" style="flex: 1; font-size: 11px; padding: 2px;">
+              <option value="Tự động" ${r.ctaHandling === 'Tự động' || !r.ctaHandling ? 'selected' : ''}>CTA: Tự động</option>
+              <option value="Giữ CTA hiện tại" ${r.ctaHandling === 'Giữ CTA hiện tại' ? 'selected' : ''}>CTA: Giữ nguyên</option>
+              <option value="Không dùng CTA" ${r.ctaHandling === 'Không dùng CTA' ? 'selected' : ''}>CTA: Không dùng</option>
+            </select>
+          </div>
+        </td>
         <td><input type="text" class="input-inline ad-name-input" value="${esc(r.adName || '')}"></td>
         <td>
           <div class="cta-edit-group">
@@ -928,7 +959,10 @@ function renderTable() {
         r.budgetLevel = tr.querySelector('.budget-level-input').value;
         r.budgetMode = tr.querySelector('.budget-mode-input').value;
         r.startDate = tr.querySelector('.start-date-input').value.trim();
+        r.startTimeRaw = tr.querySelector('.start-time-input').value.trim();
         r.postLink = tr.querySelector('.post-link-input').value.trim();
+        r.contentMode = tr.querySelector('.content-mode-input').value;
+        r.ctaHandling = tr.querySelector('.cta-handling-input').value;
         r.adName = tr.querySelector('.ad-name-input').value.trim();
         r.cta = tr.querySelector('.cta-input').value;
         r.ctaLink = tr.querySelector('.cta-link-input').value.trim();
@@ -955,8 +989,17 @@ function renderTable() {
           <div class="cell-strong">${esc(r.budget || '—')}</div>
           <div class="cell-sub">${r.budgetLevel === 'campaign' ? 'CBO (Chiến dịch)' : 'ABO (Nhóm)'} · ${r.budgetMode === 'lifetime' ? 'Trọn đời' : 'Hàng ngày'}</div>
         </td>
-        <td>${esc(r.startDate || '—')}</td>
-        <td><div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.postLink || '')}">${esc(r.postLink || '—')}</div></td>
+        <td>
+          <div>${esc(r.startDate || '—')}</div>
+          ${r.startTimeRaw ? `<div class="cell-sub" style="font-size: 11px;">Giờ: ${esc(r.startTimeRaw)}</div>` : ''}
+        </td>
+        <td>
+          <div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.postLink || '')}">${esc(r.postLink || '—')}</div>
+          <div class="cell-sub" style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">
+            <span class="chip-sm" style="background-color: var(--bg-hover); font-size: 11px; padding: 2px 6px; border-radius: 4px;">${esc(r.contentMode || 'Sử dụng bài viết có sẵn')}</span>
+            <span class="chip-sm" style="background-color: var(--bg-hover); font-size: 11px; padding: 2px 6px; border-radius: 4px;">CTA: ${esc(r.ctaHandling || 'Tự động')}</span>
+          </div>
+        </td>
         <td><div class="cell-strong">${esc(r.adName || '—')}</div></td>
         <td>
           <div>${ctaPillHtml(r)}</div>
@@ -1008,14 +1051,36 @@ function openDrawer(index) {
   }
 
   let noteHtml = '';
+  const mode = r.contentMode || 'Sử dụng bài viết có sẵn';
+  const isExisting = mode === 'Sử dụng bài viết có sẵn' || r.parsed?.contentMode === 'EXISTING_POST';
+  const ctaHand = r.ctaHandling || 'Tự động';
+
   if (hasPost) {
-    if (State.creativeMode === 'EXISTING_POST') {
-      noteHtml = `
-        <dt>Ghi chú tạo QC</dt>
-        <dd style="color: #2563eb; font-weight: 600;">
-          Dùng đúng bài viết gốc để tạo quảng cáo, không đăng bài mới công khai.
-        </dd>
-      `;
+    if (isExisting) {
+      if (ctaHand === 'Tự động') {
+        if (r.parsed?.hasOldCta) {
+          noteHtml = `
+            <dt>Ghi chú tạo QC</dt>
+            <dd style="color: #2563eb; font-weight: 600;">
+              Bài viết đã có sẵn nút và link CTA. Giữ nguyên bài gốc không chỉnh sửa.
+            </dd>
+          `;
+        } else {
+          noteHtml = `
+            <dt>Ghi chú tạo QC</dt>
+            <dd style="color: #ea580c; font-weight: 600;">
+              Bài gốc chưa có CTA. Hệ thống sẽ thử cập nhật CTA qua Ad Creative, nếu thất bại sẽ báo lỗi (không tạo dark post).
+            </dd>
+          `;
+        }
+      } else {
+        noteHtml = `
+          <dt>Ghi chú tạo QC</dt>
+          <dd style="color: #2563eb; font-weight: 600;">
+            Đã chọn giữ CTA hiện tại hoặc không dùng CTA. Giữ nguyên bài gốc.
+          </dd>
+        `;
+      }
     } else {
       noteHtml = `
         <dt>Ghi chú tạo QC</dt>
@@ -1029,7 +1094,7 @@ function openDrawer(index) {
   body.innerHTML = `
     <div class="section-label">Dữ liệu</div>
     <dl class="dl">
-      ${hasPost ? `<dt>Chế độ</dt><dd>${State.creativeMode === 'EXISTING_POST' ? 'Sử dụng đúng bài viết có sẵn' : 'Tạo bản quảng cáo mới có CTA'}</dd>` : ''}
+      ${hasPost ? `<dt>Chế độ</dt><dd>${esc(mode)} · Xử lý CTA: ${esc(ctaHand)}</dd>` : ''}
       <dt>Chiến dịch</dt><dd>${esc(r.campaignName || '—')}</dd>
       <dt>Nhóm QC</dt><dd>${esc(r.adsetName || '—')}</dd>
       <dt>Quảng cáo</dt><dd>${esc(r.adName || '—')}</dd>
@@ -1037,6 +1102,7 @@ function openDrawer(index) {
       ${ctaHtml}
       <dt>Quốc gia</dt><dd>${esc(r.country || '—')}</dd>
       <dt>Ngân sách</dt><dd>${esc(r.budget || '—')} · ${budgetModeLabel(r)} · ${budgetLevelLabel(r)}</dd>
+      <dt>Thời gian</dt><dd>${esc(r.startDate || '—')} ${r.startTimeRaw ? esc(r.startTimeRaw) : '00:00'} ${r.endDate ? `→ ${esc(r.endDate)} ${r.endTimeRaw ? esc(r.endTimeRaw) : '23:59'}` : ''}</dd>
       ${hasPost ? `
         <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
         <dt>Post ID thật</dt><dd class="mono">${esc(r.parsed?.postId || '—')}</dd>
@@ -1233,21 +1299,36 @@ function showResults(results, draft) {
 //  File mẫu
 // ============================================================
 function downloadTemplate() {
-  const headers = ['Link Page', 'Link bài viết/Reel/Ảnh', 'Link CTA', 'Tên chiến dịch', 'Tên nhóm quảng cáo',
-    'Tên quảng cáo', 'Loại chiến dịch', 'Nút CTA', 'Quốc gia', 'Ngân sách', 'Loại ngân sách', 'Cấp ngân sách',
-    'Ngày bắt đầu', 'Ngày kết thúc', 'Trạng thái'];
-  // "Loại ngân sách": Hàng ngày | Trọn đời (mặc định Hàng ngày — Trọn đời cần Ngày kết thúc).
-  // "Cấp ngân sách": Nhóm | Chiến dịch (CBO) — mặc định Nhóm.
-  // Mẹo: Page ID nên nhập dạng LINK (facebook.com/...) để Excel không làm tròn số dài.
+  const headers = [
+    'Link Page', 'Link bài viết', 'Chế độ nội dung', 'Xử lý CTA', 'Link CTA', 'Nút CTA',
+    'Tên chiến dịch', 'Tên nhóm quảng cáo', 'Tên quảng cáo', 'Loại chiến dịch',
+    'Quốc gia', 'Ngân sách', 'Loại ngân sách', 'Ngày bắt đầu', 'Giờ bắt đầu',
+    'Ngày kết thúc', 'Giờ kết thúc', 'Trạng thái', 'Ghi chú'
+  ];
   const sample = [
-    'https://www.facebook.com/61550000000000', 'https://www.facebook.com/61550000000000/posts/1234567890', '',
-    'CD Tương tác T6', 'Nhóm VN 25-45', 'QC Bài viết A', 'Tương tác', '', 'Việt Nam', '200000', 'Hàng ngày', 'Nhóm', '24/06/2026', '30/06/2026', 'Tạm dừng'];
-  const sample2 = [
-    'https://www.facebook.com/61550000000000', '', 'https://shop.example.com/sale', 'CD Traffic Sale',
-    'Nhóm Web VN', 'QC Web Sale', 'Traffic', 'Mua ngay', 'VN', '500000', 'Hàng ngày', 'Chiến dịch', '24/06/2026', '', 'Bật'];
+    'https://www.facebook.com/HaiDangReviewtaphoa',
+    'https://www.facebook.com/reel/1925057404843374/',
+    'Sử dụng bài viết có sẵn',
+    'Tự động',
+    'https://s.shopee.vn/8fQCw4wl8v',
+    'Mua ngay',
+    'Test Campaign 01',
+    'Adset Việt Nam 18-45',
+    'Ad Reel 01',
+    'Lưu lượng truy cập',
+    'Việt Nam',
+    '200000',
+    'Hàng ngày',
+    '24/06/2026',
+    '08:00',
+    '30/06/2026',
+    '23:59',
+    'Tạm dừng',
+    'Test trước 1 dòng'
+  ];
   // Hàng ghi chú các nút CTA hợp lệ (đặt ở sheet thứ 2 cho gọn)
   const ctaGuide = [['Mã CTA', 'Nhãn hiển thị'], ...Object.entries(CTA_LABELS).map(([code, label]) => [code, label])];
-  const ws = XLSX.utils.aoa_to_sheet([headers, sample, sample2]);
+  const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
   ws['!cols'] = headers.map(() => ({ wch: 22 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Quảng cáo');

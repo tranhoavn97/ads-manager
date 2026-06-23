@@ -111,27 +111,44 @@ function parseNumber(input) {
   return parseFloat(s);
 }
 
-function parseDate(input) {
+function parseDate(input, timeInput) {
   if (!input) return null;
   const s = input.toString().trim();
+  let dt = null;
 
   // Hỗ trợ số serial ngày của Excel (ví dụ 46195)
   if (/^\d{5}(\.\d+)?$/.test(s)) {
     const serial = parseFloat(s);
     const baseDate = new Date(Date.UTC(1899, 11, 30));
-    const dt = new Date(baseDate.getTime() + serial * 24 * 60 * 60 * 1000);
-    return isNaN(dt.getTime()) ? null : dt;
+    dt = new Date(baseDate.getTime() + Math.floor(serial) * 24 * 60 * 60 * 1000);
+  } else {
+    // dd/mm/yyyy hoặc dd-mm-yyyy
+    const dmy = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+    if (dmy) {
+      const [, d, m, y] = dmy;
+      dt = new Date(Date.UTC(+y, +m - 1, +d, 0, 0, 0));
+    } else {
+      const parsed = new Date(s);
+      if (!isNaN(parsed.getTime())) {
+        dt = parsed;
+      }
+    }
   }
 
-  // dd/mm/yyyy hoặc dd-mm-yyyy
-  const dmy = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
-  if (dmy) {
-    const [, d, m, y] = dmy;
-    const dt = new Date(Date.UTC(+y, +m - 1, +d, 0, 0, 0));
-    return isNaN(dt.getTime()) ? null : dt;
+  if (!dt || isNaN(dt.getTime())) return null;
+
+  if (timeInput) {
+    const ts = timeInput.toString().trim();
+    const timeMatch = ts.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (timeMatch) {
+      const hrs = parseInt(timeMatch[1], 10);
+      const mins = parseInt(timeMatch[2], 10);
+      const secs = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
+      dt.setUTCHours(hrs, mins, secs, 0);
+    }
   }
-  const dt = new Date(s);
-  return isNaN(dt.getTime()) ? null : dt;
+
+  return dt;
 }
 
 function stripAccents(s) {
@@ -155,6 +172,25 @@ export function resolveBudgetLevel(input) {
   return 'adset';
 }
 
+export function resolveContentMode(input) {
+  const n = stripAccents(input);
+  if (n.includes('co san') || n.includes('sử dụng bài viết có sẵn') || n.includes('existing')) {
+    return 'EXISTING_POST';
+  }
+  return 'NEW_CTA_CREATIVE';
+}
+
+export function resolveCtaHandling(input) {
+  const n = stripAccents(input);
+  if (n.includes('hien tai') || n.includes('giu cta') || n.includes('keep')) {
+    return 'KEEP_CURRENT';
+  }
+  if (n.includes('khong') || n.includes('no cta') || n.includes('khong dung')) {
+    return 'NO_CTA';
+  }
+  return 'AUTO';
+}
+
 /**
  * Kiểm tra một dòng. KHÔNG gọi API ở đây (phần resolve Page/Post nằm ở route).
  * @param {object} row - dữ liệu đã map theo khoá chuẩn
@@ -173,15 +209,29 @@ export function validateRow(row) {
     return true;
   };
 
-  if (!row.postLink || row.postLink.toString().trim() === '') {
-    need(row.pageLink, 'link Page');
+  const mode = resolveContentMode(row.contentMode);
+  normalized.contentMode = mode;
+
+  const ctaHand = resolveCtaHandling(row.ctaHandling);
+  normalized.ctaHandling = ctaHand;
+
+  need(row.contentMode, 'chế độ nội dung');
+  need(row.ctaHandling, 'xử lý CTA');
+  need(row.pageLink, 'link Page');
+
+  if (mode === 'EXISTING_POST') {
+    need(row.postLink, 'link bài viết');
   }
+
   need(row.campaignName, 'tên chiến dịch');
   need(row.adsetName, 'tên nhóm quảng cáo');
   need(row.adName, 'tên quảng cáo');
   need(row.campaignType, 'loại chiến dịch');
   need(row.country, 'quốc gia');
   need(row.budget, 'ngân sách');
+  need(row.budgetMode, 'loại ngân sách');
+  need(row.startDate, 'ngày bắt đầu');
+  need(row.statusRaw, 'trạng thái');
 
   // Loại chiến dịch
   const ctype = resolveCampaignType(row.campaignType);
@@ -189,13 +239,12 @@ export function validateRow(row) {
     errors.push(`Loại chiến dịch "${row.campaignType}" không hợp lệ (chỉ nhận: Tin nhắn, Tương tác, Traffic, Lead, Doanh số)`);
   } else if (ctype) {
     normalized.campaignType = ctype;
-    // Loại cần website nhưng thiếu link CTA
-    if (ctype.needsLink && (!row.ctaLink || row.ctaLink.toString().trim() === '')) {
+    
+    // Loại cần website nhưng thiếu link CTA (chỉ check khi ctaHandling = AUTO)
+    const isTraffic = ctype.id === 'traffic';
+    const needsLink = ctype.needsLink || (isTraffic && mode === 'EXISTING_POST');
+    if (needsLink && ctaHand === 'AUTO' && (!row.ctaLink || row.ctaLink.toString().trim() === '')) {
       errors.push(`Loại "${ctype.label}" cần link CTA (website đích) nhưng đang để trống`);
-    }
-    // Loại boost post nhưng thiếu link bài viết
-    if (!ctype.needsLink && ctype.id !== 'lead' && (!row.postLink || row.postLink.toString().trim() === '')) {
-      warnings.push(`Loại "${ctype.label}" thường cần link bài viết/reel/ảnh để quảng cáo`);
     }
   }
 
@@ -221,9 +270,10 @@ export function validateRow(row) {
     }
   }
 
-  // Ngày
-  const start = parseDate(row.startDate);
-  const end = parseDate(row.endDate);
+  // Ngày & Giờ bắt đầu/kết thúc
+  const start = parseDate(row.startDate, row.startTimeRaw);
+  const end = parseDate(row.endDate, row.endTimeRaw);
+  
   if (row.startDate && !start) errors.push(`Ngày bắt đầu "${row.startDate}" không đọc được (dùng dd/mm/yyyy)`);
   if (row.endDate && !end) errors.push(`Ngày kết thúc "${row.endDate}" không đọc được (dùng dd/mm/yyyy)`);
   if (start && end && end <= start) errors.push('Ngày kết thúc phải sau ngày bắt đầu');
