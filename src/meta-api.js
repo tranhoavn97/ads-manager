@@ -108,7 +108,7 @@ export async function getAdAccounts(token) {
 export async function getPages(token) {
   const data = await call('GET', 'me/accounts', {
     token,
-    params: { fields: 'id,name,access_token,tasks', limit: 200 },
+    params: { fields: 'id,name,username,link,access_token,tasks', limit: 200 },
   });
   return data.data || [];
 }

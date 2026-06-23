@@ -26,7 +26,15 @@ async function loadOwnedPages(token) {
   const advertiseSet = new Set(
     pages.filter((p) => !Array.isArray(p.tasks) || p.tasks.includes('ADVERTISE')).map((p) => p.id)
   );
-  return { pages, idSet, advertiseSet };
+  // Map tên vanity (username / slug trong link) -> ID số, để resolve link dạng tên
+  const usernameMap = new Map();
+  for (const p of pages) {
+    if (p.username) usernameMap.set(p.username.toLowerCase(), p.id);
+    // Tách slug từ trường link (vd https://facebook.com/HaiDangReviewtaphoa)
+    const m = (p.link || '').match(/facebook\.com\/([^/?#]+)/i);
+    if (m && m[1] && !/^profile\.php$/i.test(m[1])) usernameMap.set(m[1].toLowerCase(), p.id);
+  }
+  return { pages, idSet, advertiseSet, usernameMap };
 }
 
 // ---------- BƯỚC KIỂM TRA (PREVIEW) ----------
@@ -67,13 +75,17 @@ router.post('/validate', requireAuth, async (req, res) => {
       const key = pageRes.slug.toLowerCase();
       if (slugCache.has(key)) {
         parsed.pageId = slugCache.get(key);
+      } else if (owned.usernameMap.has(key)) {
+        // Khớp với Page bạn quản lý (đáng tin cậy nhất)
+        parsed.pageId = owned.usernameMap.get(key);
+        slugCache.set(key, parsed.pageId);
       } else {
         try {
           const r = await resolvePageSlug(req.session.fbToken, pageRes.slug);
           parsed.pageId = r.id;
           slugCache.set(key, r.id);
         } catch {
-          errors.push(`Không lấy được Page ID từ "${pageRes.slug}". Hãy dùng link có ID số hoặc kiểm tra quyền truy cập Page.`);
+          errors.push(`Không lấy được Page ID từ tên "${pageRes.slug}". Tên (vanity) chỉ tra được khi bạn đăng nhập bằng tài khoản quản lý Page này. Nếu không, hãy thay bằng link/ID Page dạng số.`);
         }
       }
     } else {
