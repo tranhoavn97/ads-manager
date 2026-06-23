@@ -124,13 +124,22 @@ router.post('/validate', requireAuth, async (req, res) => {
         parsed.postId = postRes.postId;
         const ownerPageId = postRes.pageIdFromLink || parsed.pageId;
         parsed.objectStoryId = buildObjectStoryId(ownerPageId, postRes.postId);
-        // Kiểm tra bài viết có dùng được không
+        // Kiểm tra bài viết có dùng được không — ưu tiên dùng Page access token
         if (parsed.objectStoryId) {
+          const ownerPage = owned.pages.find((p) => p.id === ownerPageId);
+          const postToken = ownerPage?.access_token || req.session.fbToken;
           try {
-            await checkPostExists(req.session.fbToken, parsed.objectStoryId);
+            await checkPostExists(postToken, parsed.objectStoryId);
           } catch (err) {
-            errors.push(err instanceof MetaApiError ? `Lỗi bài viết: ${err.message}` : 'Không truy cập được bài viết');
-            if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
+            const code = err instanceof MetaApiError ? err.code : null;
+            // Lỗi quyền đọc bài: chỉ cảnh báo (không chặn) để vẫn cho tạo
+            const permCodes = [10, 200, 190, 3, 102, 458, 459, 463, 467, 1349125];
+            if (permCodes.includes(code)) {
+              warnings.push('Chưa kiểm tra trước được bài viết do token thiếu quyền "pages_read_engagement". Vẫn cho phép tạo — nếu reel/bài viết thuộc Page bạn quản lý thì thường vẫn tạo được. Nên dùng token có quyền pages_read_engagement để chắc chắn.');
+            } else {
+              errors.push(err instanceof MetaApiError ? `Lỗi bài viết: ${err.message}` : 'Không truy cập được bài viết');
+              if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
+            }
           }
         }
       }
