@@ -3,9 +3,9 @@ import { requireAuth } from './auth.js';
 import {
   getPages, resolvePageSlug, scrapePageId, checkPostExists,
   createCampaign, createAdSet, createAdCreative, createAd,
-  MetaApiError,
+  MetaApiError, resolvePostFromGraph, verifyPostDetails, isPermalinkMatch,
 } from '../meta-api.js';
-import { parsePageId, parsePostId, buildObjectStoryId } from '../parsers.js';
+import { parsePageId, parsePostId, buildObjectStoryId, normalizeFbUrl } from '../parsers.js';
 import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, ROW_STATUS } from '../validators.js';
 import { resolveCampaignType, resolveCta } from '../campaign-mapper.js';
 
@@ -63,7 +63,15 @@ router.post('/validate', requireAuth, async (req, res) => {
     const base = validateRow(row);
     const errors = [...base.errors];
     const warnings = [...base.warnings];
-    const parsed = { pageId: null, postId: null, objectStoryId: null };
+    const parsed = {
+      pageId: null,
+      postId: null,
+      videoId: null,
+      objectStoryId: null,
+      sourceObjectId: null,
+      permalinkUrl: null,
+      verifiedWithGraph: false
+    };
     let status = base.status;
 
     // 0) Nút CTA: cảnh báo nhẹ nếu nhập nhưng không nhận dạng được
@@ -121,6 +129,7 @@ router.post('/validate', requireAuth, async (req, res) => {
       const mode = creativeMode || 'NEW_CTA_CREATIVE';
       const willUseLink = !!(ctype && ctype.needsLink && !isTraffic && row.ctaLink && row.ctaLink.toString().trim());
       const postRes = parsePostId(row.postLink);
+      
       if (postRes.error) {
         if (willUseLink) {
           warnings.push(`Bỏ qua reel/bài viết (dùng quảng cáo link website cho loại "${ctype.label}"). ${postRes.error}`);
@@ -129,46 +138,92 @@ router.post('/validate', requireAuth, async (req, res) => {
           if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
         }
       } else {
-        parsed.postId = postRes.postId;
-        const ownerPageId = postRes.pageIdFromLink || parsed.pageId;
-        parsed.objectStoryId = buildObjectStoryId(ownerPageId, postRes.postId);
-        
-        if (mode === 'EXISTING_POST') {
-          // CHẾ ĐỘ A: DÙNG ĐÚNG BÀI VIẾT CÓ SẴN
-          // Cảnh báo nếu có nhập CTA
-          const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
-          if (hasCtaInput) {
-            warnings.push('Không thể ghi đè CTA mới khi sử dụng đúng bài viết có sẵn. Tool sẽ giữ nguyên CTA của bài gốc.');
-          }
-        } else {
-          // CHẾ ĐỘ B: TẠO BẢN QUẢNG CÁO MỚI CÓ CTA
-          if (!row.ctaLink || !row.ctaLink.toString().trim()) {
-            errors.push('Thiếu link CTA để gắn nút Mua ngay');
-            if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
-          }
-        }
-
         if (willUseLink) {
           warnings.push(`Loại "${ctype.label}" sẽ tạo quảng cáo LINK tới website (${row.ctaLink}); reel/bài viết được bỏ qua.`);
-        } else if (parsed.objectStoryId) {
-          const ownerPage = owned.pages.find((p) => p.id === ownerPageId);
+        } else if (parsed.pageId) {
+          const ownerPage = owned.pages.find((p) => p.id === parsed.pageId);
           const postToken = ownerPage?.access_token || req.session.fbToken;
+          
+          let resolved = null;
+          let resolveErrorMsg = null;
+          
           try {
-            const postInfo = await checkPostExists(postToken, parsed.objectStoryId);
-            if (postInfo && postInfo.call_to_action && postInfo.call_to_action.type && postInfo.call_to_action.type !== 'NO_BUTTON') {
-              parsed.hasOldCta = true;
-            }
+            resolved = await resolvePostFromGraph(postToken, parsed.pageId, row.postLink, postRes.postId, postRes.kind);
           } catch (err) {
-            const code = err instanceof MetaApiError ? err.code : null;
-            // Lỗi quyền đọc bài: chỉ cảnh báo (không chặn) để vẫn cho tạo
-            const permCodes = [10, 200, 190, 3, 102, 458, 459, 463, 467, 1349125];
-            if (permCodes.includes(code)) {
-              warnings.push('Chưa kiểm tra trước được bài viết do token thiếu quyền "pages_read_engagement". Vẫn cho phép tạo — nếu reel/bài viết thuộc Page bạn quản lý thì thường vẫn tạo được. Nên dùng token có quyền pages_read_engagement để chắc chắn.');
-            } else {
-              errors.push(err instanceof MetaApiError ? `Lỗi bài viết: ${err.message}` : 'Không truy cập được bài viết');
-              if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
+            resolveErrorMsg = err.message;
+          }
+          
+          if (resolved) {
+            let verified = null;
+            try {
+              verified = await verifyPostDetails(postToken, resolved.objectStoryId);
+            } catch (err) {
+              resolveErrorMsg = `Lỗi gọi API xác thực: ${err.message}`;
+            }
+            
+            if (verified) {
+              const isIdMatch = verified.id === resolved.objectStoryId;
+              const isPageMatch = verified.from?.id === parsed.pageId;
+              const isUrlMatch = isPermalinkMatch(verified.permalink_url, row.postLink, postRes.postId);
+              
+              if (isIdMatch && isPageMatch && isUrlMatch) {
+                parsed.postId = resolved.postId;
+                parsed.videoId = resolved.videoId;
+                parsed.objectStoryId = resolved.objectStoryId;
+                parsed.sourceObjectId = resolved.sourceObjectId;
+                parsed.permalinkUrl = verified.permalink_url;
+                parsed.verifiedWithGraph = true;
+                
+                console.log(`[VERIFIED POST ID RESOLUTION] SUCCESS
+- URL đầu vào: ${row.postLink}
+- Page ID: ${parsed.pageId}
+- ID parse từ URL: ${postRes.postId}
+- Video ID tìm thấy: ${resolved.videoId || 'Không có'}
+- Post ID Meta trả về: ${resolved.postId}
+- Object Story ID cuối cùng: ${resolved.objectStoryId}
+- Kết quả xác minh: Hợp lệ (Đã khớp với Graph API)`);
+                
+                if (verified.call_to_action && verified.call_to_action.type && verified.call_to_action.type !== 'NO_BUTTON') {
+                  parsed.hasOldCta = true;
+                }
+              } else {
+                let reasons = [];
+                if (!isIdMatch) reasons.push(`ID (${verified.id}) khác với ${resolved.objectStoryId}`);
+                if (!isPageMatch) reasons.push(`Page (${verified.from?.id}) khác với ${parsed.pageId}`);
+                if (!isUrlMatch) reasons.push(`URL (${verified.permalink_url}) không khớp đầu vào`);
+                resolveErrorMsg = `Xác minh thất bại: ${reasons.join(', ')}`;
+              }
             }
           }
+          
+          if (!parsed.verifiedWithGraph) {
+            errors.push("Không xác định được Post ID thật từ link này. Tool sẽ không tự ghép Page ID với Video ID.");
+            if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
+            
+            console.log(`[VERIFIED POST ID RESOLUTION] FAILED
+- URL đầu vào: ${row.postLink}
+- Page ID: ${parsed.pageId}
+- ID parse từ URL: ${postRes.postId || 'Không có'}
+- Video ID tìm thấy: Không có
+- Post ID Meta trả về: Không có
+- Object Story ID cuối cùng: Không có
+- Kết quả xác minh: Thất bại (${resolveErrorMsg || 'Không tìm thấy bài viết trùng khớp trên Page'})`);
+          } else {
+            if (mode === 'EXISTING_POST') {
+              const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
+              if (hasCtaInput) {
+                warnings.push('Không thể ghi đè CTA mới khi sử dụng đúng bài viết có sẵn. Tool sẽ giữ nguyên CTA của bài gốc.');
+              }
+            } else {
+              if (!row.ctaLink || !row.ctaLink.toString().trim()) {
+                errors.push('Thiếu link CTA để gắn nút Mua ngay');
+                if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
+              }
+            }
+          }
+        } else {
+          errors.push('Thiếu Page ID để thực hiện xác thực bài viết.');
+          if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
         }
       }
     }

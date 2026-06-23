@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { graphBase } from './config.js';
+import { normalizeFbUrl } from './parsers.js';
 
 // ============================================================
 //  Lớp bọc Meta Marketing API (Graph API)
@@ -182,4 +183,159 @@ export async function createAdCreative(token, adAccountId, payload) {
 
 export async function createAd(token, adAccountId, payload) {
   return call('POST', actPath(adAccountId, 'ads'), { token, data: payload });
+}
+
+/**
+ * So sánh lỏng trùng khớp URL bài viết
+ */
+export function isPermalinkMatch(permalinkUrl, userInputUrl, parsedId) {
+  if (!permalinkUrl || !userInputUrl) return false;
+  
+  const normPermalink = normalizeFbUrl(permalinkUrl);
+  const normInput = normalizeFbUrl(userInputUrl);
+  
+  if (normPermalink === normInput) return true;
+  
+  if (parsedId && (permalinkUrl.includes(parsedId) || userInputUrl.includes(parsedId))) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Dò tìm bài đăng chứa video/Reel hoặc khớp URL từ Graph API
+ */
+export async function resolvePostFromGraph(token, pageId, postLink, parsedId, kind) {
+  const normalizedInputUrl = normalizeFbUrl(postLink);
+  
+  let posts = [];
+  
+  // 1. Lấy danh sách posts
+  try {
+    const res = await call('GET', `${pageId}/posts`, {
+      token,
+      params: {
+        fields: 'id,permalink_url,from,created_time,attachments{media,type,target}',
+        limit: 100
+      }
+    });
+    if (res && Array.isArray(res.data)) {
+      posts = posts.concat(res.data);
+    }
+  } catch (err) {
+    console.error(`Lỗi khi gọi /${pageId}/posts:`, err.message);
+  }
+
+  // 2. Lấy danh sách published_posts để tránh bỏ sót
+  try {
+    const res = await call('GET', `${pageId}/published_posts`, {
+      token,
+      params: {
+        fields: 'id,permalink_url,from,created_time,attachments{media,type,target}',
+        limit: 100
+      }
+    });
+    if (res && Array.isArray(res.data)) {
+      const existingIds = new Set(posts.map(p => p.id));
+      for (const p of res.data) {
+        if (!existingIds.has(p.id)) {
+          posts.push(p);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`Lỗi khi gọi /${pageId}/published_posts:`, err.message);
+  }
+
+  const containsVideoId = (post, videoId) => {
+    if (!videoId) return false;
+    const attachments = post.attachments?.data || [];
+    for (const att of attachments) {
+      if (att.target?.id === videoId || att.media?.id === videoId) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Tìm trong danh sách posts thu thập được
+  for (const post of posts) {
+    const normPostUrl = normalizeFbUrl(post.permalink_url);
+    const isUrlMatch = normPostUrl && normalizedInputUrl && (normPostUrl === normalizedInputUrl);
+    
+    let isVideoMatch = false;
+    if (kind === 'reel' || kind === 'video') {
+      isVideoMatch = containsVideoId(post, parsedId);
+    }
+    
+    const isIdMatch = post.id === parsedId || post.id === `${pageId}_${parsedId}`;
+
+    if (isUrlMatch || isVideoMatch || isIdMatch) {
+      let videoId = null;
+      if (kind === 'reel' || kind === 'video') {
+        videoId = parsedId;
+      } else {
+        const attachments = post.attachments?.data || [];
+        for (const att of attachments) {
+          if (att.target?.id) {
+            videoId = att.target.id;
+            break;
+          }
+        }
+      }
+      
+      return {
+        post,
+        objectStoryId: post.id,
+        postId: post.id.includes('_') ? post.id.split('_')[1] : post.id,
+        videoId,
+        sourceObjectId: videoId,
+        permalinkUrl: post.permalink_url,
+        fromPageId: post.from?.id || pageId,
+      };
+    }
+  }
+
+  // 3. Fallback tìm trực tiếp nếu không phải Reel/Video và có parsedId giống Post ID số
+  if (kind !== 'reel' && kind !== 'video' && parsedId) {
+    const candidateId = parsedId.includes('_') ? parsedId : `${pageId}_${parsedId}`;
+    try {
+      const post = await call('GET', candidateId, {
+        token,
+        params: { fields: 'id,permalink_url,from,created_time' }
+      });
+      if (post && post.id) {
+        const normPostUrl = normalizeFbUrl(post.permalink_url);
+        const isUrlMatch = normPostUrl && normalizedInputUrl && (normPostUrl === normalizedInputUrl);
+        const isPageMatch = post.from?.id === pageId;
+        
+        if (isPageMatch && (isUrlMatch || post.id === candidateId)) {
+          return {
+            post,
+            objectStoryId: post.id,
+            postId: post.id.includes('_') ? post.id.split('_')[1] : post.id,
+            videoId: null,
+            sourceObjectId: null,
+            permalinkUrl: post.permalink_url,
+            fromPageId: post.from?.id || pageId,
+          };
+        }
+      }
+    } catch (err) {
+      // Bỏ qua lỗi direct fetch
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Kiểm tra xác thực thông tin chi tiết của object_story_id
+ */
+export async function verifyPostDetails(token, objectStoryId) {
+  return call('GET', objectStoryId, {
+    token,
+    params: { fields: 'id,permalink_url,from,created_time' }
+  });
 }

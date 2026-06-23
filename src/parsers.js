@@ -201,3 +201,49 @@ export function buildObjectStoryId(pageId, postId) {
   if (!pageId || !postId) return null;
   return `${pageId}_${postId}`;
 }
+
+/**
+ * Chuẩn hoá URL Facebook để so sánh lỏng (bỏ protocol, www, m., mobile, web, query param không cần thiết).
+ */
+export function normalizeFbUrl(urlStr) {
+  if (!urlStr) return '';
+  let clean = urlStr.trim().toLowerCase();
+  
+  // Xóa protocol
+  clean = clean.replace(/^https?:\/\//, '');
+  
+  // Chuẩn hoá subdomains về facebook.com
+  clean = clean.replace(/^(www|m|mobile|web|business)\.facebook\.com/, 'facebook.com');
+  clean = clean.replace(/^fb\.com/, 'facebook.com');
+  clean = clean.replace(/^www\.fb\.com/, 'facebook.com');
+  
+  try {
+    const url = new URL('https://' + clean);
+    const pathname = url.pathname.replace(/\/$/, '');
+    
+    // Check if it's a query-based Facebook post URL
+    const isQueryBased = pathname.includes('permalink.php') || 
+                         pathname.includes('story.php') || 
+                         pathname.includes('photo.php') || 
+                         pathname.includes('watch') ||
+                         pathname.includes('photo');
+    
+    if (isQueryBased) {
+      const allowedParams = ['story_fbid', 'fbid', 'id', 'v'];
+      const searchParams = new URLSearchParams();
+      for (const param of allowedParams) {
+        if (url.searchParams.has(param)) {
+          searchParams.set(param, url.searchParams.get(param));
+        }
+      }
+      const search = searchParams.toString();
+      return `facebook.com${pathname}${search ? '?' + search : ''}`;
+    } else {
+      // For path-based URLs, discard query params entirely
+      return `facebook.com${pathname}`;
+    }
+  } catch (e) {
+    // Fallback simple clean if URL parsing fails
+    return clean.split('?')[0].replace(/\/$/, '');
+  }
+}

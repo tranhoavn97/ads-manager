@@ -911,11 +911,18 @@ function openDrawer(index) {
       ${ctaHtml}
       <dt>Quốc gia</dt><dd>${esc(r.country || '—')}</dd>
       <dt>Ngân sách</dt><dd>${esc(r.budget || '—')} · ${budgetModeLabel(r)} · ${budgetLevelLabel(r)}</dd>
-      <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
       ${hasPost ? `
-        <dt>Object Story ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
+        <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
+        <dt>Post ID thật</dt><dd class="mono">${esc(r.parsed?.postId || '—')}</dd>
+        <dt>Video/Media ID</dt><dd class="mono">${esc(r.parsed?.videoId || '—')}</dd>
+        <dt>Object Story ID đã xác minh</dt><dd class="mono">${esc(r.parsed?.objectStoryId || '—')}</dd>
+        <dt>URL bài viết Meta trả về</dt><dd class="mono">${r.parsed?.permalinkUrl ? `<a href="${esc(r.parsed.permalinkUrl)}" target="_blank">${esc(r.parsed.permalinkUrl)}</a>` : '—'}</dd>
+        <dt>Trạng thái</dt><dd style="color: ${r.parsed?.verifiedWithGraph ? '#16a34a' : '#dc2626'}; font-weight: 600;">
+          ${r.parsed?.verifiedWithGraph ? 'Đã xác minh với Graph API' : 'Chưa xác minh'}
+        </dd>
         ${noteHtml}
       ` : `
+        <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
         <dt>Object ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
       `}
       ${ids.campaignId ? `<dt>Campaign</dt><dd class="mono">${esc(ids.campaignId)}</dd>` : ''}
