@@ -94,6 +94,27 @@ function parseDate(input) {
   return isNaN(dt.getTime()) ? null : dt;
 }
 
+function stripAccents(s) {
+  return (s ?? '').toString().toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/\s+/g, ' ').trim();
+}
+
+// "trọn đời" / "hàng ngày" -> 'lifetime' | 'daily' (mặc định daily)
+export function resolveBudgetMode(input) {
+  const n = stripAccents(input);
+  if (!n) return 'daily';
+  if (/(tron doi|lifetime|tron|toan bo|tong ngan sach)/.test(n)) return 'lifetime';
+  return 'daily';
+}
+
+// "chiến dịch" (CBO) / "nhóm" -> 'campaign' | 'adset' (mặc định adset)
+export function resolveBudgetLevel(input) {
+  const n = stripAccents(input);
+  if (!n) return 'adset';
+  if (/(chien dich|campaign|cbo)/.test(n)) return 'campaign';
+  return 'adset';
+}
+
 /**
  * Kiểm tra một dòng. KHÔNG gọi API ở đây (phần resolve Page/Post nằm ở route).
  * @param {object} row - dữ liệu đã map theo khoá chuẩn
@@ -166,6 +187,15 @@ export function validateRow(row) {
   if (start && end && end <= start) errors.push('Ngày kết thúc phải sau ngày bắt đầu');
   if (start) normalized.startTime = start.toISOString();
   if (end) normalized.endTime = end.toISOString();
+
+  // Ngân sách: hàng ngày/trọn đời + cấp chiến dịch (CBO)/nhóm
+  const budgetMode = resolveBudgetMode(row.budgetMode);
+  const budgetLevel = resolveBudgetLevel(row.budgetLevel);
+  normalized.budgetMode = budgetMode;
+  normalized.budgetLevel = budgetLevel;
+  if (budgetMode === 'lifetime' && !end) {
+    errors.push('Ngân sách trọn đời cần có Ngày kết thúc (để Facebook biết tổng thời gian chạy).');
+  }
 
   const status = errors.length ? ROW_STATUS.MISSING : ROW_STATUS.VALID;
   return { status, errors, warnings, normalized };

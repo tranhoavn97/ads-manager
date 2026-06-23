@@ -6,7 +6,7 @@ import {
   MetaApiError,
 } from '../meta-api.js';
 import { parsePageId, parsePostId, buildObjectStoryId } from '../parsers.js';
-import { validateRow, resolveCountries, resolveAdStatus, ROW_STATUS } from '../validators.js';
+import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, ROW_STATUS } from '../validators.js';
 import { resolveCampaignType, resolveCta } from '../campaign-mapper.js';
 
 const router = express.Router();
@@ -26,13 +26,17 @@ async function loadOwnedPages(token) {
   const advertiseSet = new Set(
     pages.filter((p) => !Array.isArray(p.tasks) || p.tasks.includes('ADVERTISE')).map((p) => p.id)
   );
-  // Map tên vanity (username / slug trong link) -> ID số, để resolve link dạng tên
+  // Map tên vanity (username / slug trong link / tên đã bỏ dấu) -> ID số
   const usernameMap = new Map();
+  const norm = (s) => (s ?? '').toString().toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
   for (const p of pages) {
     if (p.username) usernameMap.set(p.username.toLowerCase(), p.id);
     // Tách slug từ trường link (vd https://facebook.com/HaiDangReviewtaphoa)
     const m = (p.link || '').match(/facebook\.com\/([^/?#]+)/i);
     if (m && m[1] && !/^profile\.php$/i.test(m[1])) usernameMap.set(m[1].toLowerCase(), p.id);
+    // Khớp theo tên Page đã bỏ dấu/khoảng trắng (vd "Hải Đăng Review tạp hóa" -> haidangreviewtaphoa)
+    if (p.name && norm(p.name)) usernameMap.set(norm(p.name), p.id);
   }
   return { pages, idSet, advertiseSet, usernameMap };
 }
@@ -73,11 +77,12 @@ router.post('/validate', requireAuth, async (req, res) => {
       errors.push(pageRes.error);
     } else if (pageRes.needsResolve) {
       const key = pageRes.slug.toLowerCase();
+      const normKey = key.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
       if (slugCache.has(key)) {
         parsed.pageId = slugCache.get(key);
-      } else if (owned.usernameMap.has(key)) {
+      } else if (owned.usernameMap.has(key) || owned.usernameMap.has(normKey)) {
         // Khớp với Page bạn quản lý (đáng tin cậy nhất)
-        parsed.pageId = owned.usernameMap.get(key);
+        parsed.pageId = owned.usernameMap.get(key) || owned.usernameMap.get(normKey);
         slugCache.set(key, parsed.pageId);
       } else {
         // Thử Graph API, nếu bị chặn thì dò ID từ trang công khai
@@ -173,23 +178,35 @@ router.post('/create', requireAuth, async (req, res) => {
       const adStatus = resolveAdStatus(row.statusRaw, draftMode);
       const campaignStatus = draftMode ? 'PAUSED' : adStatus;
 
-      // 1) CAMPAIGN
-      const campaign = await createCampaign(token, adAccountId, {
+      // Ngân sách: hàng ngày/trọn đời + cấp chiến dịch (CBO)/nhóm
+      const budgetMinor = budgetToMinorUnit(row.normalized?.budget ?? row.budget, currency);
+      const budgetMode = row.normalized?.budgetMode || resolveBudgetMode(row.budgetMode);
+      const budgetLevel = row.normalized?.budgetLevel || resolveBudgetLevel(row.budgetLevel);
+      const budgetField = budgetMode === 'lifetime' ? 'lifetime_budget' : 'daily_budget';
+      if (budgetMode === 'lifetime' && !row.normalized?.endTime) {
+        throw new RowError('Ngân sách trọn đời cần Ngày kết thúc', ROW_STATUS.CREATE_ERROR);
+      }
+
+      // 1) CAMPAIGN (đặt ngân sách ở đây nếu chọn cấp chiến dịch — CBO)
+      const campaignPayload = {
         name: row.campaignName,
         objective: ctype.objective,
         status: campaignStatus,
         special_ad_categories: [],
-      });
+      };
+      if (budgetLevel === 'campaign') {
+        campaignPayload[budgetField] = budgetMinor;
+        campaignPayload.bid_strategy = 'LOWEST_COST_WITHOUT_CAP';
+      }
+      const campaign = await createCampaign(token, adAccountId, campaignPayload);
       result.ids.campaignId = campaign.id;
 
-      // 2) AD SET
+      // 2) AD SET (đặt ngân sách ở đây nếu chọn cấp nhóm)
       const adsetPayload = {
         name: row.adsetName,
         campaign_id: campaign.id,
         billing_event: ctype.billing_event,
         optimization_goal: ctype.optimization_goal,
-        bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-        daily_budget: budgetToMinorUnit(row.normalized?.budget ?? row.budget, currency),
         status: adStatus,
         targeting: {
           geo_locations: { countries },
@@ -197,6 +214,10 @@ router.post('/create', requireAuth, async (req, res) => {
           age_max: 65,
         },
       };
+      if (budgetLevel === 'adset') {
+        adsetPayload[budgetField] = budgetMinor;
+        adsetPayload.bid_strategy = 'LOWEST_COST_WITHOUT_CAP';
+      }
       if (row.normalized?.startTime) adsetPayload.start_time = row.normalized.startTime;
       if (row.normalized?.endTime) adsetPayload.end_time = row.normalized.endTime;
       if (ctype.destination_type) adsetPayload.destination_type = ctype.destination_type;

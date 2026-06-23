@@ -192,6 +192,18 @@ function ctaForRow(row) {
   if (id) { const code = TYPE_DEFAULT_CTA[id]; return { code, label: CTA_LABELS[code] || code, custom: false }; }
   return null;
 }
+// Nhãn ngân sách (hiển thị trong ngăn chi tiết)
+function budgetModeLabel(row) {
+  const n = removeAccents(row?.budgetMode);
+  if (/(tron doi|lifetime|tron|toan bo)/.test(n)) return 'trọn đời';
+  return 'hàng ngày';
+}
+function budgetLevelLabel(row) {
+  const n = removeAccents(row?.budgetLevel);
+  if (/(chien dich|campaign|cbo)/.test(n)) return 'cấp chiến dịch (CBO)';
+  return 'cấp nhóm';
+}
+
 function ctaPillHtml(row, withCode = false) {
   const c = ctaForRow(row);
   if (!c) return '<span class="cta-pill cta-none">CTA: —</span>';
@@ -428,10 +440,12 @@ function selectAccount(acc, card) {
 //  Bước 3: đọc file Excel/CSV
 // ============================================================
 const HEADER_KEYS = [
-  ['pageLink', ['link page', 'page', 'trang', 'link trang']],
+  ['pageLink', ['link page', 'link trang', 'trang fanpage', 'fanpage', 'page']],
   ['postLink', ['link bai viet', 'bai viet', 'reel', 'anh', 'post', 'link bai', 'bai/reel']],
   ['cta', ['nut cta', 'nut keu goi', 'keu goi', 'call to action', 'cta button', 'nut hanh dong']],
   ['ctaLink', ['cta', 'website', 'link dich', 'url', 'link den', 'link cta']],
+  ['budgetMode', ['loai ngan sach', 'kieu ngan sach', 'ngan sach loai', 'hang ngay tron doi']],
+  ['budgetLevel', ['cap ngan sach', 'ngan sach cap', 'cbo']],
   ['campaignType', ['loai', 'muc tieu', 'objective', 'type']],
   ['campaignName', ['ten chien dich', 'chien dich', 'campaign']],
   ['adsetName', ['nhom quang cao', 'ad set', 'adset', 'nhom']],
@@ -575,6 +589,10 @@ function clientParseRow(r) {
     if (owner && ps.postId) parsed.objectStoryId = owner + '_' + ps.postId;
     if (ps.error) r.warnings.push(ps.error);
   }
+  // Cảnh báo ID dạng số dài dễ bị Excel làm tròn sai (Facebook ID thường 16+ chữ số)
+  if (/^\d{16,}$/.test((r.pageLink || '').toString().trim())) {
+    r.warnings.push('Page ID nhập dạng số dài (≥16 chữ số) có thể bị Excel làm tròn sai (đuôi thành 0). Nên nhập dạng link facebook.com/<id>, hoặc định dạng ô thành Text trước khi nhập.');
+  }
   r.parsed = parsed;
 }
 
@@ -692,7 +710,7 @@ function openDrawer(index) {
       <dt>Loại</dt><dd>${esc(r.campaignType || '—')}</dd>
       <dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>
       <dt>Quốc gia</dt><dd>${esc(r.country || '—')}</dd>
-      <dt>Ngân sách</dt><dd>${esc(r.budget || '—')}</dd>
+      <dt>Ngân sách</dt><dd>${esc(r.budget || '—')} · ${budgetModeLabel(r)} · ${budgetLevelLabel(r)}</dd>
       <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
       <dt>Object ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
       ${ids.campaignId ? `<dt>Campaign</dt><dd class="mono">${esc(ids.campaignId)}</dd>` : ''}
@@ -762,6 +780,7 @@ function stripForSend(r) {
     pageLink: r.pageLink, postLink: r.postLink, ctaLink: r.ctaLink, cta: r.cta,
     campaignName: r.campaignName, adsetName: r.adsetName, adName: r.adName,
     campaignType: r.campaignType, country: r.country, budget: r.budget,
+    budgetMode: r.budgetMode, budgetLevel: r.budgetLevel,
     startDate: r.startDate, endDate: r.endDate, statusRaw: r.statusRaw,
     parsed: r.parsed, normalized: r.normalized,
   };
@@ -876,14 +895,17 @@ function showResults(results, draft) {
 // ============================================================
 function downloadTemplate() {
   const headers = ['Link Page', 'Link bài viết/Reel/Ảnh', 'Link CTA', 'Tên chiến dịch', 'Tên nhóm quảng cáo',
-    'Tên quảng cáo', 'Loại chiến dịch', 'Nút CTA', 'Quốc gia', 'Ngân sách', 'Ngày bắt đầu', 'Ngày kết thúc', 'Trạng thái'];
-  // Cột "Nút CTA": để trống = tự suy theo loại; hoặc điền nhãn/mã (vd: Mua ngay, Tìm hiểu thêm, LEARN_MORE).
+    'Tên quảng cáo', 'Loại chiến dịch', 'Nút CTA', 'Quốc gia', 'Ngân sách', 'Loại ngân sách', 'Cấp ngân sách',
+    'Ngày bắt đầu', 'Ngày kết thúc', 'Trạng thái'];
+  // "Loại ngân sách": Hàng ngày | Trọn đời (mặc định Hàng ngày — Trọn đời cần Ngày kết thúc).
+  // "Cấp ngân sách": Nhóm | Chiến dịch (CBO) — mặc định Nhóm.
+  // Mẹo: Page ID nên nhập dạng LINK (facebook.com/...) để Excel không làm tròn số dài.
   const sample = [
     'https://www.facebook.com/61550000000000', 'https://www.facebook.com/61550000000000/posts/1234567890', '',
-    'CD Tương tác T6', 'Nhóm VN 25-45', 'QC Bài viết A', 'Tương tác', '', 'Việt Nam', '200000', '24/06/2026', '30/06/2026', 'Tạm dừng'];
+    'CD Tương tác T6', 'Nhóm VN 25-45', 'QC Bài viết A', 'Tương tác', '', 'Việt Nam', '200000', 'Hàng ngày', 'Nhóm', '24/06/2026', '30/06/2026', 'Tạm dừng'];
   const sample2 = [
     'https://www.facebook.com/61550000000000', '', 'https://shop.example.com/sale', 'CD Traffic Sale',
-    'Nhóm Web VN', 'QC Web Sale', 'Traffic', 'Mua ngay', 'VN', '500000', '24/06/2026', '', 'Bật'];
+    'Nhóm Web VN', 'QC Web Sale', 'Traffic', 'Mua ngay', 'VN', '500000', 'Hàng ngày', 'Chiến dịch', '24/06/2026', '', 'Bật'];
   // Hàng ghi chú các nút CTA hợp lệ (đặt ở sheet thứ 2 cho gọn)
   const ctaGuide = [['Mã CTA', 'Nhãn hiển thị'], ...Object.entries(CTA_LABELS).map(([code, label]) => [code, label])];
   const ws = XLSX.utils.aoa_to_sheet([headers, sample, sample2]);

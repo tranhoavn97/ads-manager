@@ -119,7 +119,7 @@ Các cột (tên cột linh hoạt, công cụ tự nhận diện không phân b
 
 | Cột | Ví dụ | Ghi chú |
 |---|---|---|
-| **Link Page** | `https://facebook.com/61550000000000` | Tự tách Page ID. Link dạng tên (vanity) sẽ được resolve qua API nếu bạn quản lý Page đó. |
+| **Link Page** | `https://facebook.com/61550000000000` | Tự tách Page ID. Link dạng tên (vanity) sẽ được resolve nếu bạn quản lý Page đó. ⚠️ **Đừng nhập ID số trần vào ô** — Facebook ID dài 16+ chữ số sẽ bị Excel làm tròn sai. Hãy nhập **dạng link** `facebook.com/<id>` (hoặc định dạng ô là Text). |
 | **Link bài viết/Reel/Ảnh** | `.../posts/1234567890` hoặc `123_456` | Tự tách Post/Object ID. Dùng cho loại “boost bài viết”. |
 | **Link CTA** | `https://shop.example.com/sale` | Website đích. **Bắt buộc** với Traffic và Doanh số. |
 | **Tên chiến dịch** | `CD Tương tác T6` | |
@@ -128,7 +128,9 @@ Các cột (tên cột linh hoạt, công cụ tự nhận diện không phân b
 | **Loại chiến dịch** | `Tương tác` | Một trong: **Tin nhắn, Tương tác, Traffic, Lead, Doanh số**. |
 | **Nút CTA** | `Mua ngay` hoặc `LEARN_MORE` | *Tùy chọn.* Nút kêu gọi hành động. **Để trống** = tự suy theo loại (Tương tác→Thích Trang, Traffic→Tìm hiểu thêm, Tin nhắn→Gửi tin nhắn, Lead→Đăng ký, Doanh số→Mua ngay). Có thể điền nhãn tiếng Việt hoặc mã (xem sheet **“Danh sách nút CTA”** trong file mẫu). Chỉ áp dụng cho quảng cáo dạng link/website. |
 | **Quốc gia** | `Việt Nam` hoặc `VN`, `VN,US` | Tên tiếng Việt hoặc mã ISO; nhiều nước cách nhau bởi dấu phẩy. |
-| **Ngân sách** | `200000` | Ngân sách **theo ngày**, đơn vị theo tiền tệ tài khoản (vd VND). |
+| **Ngân sách** | `200000` | Số tiền, đơn vị theo tiền tệ tài khoản (vd VND). |
+| **Loại ngân sách** | `Hàng ngày` / `Trọn đời` | *Tùy chọn.* Mặc định **Hàng ngày**. **Trọn đời** bắt buộc có **Ngày kết thúc**. |
+| **Cấp ngân sách** | `Nhóm` / `Chiến dịch` | *Tùy chọn.* Mặc định **Nhóm** (ngân sách ở ad set). **Chiến dịch** = bật **CBO** (ngân sách ở cấp chiến dịch). |
 | **Ngày bắt đầu** | `24/06/2026` | Định dạng `dd/mm/yyyy`. |
 | **Ngày kết thúc** | `30/06/2026` | Có thể để trống (chạy liên tục). |
 | **Trạng thái** | `Bật` / `Tạm dừng` | `Bật` = ACTIVE, còn lại = PAUSED. **Chế độ nháp luôn ép PAUSED.** |
