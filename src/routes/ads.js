@@ -233,7 +233,11 @@ router.post('/validate', requireAuth, async (req, res) => {
                 const isPageMatch = verified.from?.id === parsed.pageId;
                 const isUrlMatch = isPermalinkMatch(verified.permalink_url, row.postLink, postRes.postId);
                 
-                if (isIdMatch && isPageMatch && isUrlMatch) {
+                // Nới lỏng: chỉ cần trùng ID và Page là đủ để xác nhận. Trùng URL là điểm cộng (ghi log/cảnh báo nhẹ nếu không khớp)
+                if (isIdMatch && isPageMatch) {
+                  if (!isUrlMatch) {
+                    warnings.push(`Cảnh báo link bài viết: Đường dẫn trả về từ Facebook (${verified.permalink_url}) không trùng khớp hoàn toàn với link bạn nhập, nhưng ID và Page đã được xác thực.`);
+                  }
                   parsed.postId = resolved.postId;
                   parsed.videoId = resolved.videoId;
                   parsed.objectStoryId = resolved.objectStoryId;
@@ -255,7 +259,6 @@ router.post('/validate', requireAuth, async (req, res) => {
                   let reasons = [];
                   if (!isIdMatch) reasons.push(`ID (${verified.id}) khác với ${resolved.objectStoryId}`);
                   if (!isPageMatch) reasons.push(`Page (${verified.from?.id}) khác với ${parsed.pageId}`);
-                  if (!isUrlMatch) reasons.push(`URL (${verified.permalink_url}) không khớp đầu vào`);
                   resolveErrorMsg = `Xác minh thất bại: ${reasons.join(', ')}`;
                 }
               }

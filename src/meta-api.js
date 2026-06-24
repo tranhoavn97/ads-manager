@@ -345,33 +345,35 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
     }
   }
 
-  // 3. Fallback tìm trực tiếp nếu không phải Reel/Video và có parsedId giống Post ID số
-  if (kind !== 'reel' && kind !== 'video' && parsedId) {
-    const candidateId = parsedId.includes('_') ? parsedId : `${pageId}_${parsedId}`;
-    try {
-      const post = await call('GET', candidateId, {
-        token,
-        params: { fields: 'id,permalink_url,from,created_time' }
-      });
-      if (post && post.id) {
-        const normPostUrl = normalizeFbUrl(post.permalink_url);
-        const isUrlMatch = normPostUrl && normalizedInputUrl && (normPostUrl === normalizedInputUrl);
-        const isPageMatch = post.from?.id === pageId;
-        
-        if (isPageMatch && (isUrlMatch || post.id === candidateId)) {
-          return {
-            post,
-            objectStoryId: post.id,
-            postId: post.id.includes('_') ? post.id.split('_')[1] : post.id,
-            videoId: null,
-            sourceObjectId: null,
-            permalinkUrl: post.permalink_url,
-            fromPageId: post.from?.id || pageId,
-          };
+  // 3. Fallback tìm trực tiếp cho mọi loại bài viết/reel/video nếu có parsedId
+  if (parsedId) {
+    const candidates = [
+      parsedId.includes('_') ? parsedId : `${pageId}_${parsedId}`,
+      parsedId
+    ];
+    for (const candidateId of candidates) {
+      try {
+        const post = await call('GET', candidateId, {
+          token,
+          params: { fields: 'id,permalink_url,from,created_time,type,object_id' }
+        });
+        if (post && post.id) {
+          const isPageMatch = post.from?.id === pageId;
+          if (isPageMatch) {
+            return {
+              post,
+              objectStoryId: post.id,
+              postId: post.id.includes('_') ? post.id.split('_')[1] : post.id,
+              videoId: post.type === 'video' ? post.object_id : (kind === 'video' || kind === 'reel' ? parsedId : null),
+              sourceObjectId: post.type === 'video' ? post.object_id : (kind === 'video' || kind === 'reel' ? parsedId : null),
+              permalinkUrl: post.permalink_url,
+              fromPageId: post.from?.id || pageId,
+            };
+          }
         }
+      } catch (err) {
+        // Bỏ qua lỗi direct fetch
       }
-    } catch (err) {
-      // Bỏ qua lỗi direct fetch
     }
   }
 
