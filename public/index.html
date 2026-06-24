@@ -94,7 +94,10 @@
             <h2>Tải file dữ liệu</h2>
             <p class="muted">Hỗ trợ <strong>.xlsx</strong>, <strong>.xls</strong>, <strong>.csv</strong>. Google Sheet: chọn <em>File → Download → Microsoft Excel (.xlsx)</em>.</p>
           </div>
-          <button id="templateBtn" class="btn btn-ghost">Tải file mẫu</button>
+          <div class="upload-actions">
+            <button id="sampleBtn" class="btn btn-secondary">Dùng dữ liệu mẫu</button>
+            <button id="templateBtn" class="btn btn-ghost">Tải file mẫu</button>
+          </div>
         </div>
 
         <label class="dropzone" id="dropzone">
@@ -118,20 +121,28 @@
           </div>
         </div>
 
+        <!-- Thanh thao tác hàng loạt (hiện khi chọn ≥1 dòng) -->
+        <div id="bulkBar" class="bulk-bar hidden">
+          <span class="bulk-count"><strong id="bulkCount">0</strong> dòng đã chọn</span>
+          <div class="bulk-actions">
+            <button id="bulkEditBtn" class="btn btn-secondary">Sửa</button>
+            <button id="bulkDelBtn" class="btn btn-ghost danger">Xoá</button>
+            <button id="bulkClearBtn" class="link-btn">Bỏ chọn</button>
+          </div>
+        </div>
+
         <div class="table-scroll">
           <table class="data-table" id="dataTable">
             <thead>
               <tr>
+                <th class="col-check"><input type="checkbox" id="checkAll" title="Chọn tất cả dòng đang hiển thị" /></th>
                 <th class="col-status">Trạng thái</th>
-                <th>Chiến dịch</th>
-                <th>Nhóm QC / Quảng cáo</th>
-                <th>Loại</th>
-                <th>Nút CTA</th>
-                <th>Page ID</th>
-                <th>Post / Object ID</th>
-                <th>Quốc gia</th>
-                <th>Ngân sách</th>
-                <th>Chi tiết</th>
+                <th class="col-names">Chiến dịch / Nhóm / QC</th>
+                <th class="col-type">Mục tiêu</th>
+                <th class="col-cta">Nút CTA / Link</th>
+                <th class="col-ids">Trang / Bài viết</th>
+                <th class="col-meta">Ngân sách / QG</th>
+                <th class="col-actions">Thao tác</th>
               </tr>
             </thead>
             <tbody id="tableBody"></tbody>

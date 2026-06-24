@@ -151,6 +151,33 @@ export async function checkPostExists(token, objectStoryId) {
   return call('GET', objectStoryId, { token, params: { fields: 'id' } });
 }
 
+// Đọc chi tiết bài viết để tái dựng quảng cáo (video/ảnh + nội dung).
+// Dùng để thêm nút CTA + link vào bài viết có sẵn (giống thao tác trong Trình quản lý QC).
+// Trả về { message, kind: 'video'|'photo'|'other', videoId, imageUrl }
+export async function getPostDetails(token, objectStoryId) {
+  const data = await call('GET', objectStoryId, {
+    token,
+    params: {
+      fields: 'message,full_picture,status_type,object_id,attachments{media_type,type,media,target,url,subattachments}',
+    },
+  });
+  const att = data.attachments?.data?.[0] || {};
+  const sub = att.subattachments?.data?.[0] || {};
+  const mediaType = (att.media_type || att.type || '').toLowerCase();
+  const statusType = (data.status_type || '').toLowerCase();
+  const imageUrl = data.full_picture || att.media?.image?.src || sub.media?.image?.src || null;
+
+  let kind = 'other';
+  let videoId = null;
+  if (mediaType.includes('video') || statusType.includes('video')) {
+    kind = 'video';
+    videoId = data.object_id || att.target?.id || sub.target?.id || null;
+  } else if (mediaType.includes('photo') || mediaType.includes('album') || statusType.includes('photo')) {
+    kind = 'photo';
+  }
+  return { message: data.message || '', kind, videoId, imageUrl };
+}
+
 // --------- Tạo Campaign / Ad Set / Creative / Ad ---------
 
 function actPath(adAccountId, suffix) {

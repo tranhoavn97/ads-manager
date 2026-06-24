@@ -10,6 +10,7 @@ const State = {
   rows: [],          // dữ liệu từ file (đã chuẩn hoá khoá)
   filter: 'all',
   search: '',
+  selected: new Set(), // index các dòng đang được tick chọn (để sửa/xoá hàng loạt)
 };
 
 const STATUS_LABEL = {
@@ -149,6 +150,23 @@ const CTA_CLASS = {
 const TYPE_DEFAULT_CTA = {
   tin_nhan: 'MESSAGE_PAGE', tuong_tac: 'LIKE_PAGE', traffic: 'LEARN_MORE', lead: 'SIGN_UP', doanh_so: 'SHOP_NOW',
 };
+// Mục tiêu chiến dịch cho dropdown — nhãn theo đúng tên trong Trình quản lý QC (Ads Manager).
+// (Các nhãn này vẫn resolve được về đúng loại ở campaign-mapper.js phía server nhờ từ khoá con.)
+const TYPE_OPTIONS = [
+  ['tin_nhan', 'Tin nhắn'],
+  ['tuong_tac', 'Lượt tương tác'],
+  ['traffic', 'Lưu lượng truy cập'],
+  ['lead', 'Khách hàng tiềm năng'],
+  ['doanh_so', 'Doanh số'],
+];
+const TYPE_LABELS = Object.fromEntries(TYPE_OPTIONS);
+// Nhãn mục tiêu chuẩn của tool cho 1 dòng (chuẩn hoá text tự do từ file về đúng tên Ads Manager)
+function typeLabel(r) {
+  const id = resolveTypeId(r?.campaignType);
+  return id ? TYPE_LABELS[id] : (r?.campaignType || '—');
+}
+// Nút CTA KHÔNG dùng link đích → ẩn ô Link (gửi tin nhắn, thích Trang, WhatsApp, gọi, không nút)
+const NO_LINK_CTAS = new Set(['MESSAGE_PAGE', 'LIKE_PAGE', 'WHATSAPP_MESSAGE', 'CALL_NOW', 'NO_BUTTON']);
 const TYPE_KEYS = [
   ['tin_nhan',  ['tin nhan', 'messages', 'message', 'nhan tin', 'messenger']],
   ['tuong_tac', ['tuong tac', 'engagement', 'post engagement']],
@@ -192,6 +210,12 @@ function ctaForRow(row) {
   if (id) { const code = TYPE_DEFAULT_CTA[id]; return { code, label: CTA_LABELS[code] || code, custom: false }; }
   return null;
 }
+// Nút CTA hiện tại của dòng có dùng link đích không (để hiện/ẩn ô Link)
+function ctaUsesLink(r) {
+  const c = ctaForRow(r);
+  if (!c) return true; // chưa rõ mục tiêu/nút → cứ cho nhập link
+  return !NO_LINK_CTAS.has(c.code);
+}
 // Nhãn ngân sách (hiển thị trong ngăn chi tiết)
 function budgetModeLabel(row) {
   const n = removeAccents(row?.budgetMode);
@@ -209,9 +233,38 @@ function ctaPillHtml(row, withCode = false) {
   if (!c) return '<span class="cta-pill cta-none">CTA: —</span>';
   const cls = CTA_CLASS[c.code] || 'cta-other';
   const dot = c.custom ? '<span class="custom-dot"></span>' : '';
-  const tip = c.custom ? 'Nút CTA tự điền trong file' : 'Nút CTA mặc định theo loại chiến dịch';
+  const tip = c.custom ? 'Nút CTA tự chọn (khác mặc định)' : 'Nút CTA mặc định theo loại chiến dịch';
   return `<span class="cta-pill ${cls}" title="${tip}">${dot}${esc(c.label)}</span>` +
     (withCode ? ` <span class="cta-code">${esc(c.code)}</span>` : '');
+}
+
+// Ô chọn mục tiêu chiến dịch (Loại) ngay trong bảng.
+function typeEditorHtml(r) {
+  const cur = resolveTypeId(r.campaignType) || '';
+  const opts = ['<option value="">— Chọn mục tiêu —</option>']
+    .concat(TYPE_OPTIONS.map(([id, label]) =>
+      `<option value="${id}"${cur === id ? ' selected' : ''}>${esc(label)}</option>`))
+    .join('');
+  return `<select class="type-select" title="Mục tiêu quảng cáo của chiến dịch">${opts}</select>`;
+}
+
+// Ô sửa nút CTA + Link CTA ngay trong bảng (ghi đè giá trị từ file).
+// - Chọn "Mặc định theo loại" => bỏ ghi đè, dùng nút mặc định theo mục tiêu.
+// - Giá trị select là MÃ CTA (vd SHOP_NOW) — khớp với resolveCta() phía server.
+// - Ô Link chỉ hiện với nút có dùng link (ẩn với Gửi tin nhắn, Không có nút, Thích Trang…).
+function ctaEditorHtml(r) {
+  const cur = resolveCtaCode(r.cta) || '';
+  const opts = ['<option value="">Mặc định theo mục tiêu</option>']
+    .concat(Object.entries(CTA_LABELS).map(([code, label]) =>
+      `<option value="${code}"${cur === code ? ' selected' : ''}>${esc(label)}</option>`))
+    .join('');
+  return `<div class="cta-cell">
+      <div class="cta-preview">${ctaPillHtml(r)}</div>
+      <select class="cta-select" title="Đổi nút kêu gọi hành động cho dòng này">${opts}</select>
+      <input class="cta-link-input${ctaUsesLink(r) ? '' : ' hidden'}" type="text" inputmode="url" spellcheck="false"
+             placeholder="Link CTA (https://…)" value="${esc(r.ctaLink || '')}"
+             title="Link đích khi bấm nút (dùng cho Traffic/Doanh số hoặc nút gắn link)" />
+    </div>`;
 }
 
 // ============================================================
@@ -316,12 +369,24 @@ function bindEvents() {
   $('#logoutBtn').addEventListener('click', logout);
   $('#toUploadBtn').addEventListener('click', () => { showView('work'); setStep(3); });
   $('#templateBtn').addEventListener('click', downloadTemplate);
+  $('#sampleBtn')?.addEventListener('click', loadSampleData);
   $('#fileInput').addEventListener('change', (e) => handleFile(e.target.files[0]));
   $('#validateBtn').addEventListener('click', validateRows);
   $('#createBtn').addEventListener('click', confirmCreate);
   $('#searchInput').addEventListener('input', (e) => { State.search = e.target.value.trim().toLowerCase(); renderTable(); });
   $('#drawerClose').addEventListener('click', closeDrawer);
   $('#drawerScrim').addEventListener('click', closeDrawer);
+
+  // Chọn nhiều dòng → sửa / xoá hàng loạt
+  $('#checkAll')?.addEventListener('change', (e) => toggleSelectAll(e.target.checked));
+  $('#bulkEditBtn')?.addEventListener('click', () => openEditRows(selectedRows()));
+  $('#bulkDelBtn')?.addEventListener('click', () => {
+    const rows = selectedRows();
+    if (!rows.length) return;
+    if (!confirm(`Xoá ${rows.length} dòng đã chọn?`)) return;
+    deleteRows(rows);
+  });
+  $('#bulkClearBtn')?.addEventListener('click', () => { State.selected.clear(); renderTable(); });
 
   // Đăng nhập bằng access token
   $('#tokenToggle')?.addEventListener('click', () => {
@@ -491,18 +556,11 @@ function handleFile(file) {
 
       clientPreCheck();
 
-      $('#fileMeta').classList.remove('hidden');
-      $('#fileMeta').innerHTML =
-        `<strong>${esc(file.name)}</strong> · ${State.rows.length} dòng` +
-        (unknownCols ? ` · <span class="muted">${unknownCols} cột không nhận dạng (đã bỏ qua)</span>` : '');
+      revealTable(`<strong>${esc(file.name)}</strong> · ${State.rows.length} dòng` +
+        (unknownCols ? ` · <span class="muted">${unknownCols} cột không nhận dạng (đã bỏ qua)</span>` : ''));
 
-      $('#tableZone').classList.remove('hidden');
-      buildFilters();
-      renderTable();
-      setStep(3);
       Logger.ok(`Đọc file "${file.name}": ${State.rows.length} dòng${unknownCols ? `, ${unknownCols} cột bị bỏ qua` : ''}.`);
-      const missing = State.rows.filter((r) => r.status === 'missing').length;
-      if (missing) Logger.warn(`${missing} dòng thiếu dữ liệu bắt buộc (kiểm tra sơ bộ phía trình duyệt).`);
+      logPreCheck();
       toast(`Đã đọc ${State.rows.length} dòng`, 'ok');
     } catch (err) {
       Logger.err(`Không đọc được file: ${err.message}`);
@@ -510,6 +568,88 @@ function handleFile(file) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// Hiện bảng + bộ lọc sau khi đã có dữ liệu (dùng chung cho file upload & dữ liệu mẫu)
+function revealTable(metaHtml) {
+  State.selected.clear();
+  $('#fileMeta').classList.remove('hidden');
+  $('#fileMeta').innerHTML = metaHtml;
+  $('#tableZone').classList.remove('hidden');
+  buildFilters();
+  renderTable();
+  setStep(3);
+}
+
+// Ghi nhật ký kết quả kiểm tra sơ bộ phía trình duyệt
+function logPreCheck() {
+  const missing = State.rows.filter((r) => r.status === 'missing').length;
+  if (missing) Logger.warn(`${missing} dòng thiếu dữ liệu bắt buộc (kiểm tra sơ bộ phía trình duyệt).`);
+  Logger.info('Sẵn sàng — bấm “Kiểm tra với Facebook” để xác thực từng dòng.');
+}
+
+// Nạp thẳng dữ liệu mẫu để thử luồng giao diện mà không cần file Excel.
+// (Page/Post ID giả lập — dùng để test bảng, bộ lọc, ngăn chi tiết, CTA, lịch sử.
+//  Khi bấm “Kiểm tra với Facebook”, server sẽ xác thực thật bằng tài khoản đang đăng nhập.)
+function loadSampleData() {
+  State.rows = buildSampleRows();
+  clientPreCheck();
+  revealTable('<strong>du-lieu-mau.xlsx</strong> · ' + State.rows.length +
+    ' dòng · <span class="muted">dữ liệu mẫu để thử giao diện</span>');
+  Logger.ok(`Nạp dữ liệu mẫu: ${State.rows.length} dòng.`);
+  logPreCheck();
+  toast(`Đã nạp ${State.rows.length} dòng dữ liệu mẫu`, 'ok');
+}
+
+// Dữ liệu mẫu — mỗi dòng minh hoạ một tình huống/loại khác nhau,
+// bao trùm: boost bài viết, Traffic + website, CBO (cấp chiến dịch),
+// ngân sách trọn đời, nút CTA tự điền, link pfbid không tách được, Page vanity, thiếu dữ liệu.
+function buildSampleRows() {
+  const raw = [
+    { // 1) Boost bài viết · Tương tác · ngân sách hàng ngày, cấp nhóm · CTA mặc định (Thích Trang)
+      pageLink: 'https://www.facebook.com/61550000000000',
+      postLink: 'https://www.facebook.com/61550000000000/posts/1234567890', ctaLink: '', cta: '',
+      campaignName: 'CD Tương tác T6', adsetName: 'Nhóm VN 25-45', adName: 'QC Bài viết A',
+      campaignType: 'Tương tác', country: 'Việt Nam', budget: '200000',
+      budgetMode: 'Hàng ngày', budgetLevel: 'Nhóm', startDate: '24/06/2026', endDate: '30/06/2026', statusRaw: 'Tạm dừng',
+    },
+    { // 2) Traffic + website · CBO (cấp chiến dịch) · CTA tự điền "Mua ngay"
+      pageLink: 'https://www.facebook.com/61550000000000',
+      postLink: '', ctaLink: 'https://shop.example.com/sale', cta: 'Mua ngay',
+      campaignName: 'CD Traffic Sale', adsetName: 'Nhóm Web VN', adName: 'QC Web Sale',
+      campaignType: 'Traffic', country: 'VN', budget: '500000',
+      budgetMode: 'Hàng ngày', budgetLevel: 'Chiến dịch', startDate: '24/06/2026', endDate: '', statusRaw: 'Bật',
+    },
+    { // 3) Doanh số · ngân sách TRỌN ĐỜI (cần ngày kết thúc) · CTA tự điền SHOP_NOW
+      pageLink: 'https://www.facebook.com/61550000000000',
+      postLink: 'https://www.facebook.com/61550000000000/posts/2223334445', ctaLink: 'https://shop.example.com/vip', cta: 'SHOP_NOW',
+      campaignName: 'CD Doanh số Hè', adsetName: 'Nhóm Mua hàng', adName: 'QC Sản phẩm',
+      campaignType: 'Doanh số', country: 'VN', budget: '3000000',
+      budgetMode: 'Trọn đời', budgetLevel: 'Nhóm', startDate: '24/06/2026', endDate: '30/06/2026', statusRaw: 'Bật',
+    },
+    { // 4) Tin nhắn · không có bài viết · CTA mặc định (Gửi tin nhắn)
+      pageLink: 'https://www.facebook.com/61550000000000',
+      postLink: '', ctaLink: '', cta: '',
+      campaignName: 'CD Tin nhắn', adsetName: 'Nhóm Inbox', adName: 'QC Inbox',
+      campaignType: 'Tin nhắn', country: 'VN', budget: '150000',
+      budgetMode: 'Hàng ngày', budgetLevel: 'Nhóm', startDate: '24/06/2026', endDate: '', statusRaw: 'Bật',
+    },
+    { // 5) Tương tác · link pfbid không tách được ID (cảnh báo) · Page dạng tên (vanity)
+      pageLink: 'https://www.facebook.com/tenshop',
+      postLink: 'https://www.facebook.com/share/p/pfbid0abcXYZ/', ctaLink: '', cta: '',
+      campaignName: 'CD Reel', adsetName: 'Nhóm Reel', adName: 'QC Reel',
+      campaignType: 'Tương tác', country: 'VN,US', budget: '100000',
+      budgetMode: 'Hàng ngày', budgetLevel: 'Nhóm', startDate: '24/06/2026', endDate: '', statusRaw: 'Tạm dừng',
+    },
+    { // 6) Thiếu dữ liệu — bỏ trống ngân sách (sẽ báo "Thiếu dữ liệu")
+      pageLink: 'https://www.facebook.com/61550000000000',
+      postLink: '', ctaLink: 'https://landing.example.com', cta: '',
+      campaignName: 'CD Lead', adsetName: 'Nhóm Form', adName: 'QC Đăng ký',
+      campaignType: 'Lead', country: 'VN', budget: '',
+      budgetMode: 'Hàng ngày', budgetLevel: 'Nhóm', startDate: '24/06/2026', endDate: '', statusRaw: 'Bật',
+    },
+  ];
+  return raw.map((r, i) => ({ index: i, status: 'pending', errors: [], warnings: [], parsed: {}, normalized: {}, ...r }));
 }
 
 // Kiểm tra nhanh phía client (chưa gọi Facebook)
@@ -640,20 +780,25 @@ function updateCounts() {
 // ============================================================
 //  Bảng dữ liệu
 // ============================================================
+// Dòng có khớp bộ lọc trạng thái + ô tìm kiếm hiện tại không
+function rowMatchesFilter(r) {
+  if (State.filter !== 'all' && r.status !== State.filter) return false;
+  if (State.search) {
+    const hay = `${r.campaignName} ${r.adsetName} ${r.adName}`.toLowerCase();
+    if (!hay.includes(State.search)) return false;
+  }
+  return true;
+}
+function visibleRows() { return State.rows.filter(rowMatchesFilter); }
+function selectedRows() { return State.rows.filter((r) => State.selected.has(r.index)); }
+
 function renderTable() {
   const body = $('#tableBody');
   body.innerHTML = '';
-  const rows = State.rows.filter((r) => {
-    if (State.filter !== 'all' && r.status !== State.filter) return false;
-    if (State.search) {
-      const hay = `${r.campaignName} ${r.adsetName} ${r.adName}`.toLowerCase();
-      if (!hay.includes(State.search)) return false;
-    }
-    return true;
-  });
+  const rows = visibleRows();
 
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="10" class="loading">Không có dòng nào khớp bộ lọc.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="loading">Không có dòng nào khớp bộ lọc.</td></tr>';
   }
 
   rows.forEach((r) => {
@@ -668,28 +813,191 @@ function renderTable() {
         : '<span class="cell-mono empty">chưa có</span>');
     const hasErr = r.errors?.length;
     tr.innerHTML = `
+      <td class="col-check"><input type="checkbox" class="row-check"${State.selected.has(r.index) ? ' checked' : ''} /></td>
       <td><span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span></td>
-      <td><div class="cell-strong">${esc(r.campaignName || '—')}</div></td>
-      <td><div class="cell-strong">${esc(r.adsetName || '—')}</div><div class="cell-sub">${esc(r.adName || '')}</div></td>
-      <td>${esc(r.campaignType || '—')}</td>
-      <td>${ctaPillHtml(r)}</td>
-      <td>${pageCell}</td>
-      <td><span class="cell-mono ${objId ? '' : 'empty'}">${esc(objId || 'chưa có')}</span></td>
-      <td>${esc(r.country || '—')}</td>
-      <td>${esc(r.budget || '—')}</td>
-      <td><button class="detail-btn ${hasErr ? 'has-err' : ''}" data-i="${r.index}">${hasErr ? 'Xem lỗi' : 'Chi tiết'}</button></td>`;
+      <td class="col-names">
+        <div class="cell-strong">${esc(r.campaignName || '—')}</div>
+        <div class="cell-sub"><span class="k">Nhóm</span>${esc(r.adsetName || '—')}</div>
+        <div class="cell-sub"><span class="k">QC</span>${esc(r.adName || '—')}</div>
+      </td>
+      <td class="col-type">${typeEditorHtml(r)}</td>
+      <td class="col-cta">${ctaEditorHtml(r)}</td>
+      <td class="col-ids">
+        <div class="idline"><span class="k">Trang</span>${pageCell}</div>
+        <div class="idline"><span class="k">Bài</span><span class="cell-mono ${objId ? '' : 'empty'}">${esc(objId || 'chưa có')}</span></div>
+      </td>
+      <td class="col-meta">
+        <div class="cell-strong">${esc(r.budget || '—')}</div>
+        <div class="cell-sub">${esc(budgetModeLabel(r))}</div>
+        <div class="cell-sub"><span class="k">QG</span>${esc(r.country || '—')}</div>
+      </td>
+      <td class="col-actions">
+        <button class="detail-btn ${hasErr ? 'has-err' : ''}" data-i="${r.index}">${hasErr ? 'Xem lỗi' : 'Chi tiết'}</button>
+        <button class="row-del" title="Xoá dòng này">✕</button>
+      </td>`;
     tr.querySelector('.detail-btn').addEventListener('click', () => openDrawer(r.index));
+    tr.querySelector('.row-del').addEventListener('click', () => deleteRows([r]));
+    const chk = tr.querySelector('.row-check');
+    chk.addEventListener('change', () => {
+      if (chk.checked) State.selected.add(r.index); else State.selected.delete(r.index);
+      updateBulkBar();
+    });
+    wireRowEditors(tr, r);
     body.appendChild(tr);
   });
 
   updateCounts();
   updateReady();
+  updateBulkBar();
 }
 
 function updateReady() {
   const ready = State.rows.filter((r) => r.status === 'valid').length;
   $('#readyCount').textContent = `${ready} dòng sẵn sàng`;
   $('#createBtn').disabled = ready === 0;
+}
+
+// ============================================================
+//  Chọn nhiều dòng → sửa / xoá hàng loạt
+// ============================================================
+function updateBulkBar() {
+  const n = selectedRows().length;
+  const bar = $('#bulkBar');
+  if (bar) {
+    bar.classList.toggle('hidden', n === 0);
+    $('#bulkCount').textContent = n;
+    $('#bulkEditBtn').textContent = n > 1 ? `Sửa ${n} dòng` : 'Sửa';
+    $('#bulkDelBtn').textContent = n > 1 ? `Xoá ${n} dòng` : 'Xoá';
+  }
+  // Đồng bộ checkbox "chọn tất cả" theo các dòng đang hiển thị
+  const all = $('#checkAll');
+  if (all) {
+    const visible = visibleRows();
+    const selVisible = visible.filter((r) => State.selected.has(r.index)).length;
+    all.checked = visible.length > 0 && selVisible === visible.length;
+    all.indeterminate = selVisible > 0 && selVisible < visible.length;
+  }
+}
+
+function toggleSelectAll(checked) {
+  visibleRows().forEach((r) => { if (checked) State.selected.add(r.index); else State.selected.delete(r.index); });
+  renderTable();
+}
+
+function deleteRows(rows) {
+  if (!rows.length) return;
+  const idxs = new Set(rows.map((r) => r.index));
+  State.rows = State.rows.filter((r) => !idxs.has(r.index));
+  idxs.forEach((i) => State.selected.delete(i));
+  renderTable();
+  Logger.warn(`Đã xoá ${idxs.size} dòng.`);
+  toast(`Đã xoá ${idxs.size} dòng`, 'ok');
+}
+
+// Sửa 1 hoặc nhiều dòng bằng cùng một biểu mẫu.
+// - 1 dòng: điền sẵn giá trị hiện tại, lưu = ghi đè (cho phép để trống).
+// - nhiều dòng: để trống = giữ nguyên; chỉ áp dụng ô có nhập.
+function openEditRows(rows) {
+  if (!rows.length) return;
+  const single = rows.length === 1;
+  const r0 = rows[0];
+  const val = (x) => (single ? esc(x || '') : '');
+  const ph = single ? '' : 'placeholder="(giữ nguyên)"';
+  const curMode = budgetModeLabel(r0); // 'hàng ngày' | 'trọn đời'
+  const modeOpts = single
+    ? `<option value="Hàng ngày"${curMode === 'hàng ngày' ? ' selected' : ''}>Hàng ngày</option>
+       <option value="Trọn đời"${curMode === 'trọn đời' ? ' selected' : ''}>Trọn đời</option>`
+    : `<option value="">(giữ nguyên)</option><option value="Hàng ngày">Hàng ngày</option><option value="Trọn đời">Trọn đời</option>`;
+
+  $('#modalTitle').textContent = single ? `Sửa dòng ${r0.index + 1}` : `Sửa ${rows.length} dòng đã chọn`;
+  $('#modalBody').innerHTML = `
+    <div class="edit-form">
+      <label>Tên chiến dịch<input id="edCamp" type="text" value="${val(r0.campaignName)}" ${ph}></label>
+      <label>Tên nhóm quảng cáo<input id="edAdset" type="text" value="${val(r0.adsetName)}" ${ph}></label>
+      <label>Tên quảng cáo<input id="edAd" type="text" value="${val(r0.adName)}" ${ph}></label>
+      <div class="edit-row">
+        <label>Ngân sách<input id="edBudget" type="text" inputmode="numeric" value="${val(r0.budget)}" ${ph}></label>
+        <label>Loại ngân sách<select id="edMode">${modeOpts}</select></label>
+      </div>
+      <div class="edit-row">
+        <label>Ngày bắt đầu<input id="edStart" type="text" value="${val(r0.startDate)}" placeholder="dd/mm/yyyy"></label>
+        <label>Ngày kết thúc<input id="edEnd" type="text" value="${val(r0.endDate)}" placeholder="dd/mm/yyyy"></label>
+      </div>
+      ${single ? '' : '<label class="edit-check"><input type="checkbox" id="edNumber"> Thêm số thứ tự vào cuối tên (1, 2, …) để tránh trùng tên</label>'}
+    </div>`;
+  const foot = $('#modalFoot');
+  foot.innerHTML = '';
+  foot.append(mkBtn('Huỷ', 'btn-ghost', closeModal),
+    mkBtn('Lưu', 'btn-primary', () => applyEditRows(rows, single)));
+  $('#modalScrim').classList.remove('hidden');
+}
+
+function applyEditRows(rows, single) {
+  const camp = $('#edCamp').value.trim();
+  const adset = $('#edAdset').value.trim();
+  const ad = $('#edAd').value.trim();
+  const budget = $('#edBudget').value.trim();
+  const mode = $('#edMode').value; // '' = giữ nguyên
+  const start = $('#edStart').value.trim();
+  const end = $('#edEnd').value.trim();
+  const number = !single && $('#edNumber')?.checked;
+
+  rows.forEach((r, i) => {
+    const sfx = number ? ' ' + (i + 1) : '';
+    if (single) {
+      r.campaignName = camp; r.adsetName = adset; r.adName = ad;
+      r.budget = budget; r.startDate = start; r.endDate = end;
+      if (mode) r.budgetMode = mode;
+    } else {
+      if (camp) r.campaignName = camp + sfx;
+      if (adset) r.adsetName = adset + sfx;
+      if (ad) r.adName = ad + sfx;
+      if (budget) r.budget = budget;
+      if (mode) r.budgetMode = mode;
+      if (start) r.startDate = start;
+      if (end) r.endDate = end;
+    }
+  });
+  closeModal();
+  renderTable();
+  Logger.ok(single ? `Đã sửa dòng ${rows[0].index + 1}.` : `Đã sửa ${rows.length} dòng.`);
+  toast(single ? 'Đã lưu thay đổi' : `Đã sửa ${rows.length} dòng`, 'ok');
+}
+
+// Gắn sự kiện cho ô chọn Mục tiêu + sửa nút CTA + Link CTA trong một dòng.
+// Sửa trực tiếp vào State.rows nên giá trị mới sẽ được gửi đi khi Kiểm tra / Tạo.
+function wireRowEditors(tr, r) {
+  const typeSel = tr.querySelector('.type-select');
+  const cell = tr.querySelector('.cta-cell');
+  const ctaSel = cell?.querySelector('.cta-select');
+  const linkEl = cell?.querySelector('.cta-link-input');
+
+  // Cập nhật pill xem trước + ẩn/hiện ô Link theo nút CTA hiện tại
+  const refreshCta = () => {
+    if (!cell) return;
+    cell.querySelector('.cta-preview').innerHTML = ctaPillHtml(r);
+    if (linkEl) linkEl.classList.toggle('hidden', !ctaUsesLink(r));
+  };
+
+  typeSel?.addEventListener('change', () => {
+    r.campaignType = typeSel.value ? TYPE_LABELS[typeSel.value] : '';
+    refreshCta(); // nút CTA mặc định + ô Link thay đổi theo mục tiêu
+    Logger.info(`Dòng ${r.index + 1}: mục tiêu → ${r.campaignType || '—'}.`);
+  });
+
+  ctaSel?.addEventListener('change', () => {
+    r.cta = ctaSel.value; // '' = mặc định theo mục tiêu; ngược lại là mã CTA
+    refreshCta();
+    const c = ctaForRow(r);
+    Logger.info(`Dòng ${r.index + 1}: nút CTA → ${c ? c.label : 'mặc định theo mục tiêu'}.`);
+  });
+
+  linkEl?.addEventListener('change', () => {
+    const v = linkEl.value.trim();
+    if (v === (r.ctaLink || '')) return;
+    r.ctaLink = v;
+    Logger.info(`Dòng ${r.index + 1}: ${v ? 'cập nhật' : 'xoá'} Link CTA.`);
+  });
 }
 
 // ============================================================
@@ -707,8 +1015,11 @@ function openDrawer(index) {
       <dt>Chiến dịch</dt><dd>${esc(r.campaignName || '—')}</dd>
       <dt>Nhóm QC</dt><dd>${esc(r.adsetName || '—')}</dd>
       <dt>Quảng cáo</dt><dd>${esc(r.adName || '—')}</dd>
-      <dt>Loại</dt><dd>${esc(r.campaignType || '—')}</dd>
+      <dt>Mục tiêu</dt><dd>${esc(typeLabel(r))}</dd>
       <dt>Nút CTA</dt><dd>${ctaPillHtml(r, true)}</dd>
+      <dt>Link CTA</dt><dd>${r.ctaLink
+        ? `<a href="${esc(r.ctaLink)}" target="_blank" rel="noopener noreferrer">${esc(r.ctaLink)}</a>`
+        : '—'}</dd>
       <dt>Quốc gia</dt><dd>${esc(r.country || '—')}</dd>
       <dt>Ngân sách</dt><dd>${esc(r.budget || '—')} · ${budgetModeLabel(r)} · ${budgetLevelLabel(r)}</dd>
       <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
@@ -810,7 +1121,7 @@ function confirmCreate() {
   const foot = $('#modalFoot');
   foot.innerHTML = '';
   const cancel = mkBtn('Huỷ', 'btn-ghost', closeModal);
-  const go = mkBtn(draft ? 'Tạo bản nháp' : 'Tạo & chạy', 'btn-primary', () => { closeModal(); runCreate(ready, draft); });
+  const go = mkBtn(draft ? 'Tạo bản nháp' : 'Tạo & chạy', 'btn-primary', () => runCreate(ready, draft));
   foot.append(cancel, go);
   $('#modalScrim').classList.remove('hidden');
 }
@@ -818,7 +1129,9 @@ function confirmCreate() {
 async function runCreate(rows, draft) {
   const btn = $('#createBtn');
   btn.disabled = true; btn.textContent = 'Đang tạo…';
-  Logger.info(`Bắt đầu tạo ${rows.length} quảng cáo · chế độ ${draft ? 'NHÁP (PAUSED)' : 'CHẠY'}.`);
+  const total = rows.length;
+  showCreateProgress(total, draft);
+  Logger.info(`Bắt đầu tạo ${total} quảng cáo · chế độ ${draft ? 'NHÁP (PAUSED)' : 'CHẠY'}.`);
   try {
     const payload = {
       adAccountId: State.selectedAccount.id,
@@ -827,15 +1140,21 @@ async function runCreate(rows, draft) {
       rows: rows.map(stripForSend),
     };
     const { results } = await api('/api/ads/create', { method: 'POST', body: payload });
+
+    // Backend tạo theo lô và trả kết quả một lần — tô từng đoạn theo kết quả để thấy được tiến trình.
+    $('#cpTrack')?.classList.remove('indeterminate');
+    const ordered = [...results].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
     let ok = 0, fail = 0;
-    results.forEach((res) => {
+    for (let i = 0; i < ordered.length; i++) {
+      const res = ordered[i];
       const r = State.rows.find((x) => x.index === res.index);
       if (r) {
         r.status = res.status;
         r.errors = res.errors?.length ? res.errors : r.errors;
         r.ids = res.ids;
       }
-      if (res.status === 'created') {
+      const success = res.status === 'created';
+      if (success) {
         ok++;
         Logger.ok(`✓ Dòng ${res.index + 1}: đã tạo (campaign ${res.ids?.campaignId || '—'}${res.ids?.adId ? ' · ad ' + res.ids.adId : ''}).`);
       } else {
@@ -848,7 +1167,7 @@ async function runCreate(rows, draft) {
         campaignName: r?.campaignName || '—',
         adsetName: r?.adsetName || '',
         adName: r?.adName || '',
-        type: r?.campaignType || '',
+        type: typeLabel(r || {}),
         cta: ctaForRow(r || {})?.code || '',
         account: State.selectedAccount?.name || '',
         draft,
@@ -856,17 +1175,63 @@ async function runCreate(rows, draft) {
         ids: res.ids || {},
         error: res.errors?.[0] || '',
       });
-    });
+      addProgressSeg(success, total);
+      updateCreateMeta(i + 1, total, ok, fail);
+      updateCreateCurrent(`${success ? '✓' : '✗'} Dòng ${res.index + 1}: ${r?.campaignName || '—'}`, !success);
+      await delay(80);
+    }
     Logger.add(`Kết quả tạo: ${ok} thành công, ${fail} lỗi.`, fail ? 'warn' : 'ok');
     renderTable();
     setStep(4);
+    await delay(450);
     showResults(results, draft);
   } catch (err) {
     Logger.err(`Tạo hàng loạt thất bại: ${err.message}`);
     toast(err.message, 'err');
+    closeModal();
   } finally {
     btn.disabled = false; btn.textContent = 'Tạo hàng loạt';
   }
+}
+
+// ---- Thanh tiến trình tạo hàng loạt (hiển thị trong modal) ----
+function showCreateProgress(total, draft) {
+  $('#modalTitle').textContent = 'Đang tạo quảng cáo…';
+  $('#modalBody').innerHTML = `
+    <p>Đang tạo <strong>${total}</strong> quảng cáo · chế độ
+       <strong>${draft ? 'nháp (PAUSED)' : 'chạy'}</strong>. Vui lòng đợi…</p>
+    <div class="progress-wrap">
+      <div class="progress-track indeterminate" id="cpTrack"></div>
+      <div class="progress-meta">
+        <span id="cpCount">0/${total}</span>
+        <span><span class="cp-ok" id="cpOk">0</span> ✓ &nbsp;·&nbsp; <span class="cp-fail" id="cpFail">0</span> ✗</span>
+      </div>
+      <div class="progress-current" id="cpCurrent">Đang gửi yêu cầu tạo tới Facebook…</div>
+    </div>`;
+  $('#modalFoot').innerHTML = '';
+  $('#modalScrim').classList.remove('hidden');
+}
+
+function addProgressSeg(success, total) {
+  const track = $('#cpTrack');
+  if (!track) return;
+  const seg = document.createElement('div');
+  seg.className = 'progress-seg ' + (success ? 'ok' : 'err');
+  seg.style.width = (100 / total) + '%';
+  track.appendChild(seg);
+}
+
+function updateCreateMeta(done, total, ok, fail) {
+  if ($('#cpCount')) $('#cpCount').textContent = `${done}/${total}`;
+  if ($('#cpOk')) $('#cpOk').textContent = ok;
+  if ($('#cpFail')) $('#cpFail').textContent = fail;
+}
+
+function updateCreateCurrent(text, isErr = false) {
+  const el = $('#cpCurrent');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('err', isErr);
 }
 
 function showResults(results, draft) {
@@ -943,6 +1308,8 @@ async function api(url, opts = {}) {
     throw err;
   }
 }
+
+function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 function mkBtn(text, cls, onClick) {
   const b = document.createElement('button');

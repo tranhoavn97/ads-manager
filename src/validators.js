@@ -80,14 +80,17 @@ function parseNumber(input) {
   return parseFloat(s);
 }
 
-function parseDate(input) {
+function parseDate(input, endOfDay = false) {
   if (!input) return null;
   const s = input.toString().trim();
   // dd/mm/yyyy hoặc dd-mm-yyyy
   const dmy = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
   if (dmy) {
     const [, d, m, y] = dmy;
-    const dt = new Date(Date.UTC(+y, +m - 1, +d, 0, 0, 0));
+    // Ngày kết thúc lấy cuối ngày (23:59) để không bị rơi vào quá khứ khi chọn đúng ngày hôm nay
+    const dt = endOfDay
+      ? new Date(Date.UTC(+y, +m - 1, +d, 23, 59, 0))
+      : new Date(Date.UTC(+y, +m - 1, +d, 0, 0, 0));
     return isNaN(dt.getTime()) ? null : dt;
   }
   const dt = new Date(s);
@@ -181,10 +184,14 @@ export function validateRow(row) {
 
   // Ngày
   const start = parseDate(row.startDate);
-  const end = parseDate(row.endDate);
+  const end = parseDate(row.endDate, true); // ngày kết thúc lấy cuối ngày
   if (row.startDate && !start) errors.push(`Ngày bắt đầu "${row.startDate}" không đọc được (dùng dd/mm/yyyy)`);
   if (row.endDate && !end) errors.push(`Ngày kết thúc "${row.endDate}" không đọc được (dùng dd/mm/yyyy)`);
   if (start && end && end <= start) errors.push('Ngày kết thúc phải sau ngày bắt đầu');
+  // Facebook bắt buộc: ngày kết thúc phải ở tương lai
+  if (end && end.getTime() <= Date.now()) {
+    errors.push('Ngày kết thúc phải ở trong tương lai — hãy chọn ngày sau hôm nay.');
+  }
   if (start) normalized.startTime = start.toISOString();
   if (end) normalized.endTime = end.toISOString();
 
@@ -195,6 +202,8 @@ export function validateRow(row) {
   normalized.budgetLevel = budgetLevel;
   if (budgetMode === 'lifetime' && !end) {
     errors.push('Ngân sách trọn đời cần có Ngày kết thúc (để Facebook biết tổng thời gian chạy).');
+  } else if (budgetMode === 'lifetime' && end && (end.getTime() - Date.now()) < 24 * 60 * 60 * 1000) {
+    warnings.push('Ngân sách trọn đời nên chạy ít nhất 24 giờ — hãy chọn Ngày kết thúc cách hôm nay vài ngày để tránh bị Facebook từ chối.');
   }
 
   const status = errors.length ? ROW_STATUS.MISSING : ROW_STATUS.VALID;

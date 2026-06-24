@@ -1,13 +1,13 @@
 import express from 'express';
 import { requireAuth } from './auth.js';
 import {
-  getPages, resolvePageSlug, scrapePageId, checkPostExists,
+  getPages, resolvePageSlug, scrapePageId, checkPostExists, getPostDetails,
   createCampaign, createAdSet, createAdCreative, createAd,
   MetaApiError,
 } from '../meta-api.js';
 import { parsePageId, parsePostId, buildObjectStoryId } from '../parsers.js';
 import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, ROW_STATUS } from '../validators.js';
-import { resolveCampaignType, resolveCta } from '../campaign-mapper.js';
+import { resolveCampaignType, resolveCta, defaultCtaForType } from '../campaign-mapper.js';
 
 const router = express.Router();
 
@@ -116,13 +116,15 @@ router.post('/validate', requireAuth, async (req, res) => {
 
     // 3) Post / Object ID (nếu có link bài viết)
     if (row.postLink && row.postLink.toString().trim()) {
-      // Loại cần website (Traffic/Doanh số) + có link CTA -> sẽ dùng quảng cáo link, bỏ qua reel/bài viết
       const ctype = resolveCampaignType(row.campaignType);
-      const willUseLink = !!(ctype && ctype.needsLink && row.ctaLink && row.ctaLink.toString().trim());
+      const hasCta = !!(row.ctaLink && row.ctaLink.toString().trim());
+      // Loại cần website (Traffic/Doanh số) + có link CTA -> DÙNG bài viết có sẵn và thêm nút CTA gắn link
+      const willAddButton = !!(ctype && ctype.needsLink && hasCta);
       const postRes = parsePostId(row.postLink);
       if (postRes.error) {
-        if (willUseLink) {
-          warnings.push(`Bỏ qua reel/bài viết (dùng quảng cáo link website cho loại "${ctype.label}"). ${postRes.error}`);
+        // Không đọc được link bài: nếu là loại cần link + có link CTA thì vẫn tạo được bằng quảng cáo link mới
+        if (ctype && ctype.needsLink && hasCta) {
+          warnings.push(`Không dùng được link bài viết (${postRes.error}) — sẽ tạo quảng cáo LINK tới website cho loại "${ctype.label}".`);
         } else {
           errors.push(postRes.error);
           if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
@@ -131,14 +133,17 @@ router.post('/validate', requireAuth, async (req, res) => {
         parsed.postId = postRes.postId;
         const ownerPageId = postRes.pageIdFromLink || parsed.pageId;
         parsed.objectStoryId = buildObjectStoryId(ownerPageId, postRes.postId);
-        // Loại Traffic/Doanh số: dùng link website, không cần kiểm tra reel
-        if (willUseLink) {
-          warnings.push(`Loại "${ctype.label}" sẽ tạo quảng cáo LINK tới website (${row.ctaLink}); reel/bài viết được bỏ qua.`);
-        } else if (parsed.objectStoryId) {
+        if (parsed.objectStoryId) {
           const ownerPage = owned.pages.find((p) => p.id === ownerPageId);
           const postToken = ownerPage?.access_token || req.session.fbToken;
           try {
             await checkPostExists(postToken, parsed.objectStoryId);
+            if (willAddButton) {
+              const ctaLabel = (resolveCta(row.cta) || defaultCtaForType(ctype.id))?.label || 'Mua ngay';
+              warnings.push(`Sẽ dùng bài viết có sẵn và thêm nút "${ctaLabel}" gắn link ${row.ctaLink} (giống thao tác trong Trình quản lý QC).`);
+            } else if (ctype && ctype.needsLink && !hasCta) {
+              warnings.push(`Loại "${ctype.label}" nên có cột CTA/website để gắn nút bấm + link. Thiếu link thì bài viết chỉ chạy tăng tương tác, không có nút dẫn tới web.`);
+            }
           } catch (err) {
             const code = err instanceof MetaApiError ? err.code : null;
             // Lỗi quyền đọc bài: chỉ cảnh báo (không chặn) để vẫn cho tạo
@@ -177,6 +182,13 @@ router.post('/create', requireAuth, async (req, res) => {
   }
 
   const token = req.session.fbToken;
+  // Nạp Page để lấy access_token của Page (đọc bài viết bằng token của Page, không cần pages_read_engagement trên token user)
+  let pagesById = new Map();
+  try {
+    const pages = await getPages(token);
+    pagesById = new Map(pages.map((p) => [p.id, p]));
+  } catch { /* vẫn tạo được bằng token user */ }
+
   const results = [];
 
   for (let i = 0; i < rows.length; i++) {
@@ -251,24 +263,46 @@ router.post('/create', requireAuth, async (req, res) => {
       result.ids.adsetId = adset.id;
 
       // 3) AD CREATIVE
-      // Loại cần website (Traffic/Doanh số) + có link CTA -> ưu tiên quảng cáo LINK (bỏ qua boost post/reel),
-      // vì reel/bài viết thường không boost được và mục tiêu là kéo về website.
-      const useLink = row.ctaLink && (ctype.needsLink || !row.parsed?.objectStoryId);
+      const hasPost = !!row.parsed?.objectStoryId;
+      const hasCta = !!(row.ctaLink && row.ctaLink.toString().trim());
+      // CTA: lấy từ sheet nếu có, không thì mặc định theo loại chiến dịch
+      const ctaOverride = resolveCta(row.cta);
+      const ctaType = ctaOverride && ctaOverride.code !== 'NO_BUTTON' ? ctaOverride.code : ctype.default_cta;
       let creativePayload;
-      if (useLink) {
-        // Quảng cáo link tới website — CTA lấy từ sheet nếu có, không thì mặc định theo loại
-        const ctaOverride = resolveCta(row.cta);
-        const ctaType = ctaOverride && ctaOverride.code !== 'NO_BUTTON' ? ctaOverride.code : ctype.default_cta;
+
+      if (hasPost && hasCta && ctype.needsLink) {
+        // (A) DÙNG BÀI VIẾT CÓ SẴN + thêm nút CTA gắn link (giống thao tác trong Trình quản lý QC:
+        //     "Sử dụng bài viết có sẵn" -> "Thêm nút kêu gọi hành động" -> Mua ngay + URL).
+        //     Đọc media của bài (video/ảnh) rồi dựng creative giữ nguyên nội dung + gắn nút + link.
+        const callToAction = { type: ctaType, value: { link: row.ctaLink } };
+        const ownerPageId = row.parsed.objectStoryId.split('_')[0];
+        const ownerPage = pagesById.get(ownerPageId) || pagesById.get(pageId);
+        const postToken = ownerPage?.access_token || token;
+        let details = {};
+        try {
+          details = await getPostDetails(postToken, row.parsed.objectStoryId);
+        } catch { details = {}; }
+
+        const message = details.message || row.adName;
+        if (details.kind === 'video' && details.videoId) {
+          const video_data = { video_id: details.videoId, message, call_to_action: callToAction };
+          if (details.imageUrl) video_data.image_url = details.imageUrl;
+          creativePayload = { name: `${row.adName} - creative`, object_story_spec: { page_id: pageId, video_data } };
+        } else {
+          // Ảnh / không lấy được video -> quảng cáo link kèm ảnh bài viết (vẫn có nút + link)
+          const link_data = { link: row.ctaLink, message, call_to_action: callToAction };
+          if (details.imageUrl) link_data.picture = details.imageUrl;
+          creativePayload = { name: `${row.adName} - creative`, object_story_spec: { page_id: pageId, link_data } };
+        }
+      } else if (hasCta && (ctype.needsLink || !hasPost)) {
+        // (B) Quảng cáo link mới tới website (không có bài viết có sẵn để dùng)
         const link_data = { link: row.ctaLink, message: row.adName };
         if (!(ctaOverride && ctaOverride.code === 'NO_BUTTON')) {
           link_data.call_to_action = { type: ctaType, value: { link: row.ctaLink } };
         }
-        creativePayload = {
-          name: `${row.adName} - creative`,
-          object_story_spec: { page_id: pageId, link_data },
-        };
-      } else if (row.parsed?.objectStoryId) {
-        // Quảng cáo từ bài viết/reel có sẵn (boost)
+        creativePayload = { name: `${row.adName} - creative`, object_story_spec: { page_id: pageId, link_data } };
+      } else if (hasPost) {
+        // (C) Boost bài viết/reel có sẵn (không gắn link)
         creativePayload = { name: `${row.adName} - creative`, object_story_id: row.parsed.objectStoryId };
       } else {
         throw new RowError('Thiếu cả bài viết lẫn link CTA để tạo nội dung quảng cáo', ROW_STATUS.POST_ERROR);
