@@ -1,6 +1,44 @@
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { graphBase } from './config.js';
 import { normalizeFbUrl } from './parsers.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOG_DIR = path.join(__dirname, '../logs');
+const LOG_FILE = path.join(LOG_DIR, 'api_calls.log');
+
+async function logApiCall(method, pathStr, params, statusCode, duration, errorMsg, headers) {
+  try {
+    if (!fs.existsSync(LOG_DIR)) {
+      fs.mkdirSync(LOG_DIR, { recursive: true });
+    }
+    const appUsage = headers?.['x-app-usage'] || null;
+    const adAccountUsage = headers?.['x-ad-account-usage'] || null;
+    const bizUsage = headers?.['x-business-use-case-usage'] || null;
+    
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      method,
+      path: pathStr,
+      params: params ? { ...params, access_token: '***' } : null,
+      statusCode,
+      durationMs: duration,
+      error: errorMsg || null,
+      rateLimit: {
+        appUsage,
+        adAccountUsage,
+        bizUsage
+      }
+    };
+    
+    await fs.promises.appendFile(LOG_FILE, JSON.stringify(logEntry) + '\n', 'utf8');
+    console.log(`[API Call] ${method} ${pathStr} - Status: ${statusCode} - ${duration}ms${appUsage ? ` (App: ${appUsage})` : ''}`);
+  } catch (err) {
+    console.error('Lỗi khi ghi log API:', err.message);
+  }
+}
 
 // ============================================================
 //  Lớp bọc Meta Marketing API (Graph API)
@@ -49,6 +87,7 @@ function translateError(fbError, httpStatus) {
 
 async function call(method, path, { token, params = {}, data = null } = {}) {
   const url = `${graphBase}/${path.replace(/^\//, '')}`;
+  const start = Date.now();
   try {
     const res = await axios({
       method,
@@ -58,15 +97,24 @@ async function call(method, path, { token, params = {}, data = null } = {}) {
       timeout: 30000,
       headers: { 'Content-Type': 'application/json' },
     });
+    const duration = Date.now() - start;
+    await logApiCall(method, path, params, res.status, duration, null, res.headers);
     return res.data;
   } catch (err) {
+    const duration = Date.now() - start;
+    let finalError = err;
+    let statusCode = 502;
     if (err.response?.data?.error) {
-      throw translateError(err.response.data.error, err.response.status);
+      finalError = translateError(err.response.data.error, err.response.status);
+      statusCode = err.response.status;
+    } else if (err.code === 'ECONNABORTED') {
+      finalError = new MetaApiError('Hết thời gian chờ phản hồi từ Meta API. Vui lòng thử lại.', { status: 408 });
+      statusCode = 408;
+    } else {
+      finalError = new MetaApiError(`Lỗi kết nối tới Meta API: ${err.message}`, { status: 502 });
     }
-    if (err.code === 'ECONNABORTED') {
-      throw new MetaApiError('Hết thời gian chờ phản hồi từ Meta API. Vui lòng thử lại.', { status: 408 });
-    }
-    throw new MetaApiError(`Lỗi kết nối tới Meta API: ${err.message}`, { status: 502 });
+    await logApiCall(method, path, params, statusCode, duration, finalError.message, err.response?.headers);
+    throw finalError;
   }
 }
 
@@ -375,4 +423,17 @@ export async function uploadAdImageFromUrl(token, adAccountId, imageUrl) {
     return data.images[keys[0]].hash;
   }
   throw new Error('Không lấy được hash ảnh từ Meta API.');
+}
+
+/**
+ * Kiểm tra các quyền (scopes) đã được cấp của token
+ */
+export async function getTokenPermissions(token) {
+  try {
+    const res = await call('GET', 'me/permissions', { token });
+    return res.data || [];
+  } catch (err) {
+    console.error('Lỗi lấy quyền từ token:', err.message);
+    throw err;
+  }
 }

@@ -1,11 +1,13 @@
 import express from 'express';
+import axios from 'axios';
 import { requireAuth } from './auth.js';
 import {
   getPages, resolvePageSlug, scrapePageId, checkPostExists,
   createCampaign, createAdSet, createAdCreative, createAd,
   MetaApiError, resolvePostFromGraph, verifyPostDetails, isPermalinkMatch,
-  getAdCreative, uploadAdImageFromUrl,
+  getAdCreative, uploadAdImageFromUrl, getTokenPermissions
 } from '../meta-api.js';
+import { config } from '../config.js';
 import { parsePageId, parsePostId, buildObjectStoryId, normalizeFbUrl } from '../parsers.js';
 import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, resolveContentMode, resolveCtaHandling, ROW_STATUS } from '../validators.js';
 import { resolveCampaignType, resolveCta, defaultCtaForType } from '../campaign-mapper.js';
@@ -42,6 +44,36 @@ async function loadOwnedPages(token) {
   return { pages, idSet, advertiseSet, usernameMap };
 }
 
+// Hàm kiểm tra khả năng truy cập của URL CTA
+async function checkUrlAccessibility(url) {
+  if (!url) return { valid: false, error: 'URL trống' };
+  let formattedUrl = url.trim();
+  if (!/^https?:\/\//i.test(formattedUrl)) {
+    formattedUrl = 'https://' + formattedUrl;
+  }
+  try {
+    const res = await axios.head(formattedUrl, {
+      timeout: 5000,
+      maxRedirects: 5,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (res.status >= 400) {
+      return { valid: false, error: `URL phản hồi mã lỗi HTTP ${res.status}`, code: res.status };
+    }
+    return { valid: true };
+  } catch (err) {
+    if (err.response && err.response.status) {
+      if (err.response.status < 400) {
+        return { valid: true };
+      }
+      return { valid: false, error: `URL phản hồi mã lỗi HTTP ${err.response.status}`, code: err.response.status };
+    }
+    return { valid: false, error: `Không thể kết nối đến URL: ${err.message}` };
+  }
+}
+
 // ---------- BƯỚC KIỂM TRA (PREVIEW) ----------
 router.post('/validate', requireAuth, async (req, res) => {
   const { rows, creativeMode } = req.body || {};
@@ -49,11 +81,23 @@ router.post('/validate', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Dữ liệu rows không hợp lệ' });
   }
 
+  const fbToken = req.session.fbToken;
   let owned;
   try {
-    owned = await loadOwnedPages(req.session.fbToken);
+    owned = await loadOwnedPages(fbToken);
   } catch (err) {
     return res.status(err.status || 400).json({ error: err instanceof MetaApiError ? err.message : err.message });
+  }
+
+  // Kiểm tra quyền từ token
+  let missingPermissions = [];
+  try {
+    const perms = await getTokenPermissions(fbToken);
+    const granted = new Set(perms.filter(p => p.status === 'granted').map(p => p.permission));
+    const required = config.scopes.split(',').map(s => s.trim()).filter(Boolean);
+    missingPermissions = required.filter(p => !granted.has(p));
+  } catch (err) {
+    console.warn('Lỗi kiểm tra quyền hạn của token:', err.message);
   }
 
   const slugCache = new Map();
@@ -75,7 +119,25 @@ router.post('/validate', requireAuth, async (req, res) => {
     };
     let status = base.status;
 
-    // 0) Nút CTA: cảnh báo nhẹ nếu nhập nhưng không nhận dạng được
+    // 0) Kiểm tra quyền token
+    if (missingPermissions.length > 0) {
+      warnings.push(`Token thiếu các quyền đề xuất: ${missingPermissions.join(', ')}. Việc tạo quảng cáo có thể thất bại.`);
+    }
+
+    // 0.1) Kiểm tra khả năng truy cập của link CTA
+    if (row.ctaLink && row.ctaLink.toString().trim()) {
+      const urlCheck = await checkUrlAccessibility(row.ctaLink);
+      if (!urlCheck.valid) {
+        if (urlCheck.error.includes('HTTP')) {
+          warnings.push(`Cảnh báo link CTA: ${urlCheck.error}`);
+        } else {
+          errors.push(`Lỗi link CTA không tồn tại/không truy cập được: ${urlCheck.error}`);
+          if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
+        }
+      }
+    }
+
+    // 0.2) Nút CTA: cảnh báo nhẹ nếu nhập nhưng không nhận dạng được
     if (row.cta && row.cta.toString().trim() && !resolveCta(row.cta)) {
       warnings.push(`Nút CTA "${row.cta}" không nhận dạng — sẽ dùng nút mặc định theo loại chiến dịch.`);
     }

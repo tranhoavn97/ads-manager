@@ -181,6 +181,12 @@ export function parsePostId(input) {
     return numericOrOpaque(segments[segments.length - 1], null, 'video');
   }
 
+  // /video/<id>
+  const videoIdx = segments.indexOf('video');
+  if (videoIdx !== -1 && segments[videoIdx + 1]) {
+    return numericOrOpaque(segments[videoIdx + 1], null, 'video');
+  }
+
   // /story.php?story_fbid=...&id=...  (đã xử lý qua query phía trên)
 
   // Phần tử số cuối cùng trong path

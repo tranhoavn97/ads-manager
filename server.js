@@ -6,6 +6,7 @@ import { config } from './src/config.js';
 import authRouter from './src/routes/auth.js';
 import accountsRouter from './src/routes/accounts.js';
 import adsRouter from './src/routes/ads.js';
+import webhooksRouter from './src/routes/webhooks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -29,6 +30,7 @@ app.use(
 app.use('/api/auth', authRouter);
 app.use('/api/accounts', accountsRouter);
 app.use('/api/ads', adsRouter);
+app.use('/api/webhooks', webhooksRouter);
 
 // Frontend tĩnh (dùng khi chạy server thường; trên Vercel do static routes phục vụ)
 app.use(express.static(path.join(__dirname, 'public')));

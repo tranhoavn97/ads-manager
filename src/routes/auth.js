@@ -1,7 +1,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import { config } from '../config.js';
-import { exchangeCodeForToken, getLongLivedToken, getMe, MetaApiError } from '../meta-api.js';
+import { exchangeCodeForToken, getLongLivedToken, getMe, MetaApiError, getTokenPermissions } from '../meta-api.js';
 
 const router = express.Router();
 
@@ -85,9 +85,21 @@ router.post('/token', async (req, res) => {
   }
   try {
     const me = await getMe(raw); // xác thực token bằng cách gọi /me
+    
+    // Kiểm tra danh sách quyền được cấp
+    let missingPermissions = [];
+    try {
+      const perms = await getTokenPermissions(raw);
+      const granted = new Set(perms.filter(p => p.status === 'granted').map(p => p.permission));
+      const required = config.scopes.split(',').map(s => s.trim()).filter(Boolean);
+      missingPermissions = required.filter(p => !granted.has(p));
+    } catch (e) {
+      console.warn('Không thể kiểm tra danh sách quyền:', e.message);
+    }
+
     req.session.fbToken = raw;
     req.session.user = { id: me.id, name: me.name };
-    res.json({ ok: true, user: req.session.user });
+    res.json({ ok: true, user: req.session.user, missingPermissions });
   } catch (err) {
     const msg = err instanceof MetaApiError ? err.message : 'Token không hợp lệ hoặc đã hết hạn.';
     res.status(401).json({ error: msg });
