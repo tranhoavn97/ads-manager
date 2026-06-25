@@ -11,7 +11,20 @@ const State = {
   filter: 'all',
   search: '',
   creativeMode: 'NEW_CTA_CREATIVE',
-  editingRowIndex: null,
+  editing: new Set(),   // các dòng đang ở chế độ nhập (sửa được nhiều dòng cùng lúc)
+};
+
+// Ánh xạ class ô input ↔ trường dữ liệu của dòng (dùng để live-bind khi nhập)
+const EDIT_FIELD_MAP = {
+  '.page-link-input': 'pageLink', '.post-link-input': 'postLink',
+  '.content-mode-input': 'contentMode', '.cta-handling-input': 'ctaHandling',
+  '.campaign-name-input': 'campaignName', '.campaign-type-input': 'campaignType',
+  '.adset-name-input': 'adsetName', '.ad-name-input': 'adName',
+  '.cta-input': 'cta', '.cta-link-input': 'ctaLink',
+  '.budget-val-input': 'budget', '.budget-level-input': 'budgetLevel', '.budget-mode-input': 'budgetMode',
+  '.start-date-input': 'startDate', '.start-time-input': 'startTimeRaw',
+  '.end-date-input': 'endDate', '.end-time-input': 'endTimeRaw',
+  '.country-input': 'country', '.status-input': 'statusRaw', '.notes-input': 'notes',
 };
 
 const STATUS_LABEL = {
@@ -344,7 +357,7 @@ function renderLegalPage(path) {
     body {
       background-color: #f8fafc !important;
       color: #1e293b !important;
-      font-family: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif !important;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
       margin: 0 !important;
       padding: 0 !important;
       display: flex !important;
@@ -481,8 +494,18 @@ async function init() {
 
 function bindEvents() {
   $('#logoutBtn').addEventListener('click', logout);
-  $('#toUploadBtn').addEventListener('click', () => { showView('work'); setStep(3); });
+  $('#toUploadBtn').addEventListener('click', enterDashboard);
+
+  // Tab chính: Quản lý / Tạo hàng loạt
+  $$('.apptab').forEach((btn) => btn.addEventListener('click', () => switchTab(btn.dataset.view)));
+  $('#accSelect')?.addEventListener('change', onAccChange);
+  $('#switchAccBtn')?.addEventListener('click', () => {
+    $('#appbar').classList.add('hidden');
+    showView('account');
+  });
   $('#templateBtn').addEventListener('click', downloadTemplate);
+  $('#manualStartBtn')?.addEventListener('click', startManualTable);
+  $('#addRowBtn')?.addEventListener('click', () => addBlankRow(true));
   $('#fileInput').addEventListener('change', (e) => handleFile(e.target.files[0]));
   $('#validateBtn').addEventListener('click', validateRows);
   $('#createBtn').addEventListener('click', confirmCreate);
@@ -547,6 +570,60 @@ async function onLoggedIn() {
 async function logout() {
   await api('/api/auth/logout', { method: 'POST' });
   location.reload();
+}
+
+// Vào bảng điều khiển (dashboard có tab) sau khi đã chọn tài khoản
+function enterDashboard() {
+  const acc = State.selectedAccount;
+  if (!acc) return toast('Hãy chọn tài khoản quảng cáo', 'err');
+  $('#appbar').classList.remove('hidden');
+  populateAccSelect();
+  switchTab('manage');
+}
+
+// Đổ danh sách tài khoản vào dropdown trên thanh tab + đồng bộ nhãn
+function populateAccSelect() {
+  const sel = $('#accSelect');
+  if (!sel) return;
+  const usable = State.adAccounts.filter((a) => a.usable);
+  sel.innerHTML = usable
+    .map((a) => `<option value="${esc(a.id)}">${esc(a.name)} · ${esc(a.currency)}</option>`)
+    .join('');
+  if (State.selectedAccount) sel.value = State.selectedAccount.id;
+  if (window.NiceSelect) NiceSelect.refresh(sel);
+}
+
+// Đổi tài khoản ngay từ dropdown (không cần quay lại màn chọn)
+function onAccChange(e) {
+  const id = e.target.value;
+  const acc = State.adAccounts.find((a) => a.id === id);
+  if (!acc) return;
+  if (State.selectedAccount && acc.id === State.selectedAccount.id) return;
+  State.selectedAccount = acc;
+  Logger.info(`Đổi tài khoản: ${acc.name} (${acc.id} · ${acc.currency}).`);
+  toast(`Đã chọn ${acc.name}`, 'ok');
+  // Nếu đang ở tab Quản lý → tải lại dữ liệu của tài khoản mới
+  _manageLoadedFor = null;
+  const onManage = !$('#view-manage').classList.contains('hidden');
+  if (onManage && typeof Manage !== 'undefined') {
+    _manageLoadedFor = acc.id;
+    Manage.load();
+  }
+}
+
+// Chuyển tab Quản lý <-> Tạo hàng loạt
+let _manageLoadedFor = null;
+function switchTab(view) {
+  $$('.apptab').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  showView(view);
+  if (view === 'manage' && typeof Manage !== 'undefined') {
+    // Lần đầu vào tab Quản lý cho tài khoản này thì tự nạp dữ liệu
+    const accId = State.selectedAccount?.id;
+    if (_manageLoadedFor !== accId) {
+      _manageLoadedFor = accId;
+      Manage.load();
+    }
+  }
 }
 
 // Đăng nhập trực tiếp bằng access token (không qua OAuth)
@@ -699,6 +776,110 @@ function handleFile(file) {
   reader.readAsArrayBuffer(file);
 }
 
+// ============================================================
+//  Nhập tay trong bảng (thêm/nhân đôi/xoá dòng — không cần file)
+// ============================================================
+const ROW_FIELDS = [
+  'adAccountId', 'pageLink', 'postLink', 'contentMode', 'ctaHandling', 'ctaLink', 'cta',
+  'campaignType', 'campaignName', 'adsetName', 'adName', 'country',
+  'budgetMode', 'budgetLevel', 'budget', 'startDate', 'startTimeRaw',
+  'endDate', 'endTimeRaw', 'statusRaw', 'notes',
+];
+
+function nextRowIndex() {
+  return State.rows.length ? Math.max(...State.rows.map((r) => r.index)) + 1 : 0;
+}
+
+function blankRow() {
+  return {
+    index: nextRowIndex(),
+    status: 'missing', errors: [], warnings: [], parsed: {}, normalized: {},
+    pageLink: '', postLink: '', ctaLink: '', cta: '',
+    contentMode: 'Sử dụng bài viết có sẵn', ctaHandling: 'Tự động',
+    campaignType: '', campaignName: '', adsetName: '', adName: '',
+    country: 'Việt Nam', budget: '', budgetMode: 'daily', budgetLevel: 'adset',
+    startDate: '', startTimeRaw: '', endDate: '', endTimeRaw: '',
+    statusRaw: 'Tạm dừng', notes: '',
+  };
+}
+
+function ensureTableReady() {
+  $('#tableZone').classList.remove('hidden');
+  buildFilters();
+}
+
+function updateRowMeta() {
+  const meta = $('#fileMeta');
+  meta.classList.remove('hidden');
+  meta.innerHTML = `<strong>${State.rows.length} dòng</strong> trong bảng · nhập tay hoặc tải file đều được. Sửa trực tiếp từng ô rồi bấm <strong>Kiểm tra với Facebook</strong>.`;
+}
+
+function addBlankRow(editImmediately) {
+  const row = blankRow();
+  State.rows.push(row);
+  ensureTableReady();
+  if (editImmediately) State.editing.add(row.index);
+  renderTable();
+  updateRowMeta();
+  // Cuộn tới dòng mới + focus ô đầu tiên để gõ liền
+  const sc = $('.table-scroll');
+  if (sc) sc.scrollTop = sc.scrollHeight;
+  const firstInput = $(`#tableBody tr:last-child .page-link-input`);
+  if (firstInput) firstInput.focus();
+  Logger.info(`Thêm 1 dòng trống (#${row.index + 1}).`);
+}
+
+function duplicateRow(index) {
+  const src = State.rows.find((r) => r.index === index);
+  if (!src) return;
+  const copy = blankRow();
+  ROW_FIELDS.forEach((f) => { copy[f] = src[f] ?? copy[f]; });
+  copy.campaignName = src.campaignName ? src.campaignName + ' (sao chép)' : '';
+  // chèn ngay sau dòng gốc, mở luôn chế độ nhập để chỉnh
+  const pos = State.rows.findIndex((r) => r.index === index);
+  State.rows.splice(pos + 1, 0, copy);
+  State.editing.add(copy.index);
+  clientPreCheck([copy]);
+  buildFilters();
+  renderTable();
+  updateRowMeta();
+  toast('Đã nhân đôi dòng', 'ok');
+}
+
+function deleteRow(index) {
+  const r = State.rows.find((x) => x.index === index);
+  if (!r) return;
+  // Dòng đã có dữ liệu thì hỏi xác nhận; dòng trống thì xoá luôn
+  const hasData = [r.pageLink, r.campaignName, r.adName, r.adsetName, r.postLink, r.budget].some((v) => v && v.toString().trim());
+  if (hasData && !confirm(`Xoá dòng "${r.campaignName || 'chưa đặt tên'}"?`)) return;
+  State.rows = State.rows.filter((x) => x.index !== index);
+  State.editing.delete(index);
+  buildFilters();
+  renderTable();
+  updateRowMeta();
+  toast('Đã xoá dòng', 'ok');
+}
+
+// Chốt toàn bộ dòng đang nhập: thoát chế độ nhập + tính lại trạng thái sơ bộ
+function finalizeEditing() {
+  if (!State.editing.size) return;
+  const edited = [...State.editing].map((i) => State.rows.find((r) => r.index === i)).filter(Boolean);
+  State.editing.clear();
+  clientPreCheck(edited);
+  buildFilters();
+  renderTable();
+}
+
+function startManualTable() {
+  if (!State.rows.length) {
+    addBlankRow(true);
+  } else {
+    ensureTableReady();
+    renderTable();
+    $('#tableZone').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
 // Kiểm tra nhanh phía client (chưa gọi Facebook)
 // ----- Tách Page ID / Post ID ngay phía trình duyệt (xem trước, không cần đăng nhập) -----
 const FB_HOSTS = new Set(['facebook.com', 'www.facebook.com', 'm.facebook.com',
@@ -822,7 +1003,7 @@ function getStatusIconHtml(r) {
   return `<div class="status-icon status-pending" title="${title}">?</div>`;
 }
 
-function clientPreCheck() {
+function clientPreCheck(rows) {
   const otherRequired = [
     ['campaignName', 'tên chiến dịch'],
     ['adsetName', 'tên nhóm quảng cáo'],
@@ -834,7 +1015,7 @@ function clientPreCheck() {
     ['startDate', 'ngày bắt đầu'],
     ['statusRaw', 'trạng thái']
   ];
-  State.rows.forEach((r) => {
+  (rows || State.rows).forEach((r) => {
     r.errors = [];
     r.warnings = [];
     
@@ -919,7 +1100,7 @@ function renderTable() {
     const tr = document.createElement('tr');
     const hasErr = r.errors?.length;
     
-    if (State.editingRowIndex === r.index) {
+    if (State.editing.has(r.index)) {
       tr.innerHTML = `
         <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
         <!-- Link Page -->
@@ -927,22 +1108,23 @@ function renderTable() {
         <!-- Bài viết & Chế độ -->
         <td>
           <input type="text" class="input-inline post-link-input" value="${esc(r.postLink || '')}" placeholder="Link bài viết" style="margin-bottom: 6px;">
-          <div style="display: flex; gap: 4px;">
-            <select class="select-inline content-mode-input" style="flex: 1; font-size: 11px; padding: 2px;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <select class="select-inline content-mode-input">
               <option value="Sử dụng bài viết có sẵn" ${r.contentMode === 'Sử dụng bài viết có sẵn' || r.contentMode === 'EXISTING_POST_STRICT' ? 'selected' : ''}>Bài viết có sẵn</option>
               <option value="Tạo bản quảng cáo mới có CTA" ${r.contentMode === 'Tạo bản quảng cáo mới có CTA' || r.contentMode === 'NEW_CTA_CREATIVE' ? 'selected' : ''}>Tạo bài mới</option>
             </select>
-            <select class="select-inline cta-handling-input" style="flex: 1; font-size: 11px; padding: 2px;">
-              <option value="Tự động" ${r.ctaHandling === 'Tự động' || !r.ctaHandling || r.ctaHandling === 'AUTO' ? 'selected' : ''}>CTA: Tự động</option>
-              <option value="Giữ CTA hiện tại" ${r.ctaHandling === 'Giữ CTA hiện tại' || r.ctaHandling === 'KEEP_CURRENT' ? 'selected' : ''}>CTA: Giữ nguyên</option>
-              <option value="Không dùng CTA" ${r.ctaHandling === 'Không dùng CTA' || r.ctaHandling === 'NO_CTA' ? 'selected' : ''}>CTA: Không dùng</option>
+            <select class="select-inline cta-handling-input">
+              <option value="Tự động" ${r.ctaHandling === 'Tự động' || !r.ctaHandling || r.ctaHandling === 'AUTO' ? 'selected' : ''}>CTA tự động</option>
+              <option value="Giữ CTA hiện tại" ${r.ctaHandling === 'Giữ CTA hiện tại' || r.ctaHandling === 'KEEP_CURRENT' ? 'selected' : ''}>Giữ CTA</option>
+              <option value="Không dùng CTA" ${r.ctaHandling === 'Không dùng CTA' || r.ctaHandling === 'NO_CTA' ? 'selected' : ''}>Bỏ CTA</option>
             </select>
           </div>
         </td>
         <!-- Chiến dịch & Loại -->
         <td>
           <input type="text" class="input-inline campaign-name-input" value="${esc(r.campaignName || '')}" style="margin-bottom: 4px;">
-          <select class="select-inline campaign-type-input" style="font-size: 11px; padding: 2px;">
+          <select class="select-inline campaign-type-input">
+            <option value="" disabled ${!r.campaignType ? 'selected' : ''}>— Chọn loại —</option>
             <option value="Tin nhắn" ${r.campaignType === 'Tin nhắn' || r.campaignType === 'tin_nhan' ? 'selected' : ''}>Tin nhắn</option>
             <option value="Tương tác" ${r.campaignType === 'Tương tác' || r.campaignType === 'tuong_tac' ? 'selected' : ''}>Tương tác</option>
             <option value="Traffic" ${r.campaignType === 'Traffic' || r.campaignType === 'traffic' ? 'selected' : ''}>Traffic</option>
@@ -973,12 +1155,12 @@ function renderTable() {
         <td>
           <div class="budget-edit-group">
             <input type="text" class="input-inline budget-val-input" value="${esc(r.budget || '')}" style="margin-bottom: 4px;">
-            <div class="budget-options-inline" style="display: flex; gap: 2px;">
-              <select class="select-inline budget-level-input" style="flex: 1; font-size: 11px; padding: 2px;">
-                <option value="adset" ${r.budgetLevel === 'adset' ? 'selected' : ''}>ABO (Nhóm)</option>
-                <option value="campaign" ${r.budgetLevel === 'campaign' ? 'selected' : ''}>CBO (Chiến dịch)</option>
+            <div class="budget-options-inline" style="display: flex; flex-direction: column; gap: 4px;">
+              <select class="select-inline budget-level-input" title="ABO = ngân sách ở Nhóm · CBO = ngân sách ở Chiến dịch">
+                <option value="adset" ${r.budgetLevel === 'adset' ? 'selected' : ''}>ABO · Nhóm</option>
+                <option value="campaign" ${r.budgetLevel === 'campaign' ? 'selected' : ''}>CBO · Chiến dịch</option>
               </select>
-              <select class="select-inline budget-mode-input" style="flex: 1; font-size: 11px; padding: 2px;">
+              <select class="select-inline budget-mode-input">
                 <option value="daily" ${r.budgetMode === 'daily' ? 'selected' : ''}>Hàng ngày</option>
                 <option value="lifetime" ${r.budgetMode === 'lifetime' ? 'selected' : ''}>Trọn đời</option>
               </select>
@@ -1012,61 +1194,37 @@ function renderTable() {
         <!-- Thao tác -->
         <td>
           <div class="action-btn-group">
-            <button class="save-btn" title="Lưu">✓</button>
-            <button class="cancel-btn" title="Hủy">x</button>
+            <button class="done-row-btn" title="Xong dòng này">✓ Xong</button>
+            <button class="del-row-btn" data-i="${r.index}" title="Xoá dòng">🗑</button>
           </div>
         </td>`;
-        
-      tr.querySelector('.save-btn').addEventListener('click', () => {
-        const newPostLink = tr.querySelector('.post-link-input').value.trim();
-        const newCta = tr.querySelector('.cta-input').value;
-        const newCtaLink = tr.querySelector('.cta-link-input').value.trim();
-        
-        const isModified = newPostLink !== r.postLink || newCta !== r.cta || newCtaLink !== r.ctaLink;
 
-        r.pageLink = tr.querySelector('.page-link-input').value.trim();
-        r.postLink = newPostLink;
-        r.contentMode = tr.querySelector('.content-mode-input').value;
-        r.ctaHandling = tr.querySelector('.cta-handling-input').value;
-        r.campaignName = tr.querySelector('.campaign-name-input').value.trim();
-        r.campaignType = tr.querySelector('.campaign-type-input').value;
-        r.adsetName = tr.querySelector('.adset-name-input').value.trim();
-        r.adName = tr.querySelector('.ad-name-input').value.trim();
-        r.cta = newCta;
-        r.ctaLink = newCtaLink;
-        r.budget = tr.querySelector('.budget-val-input').value.trim();
-        r.budgetLevel = tr.querySelector('.budget-level-input').value;
-        r.budgetMode = tr.querySelector('.budget-mode-input').value;
-        r.startDate = tr.querySelector('.start-date-input').value.trim();
-        r.startTimeRaw = tr.querySelector('.start-time-input').value.trim();
-        r.endDate = tr.querySelector('.end-date-input').value.trim();
-        r.endTimeRaw = tr.querySelector('.end-time-input').value.trim();
-        r.country = tr.querySelector('.country-input').value.trim();
-        r.statusRaw = tr.querySelector('.status-input').value;
-        r.notes = tr.querySelector('.notes-input').value.trim();
-        
-        State.editingRowIndex = null;
-        
-        if (isModified) {
-          r.status = 'need_verify';
-          r.errors = ['Cần kiểm tra lại bài viết / CTA với Facebook'];
-          r.parsed.verifiedWithGraph = false;
-          buildFilters();
-          renderTable();
-          toast('Đã sửa, vui lòng kiểm tra lại với Facebook', 'warn');
-        } else {
-          clientPreCheck();
-          buildFilters();
-          renderTable();
-          toast('Đã lưu thay đổi', 'ok');
-        }
+      // Live-bind: gõ tới đâu lưu vào dòng tới đó → thêm dòng mới không mất dữ liệu
+      for (const [sel, field] of Object.entries(EDIT_FIELD_MAP)) {
+        const el = tr.querySelector(sel);
+        if (!el) continue;
+        const ev = el.tagName === 'SELECT' ? 'change' : 'input';
+        el.addEventListener(ev, () => {
+          r[field] = el.value;
+          r.parsed = r.parsed || {};
+          r.parsed.verifiedWithGraph = false; // sửa thì cần kiểm tra lại
+        });
+      }
+      // Enter ở ô bất kỳ = thêm dòng mới ngay bên dưới (nhập liên tục)
+      tr.querySelectorAll('input').forEach((el) => {
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); addBlankRow(true); }
+        });
       });
-      
-      tr.querySelector('.cancel-btn').addEventListener('click', () => {
-        State.editingRowIndex = null;
+
+      tr.querySelector('.done-row-btn').addEventListener('click', () => {
+        State.editing.delete(r.index);
+        clientPreCheck([r]);
+        buildFilters();
         renderTable();
       });
-      
+      tr.querySelector('.del-row-btn').addEventListener('click', () => deleteRow(r.index));
+
     } else {
       tr.innerHTML = `
         <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
@@ -1121,15 +1279,19 @@ function renderTable() {
           <div class="action-btn-group">
             <button class="edit-btn" data-i="${r.index}">Sửa</button>
             <button class="detail-btn ${hasErr ? 'has-err' : ''}" data-i="${r.index}">Chi tiết</button>
+            <button class="dup-row-btn" data-i="${r.index}" title="Nhân đôi dòng">⧉</button>
+            <button class="del-row-btn" data-i="${r.index}" title="Xoá dòng">🗑</button>
           </div>
         </td>`;
-        
+
       tr.querySelector('.edit-btn').addEventListener('click', () => {
-        State.editingRowIndex = r.index;
+        State.editing.add(r.index);
         renderTable();
       });
-      
+
       tr.querySelector('.detail-btn').addEventListener('click', () => openDrawer(r.index));
+      tr.querySelector('.dup-row-btn').addEventListener('click', () => duplicateRow(r.index));
+      tr.querySelector('.del-row-btn').addEventListener('click', () => deleteRow(r.index));
     }
     body.appendChild(tr);
   });
@@ -1264,6 +1426,7 @@ function closeDrawer() {
 //  Kiểm tra với Facebook (preview)
 // ============================================================
 async function validateRows() {
+  finalizeEditing(); // chốt mọi dòng đang nhập tay trước khi kiểm tra
   const targetRows = State.rows.filter((r) => r.status !== 'missing');
   if (!targetRows.length) return toast('Chưa có dòng hợp lệ nào để kiểm tra', 'err');
   

@@ -1,0 +1,311 @@
+/* =====================================================================
+   minimal.css — Theme "Minimalist Modern" (nạp CUỐI CÙNG)
+   Electric-Blue gradient · Calistoga + Inter + JetBrains Mono · card trắng.
+   Thay thế hoàn toàn lớp Neumorphism. Token-first: override biến trước,
+   sau đó tinh chỉnh từng component. Gỡ link minimal.css là quay lại nền cũ.
+   ===================================================================== */
+
+/* ---------- 1. TOKEN ---------- */
+:root {
+  --bg: #FAFAFA;            /* canvas off-white ấm */
+  --surface: #FFFFFF;      /* card trắng tinh */
+  --surface-2: #F1F5F9;    /* muted surface */
+  --ink: #0F172A;          /* slate-900 */
+  --ink-soft: #334155;     /* slate-700 */
+  --muted: #64748B;        /* slate-500 */
+
+  --primary: #0052FF;      /* Electric Blue */
+  --primary-ink: #0042CC;
+  --primary-light: #4D7CFF;
+  --primary-wash: #EEF3FF; /* accent/5 */
+
+  --border: #E2E8F0;       /* slate-200 */
+  --border-strong: #CBD5E1;/* slate-300 */
+
+  --radius: 16px;
+  --radius-sm: 12px;
+  --shadow-sm: 0 1px 3px rgba(15,23,42,0.06);
+  --shadow-md: 0 4px 12px rgba(15,23,42,0.07);
+  --shadow-lg: 0 12px 28px rgba(15,23,42,0.10);
+
+  --grad: linear-gradient(135deg, #0052FF, #4D7CFF);
+  --grad-h: linear-gradient(90deg, #0052FF, #4D7CFF);
+  --shadow-accent: 0 4px 14px rgba(0,82,255,0.25);
+  --shadow-accent-lg: 0 10px 26px rgba(0,82,255,0.32);
+}
+
+/* ---------- 2. Nền + Typography ---------- */
+html, body {
+  background: var(--bg) !important;
+  color: var(--ink);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  scroll-behavior: smooth;
+}
+h1, h2, h3, .hero-card h1, .brand-text strong, .panel-head h2,
+.modal-head, .drawer-head strong {
+  font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.section-label, .fineprint code, .brand-text span, .dock-tab, .cta-code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+.brand-text span { text-transform: uppercase; letter-spacing: 0.12em; font-size: 10.5px; }
+
+/* Chữ gradient (bold-factor) */
+.gradient-text {
+  background: var(--grad-h);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* Khôi phục viền 1px rõ ràng (sau Neumorphism) */
+.panel-head, .panel-foot, .toolbar, .manage-toolbar, .manage-summary,
+.action-bar, .modal-head, .modal-foot, .drawer-head, .file-meta, .hist-item {
+  border-color: var(--border) !important;
+  box-shadow: none;
+}
+
+/* ---------- 3. Top bar + thanh tab ---------- */
+.topbar {
+  background: rgba(255,255,255,0.85);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  backdrop-filter: saturate(180%) blur(12px);
+  color: var(--ink);
+  border-bottom: 1px solid var(--border);
+  box-shadow: none;
+}
+.brand-text strong { color: var(--ink); }
+.brand-text span { color: var(--muted); }
+.brand-mark { box-shadow: none; padding: 0; border-radius: 0; }
+.brand-mark span:nth-child(1) { background: var(--primary-light); }
+.brand-mark span:nth-child(2) { background: var(--primary); }
+.brand-mark span:nth-child(3) { background: #9DB6FF; }
+.user-badge { color: var(--ink-soft); box-shadow: none; background: transparent; padding: 0; }
+.user-badge .dot { background: #22C55E; box-shadow: 0 0 0 3px rgba(34,197,94,.16); }
+.link-btn { color: var(--muted); }
+.link-btn:hover { color: var(--primary); }
+
+.apptab {
+  background: var(--surface); border: 1px solid var(--border); color: var(--ink-soft);
+  box-shadow: var(--shadow-sm); border-radius: 12px;
+  transition: all .2s ease-out;
+}
+.apptab:hover { transform: translateY(-1px); border-color: rgba(0,82,255,.3); color: var(--ink); box-shadow: var(--shadow-md); }
+.apptab.active { background: var(--grad); color: #fff; border-color: transparent; box-shadow: var(--shadow-accent); }
+.apptab.active svg { opacity: 1; }
+.acc-chip { background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--border); box-shadow: none; }
+
+/* ---------- 4. Nút ---------- */
+.btn {
+  border-radius: 12px; font-weight: 600;
+  transition: all .2s ease-out;
+}
+.btn:not(:disabled):active { transform: scale(.98); }
+
+.btn-primary {
+  background: var(--grad); color: #fff; border: none; box-shadow: var(--shadow-sm);
+}
+.btn-primary:not(:disabled):hover { transform: translateY(-2px); box-shadow: var(--shadow-accent-lg); filter: brightness(1.07); }
+
+.btn-secondary {
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+}
+.btn-secondary:not(:disabled):hover { border-color: rgba(0,82,255,.35); box-shadow: var(--shadow-md); background: var(--surface); transform: translateY(-1px); }
+
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--ink-soft); box-shadow: none; }
+.btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
+
+.btn-danger { background: var(--surface); color: #DC2626; border: 1px solid #FECACA; box-shadow: var(--shadow-sm); }
+.btn-danger:not(:disabled):hover { background: #FEF2F2; box-shadow: var(--shadow-md); }
+
+.btn-lg { border-radius: 14px; }
+
+/* ---------- 5. Hero (login) + panel + thẻ tài khoản ---------- */
+.hero-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 24px;
+  box-shadow: var(--shadow-lg);
+}
+.hero-card::before { background: var(--grad-h); height: 4px; }
+.hero-card h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.1; font-weight: 800; }
+.hero-card > p { color: var(--ink-soft); }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); }
+
+.account-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: var(--shadow-sm); transition: all .2s ease-out;
+}
+.account-card:hover { transform: translateY(-2px); border-color: rgba(0,82,255,.3); box-shadow: var(--shadow-md); background: var(--surface); }
+.account-card.selected { border-color: var(--primary); box-shadow: var(--shadow-accent); background: var(--surface); outline: none; }
+.account-card .ac-id { color: var(--muted); }
+.chip { background: var(--surface-2); border: 1px solid var(--border); color: var(--ink-soft); box-shadow: none; }
+.chip.ok { background: #ECFDF5; color: #059669; border-color: transparent; }
+.chip.bad { background: #FEF2F2; color: #DC2626; border-color: transparent; }
+
+/* ---------- 6. Ô nhập ---------- */
+.search, #tokenInput, .token-row input,
+.input-inline, .ctrl-select, .select-inline {
+  background: var(--surface) !important; color: var(--ink);
+  border: 1px solid var(--border) !important; box-shadow: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+.search { border-radius: 9999px; }
+.input-inline, .ctrl-select { border-radius: 12px; }
+.select-inline { border-radius: 10px; }
+.search::placeholder, #tokenInput::placeholder, .input-inline::placeholder { color: #94A3B8; }
+.search:focus, #tokenInput:focus, .token-row input:focus,
+.input-inline:focus, .ctrl-select:focus, .select-inline:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(0,82,255,.16);
+  outline: none;
+}
+.dropzone {
+  background: var(--surface); border: 2px dashed var(--border-strong); border-radius: 16px; color: var(--muted);
+  box-shadow: none;
+}
+.dropzone:hover, .dropzone.drag { background: var(--primary-wash); border-color: var(--primary); color: var(--primary-ink); }
+.dropzone-inner strong { color: var(--ink); }
+.file-meta { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; box-shadow: none; }
+
+/* ---------- 7. Bộ lọc chip ---------- */
+.fchip { background: var(--surface); border: 1px solid var(--border); color: var(--ink-soft); box-shadow: var(--shadow-sm); }
+.fchip:hover { border-color: var(--border-strong); }
+.fchip .cnt { background: var(--surface-2); color: var(--ink-soft); }
+.fchip.active { color: #fff; box-shadow: var(--shadow-accent); }
+.fchip.active .cnt { background: rgba(255,255,255,.25); color: #fff; }
+.fchip[data-k="all"].active, .fchip.mg-all.active { background: var(--primary); border-color: var(--primary); }
+.fchip.mg-active.active { background: #059669; border-color: #059669; }
+.fchip.mg-paused.active { background: #64748B; border-color: #64748B; }
+.fchip.mg-issues.active { background: #DC2626; border-color: #DC2626; }
+
+/* ---------- 8. Dải tổng hợp ---------- */
+.sum-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); }
+.sum-pill .l { color: var(--muted); }
+.sum-pill .v { color: var(--ink); }
+.sum-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); }
+.sum-card .n { font-family: "Inter", sans-serif; }
+
+/* ---------- 9. Bảng dữ liệu (sạch, viền nhẹ) ---------- */
+.table-scroll { background: transparent; border-radius: 0; margin: 0; box-shadow: none; }
+.data-table th, .tree-table th {
+  background: var(--surface-2); color: var(--muted);
+  border-bottom: 1px solid var(--border); box-shadow: none;
+}
+.data-table td, .tree-table td { border-bottom: 1px solid var(--border); box-shadow: none; }
+.data-table tr:hover td, .mg-row:hover > td { background: var(--primary-wash); }
+.mg-row.lvl-campaign > td { background: var(--surface); }
+.mg-row.lvl-adset > td, .mg-row.lvl-ad > td { background: #FBFCFE; }
+.mg-empty-child td, .mg-row.mg-empty-child td { background: var(--surface-2); }
+
+.mg-thumb { box-shadow: none; border: 1px solid var(--border); }
+.mg-badge { box-shadow: none !important; }
+.mg-badge.ok { color: #059669; background: #ECFDF5 !important; }
+.mg-badge.warn { color: #B45309; background: #FFFBEB !important; }
+.mg-badge.bad { color: #DC2626; background: #FEF2F2 !important; }
+.mg-badge.paused { color: #64748B; background: var(--surface-2) !important; }
+
+.mg-actbtn, .dup-row-btn, .del-row-btn, .detail-btn, .edit-btn, .hist-filter, .log-btn {
+  background: var(--surface); border: 1px solid var(--border); color: var(--ink-soft);
+  box-shadow: none; transition: all .2s ease-out;
+}
+.mg-actbtn:hover, .dup-row-btn:hover, .detail-btn:hover { border-color: rgba(0,82,255,.35); color: var(--primary); background: var(--surface); transform: translateY(-1px); }
+.edit-btn { background: var(--primary-wash); border-color: rgba(0,82,255,.25); color: var(--primary); }
+.edit-btn:hover { background: var(--primary); color: #fff; }
+.del-row-btn:hover, .mg-actbtn[data-act="delete"]:hover { background: #FEF2F2; border-color: #FECACA; color: #DC2626; }
+.done-row-btn { background: var(--grad); color: #fff; border: none; box-shadow: var(--shadow-sm); }
+.done-row-btn:hover { box-shadow: var(--shadow-accent); filter: brightness(1.06); }
+.save-btn { background: #059669; box-shadow: none; }
+.cancel-btn { background: var(--surface-2); color: var(--ink-soft); box-shadow: none; }
+.mg-caret { box-shadow: none; }
+.mg-caret:hover { background: var(--surface-2); color: var(--primary); }
+
+.status-icon { box-shadow: none !important; }
+.status-icon.status-error { color: #DC2626; background: #FEF2F2 !important; border: 1px solid #FECACA !important; }
+.status-icon.status-success { color: #059669; background: #ECFDF5 !important; border: 1px solid #A7F3D0 !important; }
+.status-icon.status-pending { color: #64748B; background: var(--surface-2) !important; border: 1px solid var(--border) !important; }
+
+/* ---------- 10. Công tắc (accent xanh) ---------- */
+.mg-toggle .mtrack, .switch .track { background: var(--border-strong); box-shadow: none; }
+.mg-toggle .mthumb, .switch .thumb { background: #fff; box-shadow: var(--shadow-sm); }
+.mg-toggle input:checked + .mtrack { background: var(--grad-h); box-shadow: none; }
+.switch input:checked + .track { background: var(--grad-h); }
+.switch input:not(:checked) + .track { background: var(--border-strong); }
+
+/* ---------- 11. Modal / Drawer / Toast / Dock ---------- */
+.scrim { background: rgba(15,23,42,.45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.modal { background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-lg); }
+.drawer { background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--shadow-lg); }
+.dl dt { color: var(--muted); }
+.issue { box-shadow: none; }
+.issue.err { background: #FEF2F2; border-left: 3px solid #DC2626; color: #991B1B; }
+.issue.warn { background: #FFFBEB; border-left: 3px solid #D97706; color: #92400E; }
+
+.toast { background: var(--ink); color: #fff; box-shadow: var(--shadow-lg); border-radius: 12px; }
+.toast.err { background: #DC2626; color: #fff; }
+.toast.ok { background: #059669; color: #fff; }
+.alert { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); border-radius: 12px; }
+.alert-error { background: #FEF2F2; border-color: #FECACA; color: #991B1B; }
+
+.dock {
+  background: rgba(255,255,255,0.9);
+  -webkit-backdrop-filter: saturate(180%) blur(12px); backdrop-filter: saturate(180%) blur(12px);
+  border-top: 1px solid var(--border); box-shadow: 0 -4px 16px rgba(15,23,42,.05);
+}
+.dock-body { background: var(--surface); border-top: 1px solid var(--border); box-shadow: none; }
+.dock-loader .bar { background: var(--grad-h); box-shadow: 0 0 8px rgba(0,82,255,.4); }
+.dock-tab { color: var(--muted); }
+.dock-tab:hover { background: var(--surface-2); color: var(--ink-soft); box-shadow: none; }
+.dock-tab.active { background: var(--primary-wash); color: var(--primary); box-shadow: none; }
+.dock-count { background: var(--surface-2); color: var(--ink-soft); box-shadow: none; }
+.log-btn { background: var(--surface-2); color: var(--ink-soft); border: none; }
+.log-btn:hover { background: var(--border); transform: none; box-shadow: none; }
+.hist-filter.active { background: var(--primary); color: #fff; border-color: var(--primary); box-shadow: none; }
+.hist-item { border-bottom: 1px solid var(--border); }
+
+/* ---------- 12. CTA pill (giữ accent xanh chủ đạo) ---------- */
+.cta-pill { box-shadow: none; }
+.cta-pill.cta-learn, .cta-pill.cta-other { background: var(--primary); }
+.cta-pill.cta-none { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); box-shadow: none; }
+
+/* ---------- 13. Focus rings (WCAG, accent) ---------- */
+.btn:focus-visible, .apptab:focus-visible, .link-btn:focus-visible, .fchip:focus-visible,
+.dock-tab:focus-visible, .mg-actbtn:focus-visible, .dup-row-btn:focus-visible,
+.del-row-btn:focus-visible, .done-row-btn:focus-visible, .detail-btn:focus-visible,
+.edit-btn:focus-visible, .account-card:focus-visible, .hist-filter:focus-visible,
+.token-toggle:focus-visible, .log-btn:focus-visible, .mg-caret:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: 2px;
+}
+.mg-toggle:focus-within, .switch:focus-within { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 9999px; }
+
+/* ---------- 14. Stepper cũ (ẩn) ---------- */
+.step.active { background: var(--primary-wash); box-shadow: none; }
+.step.active .num { background: var(--primary); color: #fff; }
+
+/* =====================================================================
+   15. Bo góc chuẩn Apple OS — đồng bộ toàn app (continuous, mềm)
+   Thang bán kính nhất quán: 10/12/16/20/22/28
+   ===================================================================== */
+:root { --radius: 20px; --radius-sm: 14px; }
+
+/* Bề mặt lớn */
+.panel { border-radius: 20px; }
+.hero-card { border-radius: 28px; }
+.modal { border-radius: 22px; }
+.drawer { border-top-left-radius: 24px; border-bottom-left-radius: 24px; }
+.account-card { border-radius: 18px; }
+.table-scroll { border-radius: 16px; }
+.dropzone { border-radius: 18px; }
+
+/* Khối nhỏ / control */
+.btn { border-radius: 12px; }
+.btn-lg { border-radius: 14px; }
+.apptab { border-radius: 12px; }
+.acc-chip, .acc-select { border-radius: 12px; }
+.sum-pill { border-radius: 16px; }
+.sum-card, .file-meta, .alert, .toast, .issue { border-radius: 14px; }
+.input-inline, .ctrl-select { border-radius: 12px; }
+.fchip, .chip, .mg-badge, .search { border-radius: 9999px; } /* viên thuốc kiểu iOS */
+.mg-actbtn, .dup-row-btn, .del-row-btn, .detail-btn, .edit-btn,
+.done-row-btn, .save-btn, .cancel-btn, .log-btn { border-radius: 10px; }
+.modal-foot .btn, .panel-foot .btn { border-radius: 12px; }

@@ -6,9 +6,12 @@
   <title>Trình tạo quảng cáo Facebook hàng loạt</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=2.0.2" />
-  <link rel="stylesheet" href="theme.css?v=2.0.2" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=2.2.1" />
+  <link rel="stylesheet" href="theme.css?v=2.2.1" />
+  <link rel="stylesheet" href="manage.css?v=2.2.1" />
+  <link rel="stylesheet" href="minimal.css?v=2.2.1" />
+  <link rel="stylesheet" href="select.css?v=2.2.1" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -31,12 +34,22 @@
     </div>
   </header>
 
-  <!-- Thanh các bước -->
-  <nav class="stepper" id="stepper">
-    <div class="step" data-step="1"><span class="num">1</span> Đăng nhập</div>
-    <div class="step" data-step="2"><span class="num">2</span> Chọn tài khoản</div>
-    <div class="step" data-step="3"><span class="num">3</span> Tải file & kiểm tra</div>
-    <div class="step" data-step="4"><span class="num">4</span> Tạo hàng loạt</div>
+  <!-- Thanh tab chính (hiện sau khi chọn tài khoản) -->
+  <nav class="appbar hidden" id="appbar">
+    <div class="apptabs">
+      <button class="apptab active" data-view="manage" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg>
+        Quản lý chiến dịch
+      </button>
+      <button class="apptab" data-view="work" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Tạo hàng loạt
+      </button>
+    </div>
+    <div class="appbar-acc">
+      <select id="accSelect" class="acc-select" aria-label="Chọn tài khoản quảng cáo"></select>
+      <button class="link-btn" id="switchAccBtn" type="button">Đổi tài khoản</button>
+    </div>
   </nav>
 
   <main class="container">
@@ -47,7 +60,7 @@
     <!-- BƯỚC 1: ĐĂNG NHẬP -->
     <section id="view-login" class="view">
       <div class="hero-card">
-        <h1>Tạo hàng trăm quảng cáo từ một file Excel.</h1>
+        <h1>Tạo hàng trăm quảng cáo từ một file <span class="gradient-text">Excel</span>.</h1>
         <p>Tải lên file Excel hoặc Google Sheet, hệ thống tự đọc Page ID, Post ID, kiểm tra quyền từng dòng rồi tạo campaign, nhóm quảng cáo và quảng cáo qua Meta Marketing API — có màn hình kiểm tra trước khi chạy.</p>
         <a class="btn btn-primary btn-lg" href="/api/auth/login">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>
@@ -80,7 +93,53 @@
           <div class="loading">Đang tải danh sách tài khoản…</div>
         </div>
         <div class="panel-foot">
-          <button id="toUploadBtn" class="btn btn-primary" disabled>Tiếp tục</button>
+          <button id="toUploadBtn" class="btn btn-primary" disabled>Vào bảng điều khiển</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB QUẢN LÝ: cây Campaign → Ad Set → Ad + số liệu -->
+    <section id="view-manage" class="view hidden">
+      <div class="panel">
+        <div class="manage-toolbar">
+          <div class="filters" id="manageFilters"></div>
+          <div class="manage-right">
+            <select id="datePreset" class="ctrl-select" title="Khoảng thời gian số liệu">
+              <option value="today">Hôm nay</option>
+              <option value="yesterday">Hôm qua</option>
+              <option value="last_7d">7 ngày qua</option>
+              <option value="last_14d">14 ngày qua</option>
+              <option value="last_30d" selected>30 ngày qua</option>
+              <option value="this_month">Tháng này</option>
+              <option value="maximum">Toàn thời gian</option>
+            </select>
+            <input type="search" id="manageSearch" class="search" placeholder="Tìm chiến dịch, nhóm, quảng cáo…" />
+            <button id="manageRefresh" class="btn btn-secondary">Làm mới</button>
+          </div>
+        </div>
+        <div class="manage-summary" id="manageSummary"></div>
+        <div class="table-scroll">
+          <table class="tree-table" id="treeTable">
+            <thead>
+              <tr>
+                <th class="col-toggle">Bật</th>
+                <th class="col-name">Tên</th>
+                <th>Trạng thái</th>
+                <th class="num">Ngân sách</th>
+                <th class="num">Đã tiêu</th>
+                <th class="num">Hiển thị</th>
+                <th class="num">Tiếp cận</th>
+                <th class="num">Click</th>
+                <th class="num">CTR</th>
+                <th class="num">CPM</th>
+                <th class="num">Kết quả</th>
+                <th class="col-act">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="treeBody">
+              <tr><td colspan="12" class="loading">Chọn tài khoản và bấm “Làm mới”.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -91,10 +150,13 @@
       <div id="uploadZone" class="panel upload-panel">
         <div class="panel-head">
           <div>
-            <h2>Tải file dữ liệu</h2>
-            <p class="muted">Hỗ trợ <strong>.xlsx</strong>, <strong>.xls</strong>, <strong>.csv</strong>. Google Sheet: chọn <em>File → Download → Microsoft Excel (.xlsx)</em>.</p>
+            <h2>Nhập dữ liệu quảng cáo</h2>
+            <p class="muted">Hai cách: <strong>nhập tay trong bảng</strong> (thêm dòng rồi gõ link/tên) hoặc <strong>tải file</strong> <strong>.xlsx</strong>/<strong>.xls</strong>/<strong>.csv</strong>. Google Sheet: chọn <em>File → Download → Microsoft Excel (.xlsx)</em>.</p>
           </div>
-          <button id="templateBtn" class="btn btn-ghost">Tải file mẫu</button>
+          <div class="head-actions">
+            <button id="manualStartBtn" class="btn btn-primary">+ Nhập tay (bảng trống)</button>
+            <button id="templateBtn" class="btn btn-ghost">Tải file mẫu</button>
+          </div>
         </div>
 
         <label class="dropzone" id="dropzone">
@@ -114,6 +176,7 @@
           <div class="filters" id="statusFilters"></div>
           <div class="toolbar-right">
             <input type="search" id="searchInput" class="search" placeholder="Tìm theo tên chiến dịch, quảng cáo…" />
+            <button id="addRowBtn" class="btn btn-ghost">+ Thêm dòng</button>
             <button id="validateBtn" class="btn btn-secondary">Kiểm tra với Facebook</button>
           </div>
         </div>
@@ -214,6 +277,8 @@
     </div>
   </footer>
 
-  <script src="app.js?v=2.0.2"></script>
+  <script src="app.js?v=2.2.1"></script>
+  <script src="manage.js?v=2.2.1"></script>
+  <script src="select.js?v=2.2.1"></script>
 </body>
 </html>

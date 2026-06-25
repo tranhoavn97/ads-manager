@@ -1,0 +1,191 @@
+/* =====================================================================
+   manage.css — Tab "Quản lý chiến dịch" (Ads Manager thu gọn)
+   Nạp sau styles.css + theme.css. Dùng chung biến màu của theme.
+   ===================================================================== */
+
+/* ---------- Thanh tab chính ---------- */
+.appbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  padding: 12px 40px 0;
+}
+.apptabs { display: flex; gap: 6px; }
+.apptab {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: inherit; font-size: 14px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink-soft);
+  padding: 9px 16px; border-radius: 980px; cursor: pointer; transition: .15s;
+}
+.apptab:hover { background: var(--surface-2); color: var(--ink); }
+.apptab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.apptab svg { opacity: .85; }
+.appbar-acc { display: flex; align-items: center; gap: 10px; }
+.acc-chip {
+  font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 6px 12px; border-radius: 980px;
+}
+
+/* ---------- Toolbar quản lý ---------- */
+.manage-toolbar {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; align-items: center;
+}
+.manage-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+/* ---------- Dropdown (select) phong cách HeroUI ---------- */
+/* Mũi tên chevron riêng + viền nhạt + bo góc + focus xanh, dùng chung cho
+   .ctrl-select (toolbar/modal) và .select-inline (ô chọn trong bảng nhập tay) */
+.ctrl-select,
+.select-inline {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23868690' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background-color .15s;
+}
+.ctrl-select {
+  font: inherit; font-size: 13.5px;
+  padding: 8px 34px 8px 13px;
+  background-position: right 11px center;
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  background-color: var(--surface); color: var(--ink);
+}
+.ctrl-select:hover { background-color: var(--surface-2); border-color: var(--border-strong); }
+.ctrl-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,113,227,.15); }
+
+/* Ô chọn trong bảng nhập tay — đủ rộng, chữ không bị cắt */
+.select-inline {
+  width: 100%; min-width: 140px;
+  font-size: 12.5px; font-weight: 500;
+  min-height: 32px;
+  padding: 6px 24px 6px 10px;
+  background-position: right 8px center;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  color: var(--ink); background-color: var(--surface);
+  text-overflow: ellipsis;
+}
+.select-inline:hover { background-color: var(--surface-2); }
+.select-inline:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(0,113,227,.15); }
+
+/* Ô nhập text trong bảng cao bằng select cho thẳng hàng */
+.input-inline { min-height: 32px; }
+
+/* Bộ lọc trạng thái (active màu riêng) */
+.fchip.mg-all.active { background: var(--ink); border-color: var(--ink); }
+.fchip.mg-active.active { background: #15803d; border-color: #15803d; }
+.fchip.mg-paused.active { background: #64748b; border-color: #64748b; }
+.fchip.mg-issues.active { background: #dc2626; border-color: #dc2626; }
+.fchip.active .cnt { background: rgba(255,255,255,.25); color: #fff; }
+
+/* ---------- Dải tổng hợp ---------- */
+.manage-summary { display: flex; gap: 10px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.manage-summary:empty { display: none; }
+.sum-pill {
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 9px 16px; min-width: 120px;
+}
+.sum-pill .l { font-size: 11.5px; color: var(--muted); }
+.sum-pill .v { font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
+
+/* ---------- Bảng cây ---------- */
+.tree-table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 1080px; }
+.tree-table th {
+  text-align: left; padding: 11px 14px; font-size: 11.5px; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); border-bottom: 1px solid var(--border);
+  background: var(--surface-2); position: sticky; top: 0; white-space: nowrap; z-index: 1;
+}
+.tree-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.tree-table th.num, .tree-table td.num { text-align: right; white-space: nowrap; }
+.tree-table .col-toggle { width: 56px; }
+.tree-table .col-name { min-width: 280px; }
+.tree-table .col-act { width: 130px; }
+
+.mg-row.lvl-campaign > td { background: var(--surface); }
+.mg-row.lvl-adset > td { background: var(--surface-2); }
+.mg-row.lvl-ad > td { background: var(--surface-2); }
+.mg-row:hover > td { background: var(--primary-wash); }
+.mg-row.lvl-campaign .mg-name { font-weight: 700; }
+
+.mg-namewrap { display: flex; align-items: center; gap: 10px; }
+.mg-namewrap.indent-1 { padding-left: 22px; }
+.mg-namewrap.indent-2 { padding-left: 44px; }
+.mg-name { font-weight: 600; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mg-caret {
+  flex: none; width: 18px; height: 18px; display: grid; place-items: center;
+  font-size: 9px; color: var(--muted); cursor: pointer; border-radius: 5px;
+  transition: transform .15s ease, background .15s;
+}
+.mg-caret:hover { background: rgba(0,0,0,.06); color: var(--ink); }
+.mg-caret.open { transform: rotate(90deg); }
+.mg-caret.empty { cursor: default; visibility: hidden; }
+
+.mg-thumb { flex: none; width: 34px; height: 34px; border-radius: 7px; object-fit: cover; border: 1px solid var(--border); background: var(--surface-2); }
+.mg-thumb.empty { display: inline-block; }
+
+/* Huy hiệu trạng thái */
+.mg-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 980px; white-space: nowrap; }
+.mg-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.mg-badge.ok { color: #15803d; background: var(--st-created-bg, #e7f6ec); }
+.mg-badge.paused { color: #64748b; background: #eef1f6; }
+.mg-badge.warn { color: #b45309; background: #fdf2e3; }
+.mg-badge.bad { color: #dc2626; background: #fdeaea; }
+
+/* Công tắc bật/tắt */
+.mg-toggle { display: inline-flex; cursor: pointer; }
+.mg-toggle input { display: none; }
+.mg-toggle .mtrack { width: 38px; height: 22px; border-radius: 999px; background: #cbd5e1; position: relative; transition: .18s; }
+.mg-toggle .mthumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: .18s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.mg-toggle input:checked + .mtrack { background: #15803d; }
+.mg-toggle input:checked + .mtrack .mthumb { left: 19px; }
+.mg-toggle input:disabled + .mtrack { opacity: .5; }
+
+/* Nút thao tác */
+.mg-acts { display: flex; gap: 4px; }
+.mg-actbtn {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink-soft);
+  border-radius: 7px; cursor: pointer; font-size: 13px; transition: .12s;
+}
+.mg-actbtn:hover { background: var(--surface-2); border-color: var(--border-strong); color: var(--ink); }
+.mg-actbtn[data-act="delete"]:hover { background: #fdeaea; border-color: #dc2626; color: #dc2626; }
+
+.mg-empty-child td { background: var(--surface-2); }
+
+/* Nút nguy hiểm trong modal */
+.btn-danger { background: #dc2626; color: #fff; }
+.btn-danger:not(:disabled):hover { background: #b91c1c; }
+
+/* Trường nhập trong modal nhỏ */
+.mfield { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); margin-bottom: 14px; }
+.mfield .input-inline, .mfield .ctrl-select { font-weight: 400; }
+
+/* ---------- Thu gọn khu "Nhập dữ liệu quảng cáo" ---------- */
+.upload-panel .panel-head { padding: 14px 18px; }
+.upload-panel .panel-head h2 { font-size: 16px; }
+.dropzone { margin: 12px 18px 16px; padding: 14px 20px; border-radius: 16px; }
+.dropzone-inner { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 12px; }
+.dropzone-inner svg { width: 24px; height: 24px; }
+.dropzone-inner strong { font-size: 14px; }
+.dropzone-inner .muted { font-size: 12.5px; }
+
+/* ---------- Nhập tay trong bảng (tab Tạo hàng loạt) ---------- */
+.head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.action-btn-group { flex-wrap: wrap; }
+.dup-row-btn, .del-row-btn {
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink-soft);
+  border-radius: 7px; padding: 4px 8px; font-size: 12px; cursor: pointer; line-height: 1.2;
+}
+.done-row-btn {
+  border: 1px solid #15803d; background: #15803d; color: #fff;
+  border-radius: 7px; padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer; line-height: 1.2;
+}
+.done-row-btn:hover { background: #0f6e32; }
+.dup-row-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.del-row-btn:hover { background: #fdeaea; border-color: #dc2626; color: #dc2626; }
+
+@media (max-width: 720px) {
+  .appbar { padding: 12px 16px 0; }
+  .manage-summary { overflow-x: auto; }
+}

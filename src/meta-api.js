@@ -427,6 +427,77 @@ export async function uploadAdImageFromUrl(token, adAccountId, imageUrl) {
   throw new Error('Không lấy được hash ảnh từ Meta API.');
 }
 
+// ============================================================
+//  QUẢN LÝ (Ads Manager thu gọn): đọc cây + sửa/bật-tắt/xoá
+// ============================================================
+
+// Lấy toàn bộ các trang của một edge (tự theo paging.next)
+async function getAllPages(token, path, params, maxItems = 5000) {
+  let out = [];
+  let data = await call('GET', path, { token, params });
+  while (data) {
+    if (Array.isArray(data.data)) out = out.concat(data.data);
+    if (out.length >= maxItems) break;
+    const next = data.paging?.cursors?.after;
+    if (!next || !data.paging?.next) break;
+    data = await call('GET', path, { token, params: { ...params, after: next } });
+  }
+  return out;
+}
+
+const INSIGHTS_FIELDS = 'spend,impressions,reach,clicks,ctr,cpm,cpc,frequency,actions';
+
+function insightsExpansion(datePreset) {
+  const dp = datePreset || 'last_30d';
+  return `insights.date_preset(${dp}){${INSIGHTS_FIELDS}}`;
+}
+
+export async function getCampaigns(token, adAccountId, datePreset) {
+  const fields = [
+    'id', 'name', 'status', 'effective_status', 'objective',
+    'daily_budget', 'lifetime_budget', 'budget_remaining', 'bid_strategy',
+    'start_time', 'stop_time', 'created_time', 'updated_time',
+    insightsExpansion(datePreset),
+  ].join(',');
+  return getAllPages(token, actPath(adAccountId, 'campaigns'), { fields, limit: 200 });
+}
+
+export async function getAdSets(token, adAccountId, datePreset) {
+  const fields = [
+    'id', 'name', 'status', 'effective_status', 'campaign_id', 'optimization_goal',
+    'billing_event', 'daily_budget', 'lifetime_budget', 'budget_remaining', 'bid_strategy',
+    'start_time', 'end_time',
+    insightsExpansion(datePreset),
+  ].join(',');
+  return getAllPages(token, actPath(adAccountId, 'adsets'), { fields, limit: 200 });
+}
+
+export async function getAds(token, adAccountId, datePreset) {
+  const fields = [
+    'id', 'name', 'status', 'effective_status', 'adset_id', 'campaign_id',
+    'creative{id,thumbnail_url,object_story_id,effective_object_story_id}',
+    insightsExpansion(datePreset),
+  ].join(',');
+  return getAllPages(token, actPath(adAccountId, 'ads'), { fields, limit: 200 });
+}
+
+// Cập nhật chung (đổi tên, đổi trạng thái, đổi ngân sách…)
+export async function updateNode(token, id, payload) {
+  return call('POST', String(id), { token, data: payload });
+}
+
+// Xoá một node (campaign/adset/ad)
+export async function deleteNode(token, id) {
+  return call('DELETE', String(id), { token });
+}
+
+// Nhân bản (campaign/adset/ad) qua endpoint /copies
+export async function duplicateNode(token, id, level) {
+  const data = { status_option: 'PAUSED' };
+  if (level === 'campaign') data.deep_copy = true;
+  return call('POST', `${id}/copies`, { token, data });
+}
+
 /**
  * Kiểm tra các quyền (scopes) đã được cấp của token
  */
