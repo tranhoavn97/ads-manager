@@ -2,7 +2,7 @@
 
 Web tool tiếng Việt giúp tạo **campaign → ad set → ad creative → ad** trên Facebook hàng loạt từ một file **Excel / Google Sheet**, dùng **Meta Marketing API** và **Facebook Login for Business**.
 
-Công cụ tự đọc các cột trong sheet, tự tách **Page ID** từ link Page và **Post/Object ID** từ link bài viết/reel/ảnh, kiểm tra Page có thuộc tài khoản đang đăng nhập không, cho chọn tài khoản quảng cáo và loại chiến dịch, hiển thị **màn hình preview kiểm lỗi từng dòng** trước khi tạo, và có **chế độ nháp** để không bật quảng cáo ngay.
+Công cụ tự đọc các cột trong sheet, tự nhận diện **Tên/Page ID** từ link bài viết khi Graph API đọc được bài, tự tách **Post/Object ID** từ link bài viết/reel/ảnh, kiểm tra Page có thuộc tài khoản đang đăng nhập không, cho chọn tài khoản quảng cáo và loại chiến dịch, hiển thị **màn hình preview kiểm lỗi từng dòng** trước khi tạo, và có **chế độ nháp** để không bật quảng cáo ngay.
 
 ---
 
@@ -128,7 +128,7 @@ Các cột (tên cột linh hoạt, công cụ tự nhận diện không phân b
 
 | Cột | Ví dụ | Ghi chú |
 |---|---|---|
-| **Link Page** | `https://facebook.com/61550000000000` | Tự tách Page ID. Link dạng tên (vanity) sẽ được resolve nếu bạn quản lý Page đó. ⚠️ **Đừng nhập ID số trần vào ô** — Facebook ID dài 16+ chữ số sẽ bị Excel làm tròn sai. Hãy nhập **dạng link** `facebook.com/<id>` (hoặc định dạng ô là Text). |
+| **Tên Page** | *(có thể để trống)* | Sau khi bấm **Kiểm tra với Facebook**, hệ thống tự lấy tên/Page ID từ link bài viết nếu có quyền đọc bài. Có thể nhập tên, vanity, link hoặc ID Page làm gợi ý khi link bài viết không đủ nhận diện. |
 | **Link bài viết/Reel/Ảnh** | `.../posts/1234567890` hoặc `123_456` | Tự tách Post/Object ID. Dùng cho loại “boost bài viết”. |
 | **Link CTA** | `https://shop.example.com/sale` | Website đích. **Bắt buộc** với Traffic và Doanh số. |
 | **Tên chiến dịch** | `CD Tương tác T6` | |
@@ -203,7 +203,7 @@ Tính năng trong tab **Quản lý**:
 ## 9. Lưu ý & giới hạn quan trọng
 
 - **Link dạng `pfbid...`** (link rút gọn mới của Facebook) **không chứa ID số** nên không tách được. Hãy thay bằng **ID bài viết dạng số** hoặc dạng **`{pageId}_{postId}`**.
-- **Link Page dạng tên** (vanity, vd `facebook.com/tenshop`) chỉ resolve được nếu **bạn quản lý Page đó** (qua `pages_show_list`). Nếu không, hãy dùng link chứa ID số.
+- **Tên/Link Page** là tuỳ chọn. Link bài viết dạng `permalink.php?story_fbid=...&id=<pageId>` hoặc `/tenpage/posts/...` dễ tự nhận diện nhất. Link reel/video ngắn chỉ có media ID sẽ được dò trong các Page bạn quản lý, nhưng vẫn phụ thuộc quyền `pages_show_list` và `pages_read_engagement`.
 - **Doanh số (OFFSITE_CONVERSIONS)** thường cần **Pixel** và sự kiện chuyển đổi đã cấu hình; nếu thiếu, Meta sẽ báo lỗi (hiển thị tiếng Việt). Công cụ tập trung xử lý tốt các loại phổ biến: **boost bài viết** và **Traffic/Tin nhắn**.
 - **Lead** cần **mẫu thu thập khách hàng tiềm năng (Lead Form)** gắn với quảng cáo; phần này có thể cần thao tác thêm trong Ads Manager.
 - **Ngân sách** đang đặt ở **cấp ad set, theo ngày**. Kiểm tra kỹ **đơn vị tiền tệ** của tài khoản (công cụ tự quy đổi sang đơn vị nhỏ nhất; với tiền không có số lẻ như VND thì giữ nguyên).

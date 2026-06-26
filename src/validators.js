@@ -217,7 +217,6 @@ export function validateRow(row) {
 
   need(row.contentMode, 'chế độ nội dung');
   need(row.ctaHandling, 'xử lý CTA');
-  need(row.pageLink, 'link Page');
   need(row.postLink, 'link bài viết');
 
   if (mode === 'NEW_CTA_CREATIVE') {

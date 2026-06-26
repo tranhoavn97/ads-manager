@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { parsePageId, parsePostId, normalizeFbUrl, buildObjectStoryId } from '../src/parsers.js';
+import { parsePageId, parsePostId, parsePageSlugFromPostLink, normalizeFbUrl, buildObjectStoryId } from '../src/parsers.js';
 
 test('parsePageId works correctly', () => {
   // Numeric ID
@@ -8,6 +8,9 @@ test('parsePageId works correctly', () => {
 
   // Vanity/slug username
   assert.deepStrictEqual(parsePageId('my.vanity.page'), { id: null, slug: 'my.vanity.page', needsResolve: true, error: null });
+
+  // Page name text
+  assert.deepStrictEqual(parsePageId('Hải Đăng Review tạp hóa'), { id: null, slug: 'Hải Đăng Review tạp hóa', needsResolve: true, error: null });
 
   // Full URL profile id
   assert.deepStrictEqual(parsePageId('https://www.facebook.com/profile.php?id=987654321'), { id: '987654321', slug: null, needsResolve: false, error: null });
@@ -17,6 +20,12 @@ test('parsePageId works correctly', () => {
 
   // Invalid hosts
   assert.strictEqual(parsePageId('https://google.com/page').error !== null, true);
+});
+
+test('parsePageSlugFromPostLink extracts page slug from post URLs', () => {
+  assert.strictEqual(parsePageSlugFromPostLink('https://www.facebook.com/myPageName/posts/1234567890'), 'myPageName');
+  assert.strictEqual(parsePageSlugFromPostLink('https://www.facebook.com/myPageName/videos/1234567890'), 'myPageName');
+  assert.strictEqual(parsePageSlugFromPostLink('https://www.facebook.com/reel/1234567890'), null);
 });
 
 test('parsePostId works correctly with different formats', () => {

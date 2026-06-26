@@ -206,7 +206,7 @@ export async function checkPostExists(token, objectStoryId) {
   try {
     return await call('GET', objectStoryId, {
       token,
-      params: { fields: 'id,call_to_action,message,object_id,type,attachments{media,type,target}' }
+      params: { fields: 'id,from{id,name},call_to_action,message,object_id,type,attachments{media,type,target}' }
     });
   } catch (err) {
     if (err instanceof MetaApiError && (err.code === 100 || err.message.includes('fields') || err.message.includes('parameter'))) {
@@ -270,7 +270,7 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
     const res = await call('GET', `${pageId}/posts`, {
       token,
       params: {
-        fields: 'id,permalink_url,from,created_time,attachments{media,type,target}',
+        fields: 'id,permalink_url,from{id,name},created_time,attachments{media,type,target}',
         limit: 100
       }
     });
@@ -286,7 +286,7 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
     const res = await call('GET', `${pageId}/published_posts`, {
       token,
       params: {
-        fields: 'id,permalink_url,from,created_time,attachments{media,type,target}',
+        fields: 'id,permalink_url,from{id,name},created_time,attachments{media,type,target}',
         limit: 100
       }
     });
@@ -361,7 +361,7 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
       try {
         const post = await call('GET', candidateId, {
           token,
-          params: { fields: 'id,permalink_url,from,created_time,type,object_id' }
+          params: { fields: 'id,permalink_url,from{id,name},created_time,type,object_id' }
         });
         if (post && post.id) {
           const isPageMatch = post.from?.id === pageId;
@@ -392,7 +392,7 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
 export async function verifyPostDetails(token, objectStoryId) {
   return call('GET', objectStoryId, {
     token,
-    params: { fields: 'id,permalink_url,from,created_time,call_to_action,message,object_id,type,attachments{media,type,target}' }
+    params: { fields: 'id,permalink_url,from{id,name},created_time,call_to_action,message,object_id,type,attachments{media,type,target}' }
   });
 }
 
