@@ -1,6 +1,6 @@
 import express from 'express';
 import { requireAuth } from './auth.js';
-import { getPages, checkPostExists, createCampaign, createAdSet, createAdCreative, createAd, MetaApiError, resolvePostFromGraph } from '../meta-api.js';
+import { getPages, checkPostExists, createCampaign, createAdSet, createAdCreative, createAd, getAdCreative, MetaApiError, resolvePostFromGraph } from '../meta-api.js';
 import { resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, validateRow, ROW_STATUS } from '../validators.js';
 import { parsePageId, parsePostId, parsePageSlugFromPostLink } from '../parsers.js';
 import { resolveCta } from '../campaign-mapper.js';
@@ -13,7 +13,10 @@ const metaDetails = (e) => e instanceof MetaApiError ? { metaErrorCode: e.code ?
 function normPageKey(s) {
   return (s ?? '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
 }
-
+function sameUrl(a, b) {
+  const clean = (v) => String(v || '').trim().replace(/\/$/, '').replace(/^http:\/\//i, 'https://');
+  return clean(a) === clean(b) || clean(a).includes(clean(b)) || clean(b).includes(clean(a));
+}
 function makeOwnedMaps(pages) {
   const idMap = new Map(pages.map((p) => [String(p.id), p]));
   const usernameMap = new Map();
@@ -25,14 +28,12 @@ function makeOwnedMaps(pages) {
   }
   return { idMap, usernameMap };
 }
-
 function setPage(parsed, maps, pageId) {
   if (!pageId) return;
   const id = String(pageId);
   parsed.pageId = id;
   parsed.pageName = maps.idMap.get(id)?.name || parsed.pageName || null;
 }
-
 class RowError extends Error {
   constructor(message, status = ROW_STATUS.CREATE_ERROR, details = {}) {
     super(message); this.status = status; this.details = details;
@@ -42,7 +43,6 @@ class RowError extends Error {
 router.post('/validate', requireAuth, async (req, res, next) => {
   const { rows } = req.body || {};
   if (!Array.isArray(rows)) return next();
-
   const token = req.session.fbToken;
   const pages = await getPages(token);
   const maps = makeOwnedMaps(pages);
@@ -55,7 +55,6 @@ router.post('/validate', requireAuth, async (req, res, next) => {
     const warnings = [...base.warnings];
     const parsed = { pageId: null, pageName: null, postId: null, videoId: null, objectStoryId: null, sourceObjectId: null, permalinkUrl: null, verifiedWithGraph: false };
 
-    // Page từ cột Page hoặc từ slug trong link bài viết.
     if (row.pageLink) {
       const pageRes = parsePageId(row.pageLink);
       if (pageRes.id) setPage(parsed, maps, pageRes.id);
@@ -67,32 +66,23 @@ router.post('/validate', requireAuth, async (req, res, next) => {
     }
 
     const postRes = parsePostId(row.postLink);
-    if (postRes.error) {
-      errors.push(postRes.error);
-    } else {
+    if (postRes.error) errors.push(postRes.error);
+    else {
       if (!parsed.pageId && postRes.pageIdFromLink) setPage(parsed, maps, postRes.pageIdFromLink);
       if (!parsed.pageId) {
         const slug = parsePageSlugFromPostLink(row.postLink);
         const id = slug ? (maps.usernameMap.get(slug.toLowerCase()) || maps.usernameMap.get(normPageKey(slug))) : null;
         if (id) setPage(parsed, maps, id);
       }
-      if (!parsed.pageId) {
-        errors.push('Không tự nhận diện được Page từ link này. Hãy nhập Page ID hoặc link Page ở cột Page.');
-      } else {
+      if (!parsed.pageId) errors.push('Không tự nhận diện được Page từ link này. Hãy nhập Page ID hoặc link Page ở cột Page.');
+      else {
         const page = maps.idMap.get(parsed.pageId);
-        if (!page) {
-          errors.push('Page không thuộc tài khoản Facebook đang đăng nhập.');
-        } else if (Array.isArray(page.tasks) && !page.tasks.includes('ADVERTISE')) {
-          errors.push('Tài khoản không có quyền ADVERTISE trên Page này.');
-        } else {
-          const pageToken = page.access_token || token;
+        if (!page) errors.push('Page không thuộc tài khoản Facebook đang đăng nhập.');
+        else if (Array.isArray(page.tasks) && !page.tasks.includes('ADVERTISE')) errors.push('Tài khoản không có quyền ADVERTISE trên Page này.');
+        else {
           let resolved = null;
-          try {
-            resolved = await resolvePostFromGraph(pageToken, parsed.pageId, row.postLink, postRes.postId, postRes.kind);
-          } catch (err) {
-            warnings.push(`Graph không trả object_story_id trực tiếp: ${err.message}`);
-          }
-
+          try { resolved = await resolvePostFromGraph(page.access_token || token, parsed.pageId, row.postLink, postRes.postId, postRes.kind); }
+          catch (err) { warnings.push(`Graph không trả object_story_id trực tiếp: ${err.message}`); }
           if (resolved?.objectStoryId) {
             parsed.postId = resolved.postId;
             parsed.videoId = resolved.videoId;
@@ -101,39 +91,30 @@ router.post('/validate', requireAuth, async (req, res, next) => {
             parsed.permalinkUrl = resolved.permalinkUrl;
             parsed.verifiedWithGraph = true;
           } else if (postRes.postId && (postRes.kind === 'reel' || postRes.kind === 'video')) {
-            // Cho phép đi tiếp bằng candidate PAGE_ID_VIDEO_ID để bước tạo creative xác minh thật với Meta.
-            // Nếu Meta không chấp nhận, dòng sẽ FAILED rõ ràng, không tạo dark post.
             parsed.postId = postRes.postId;
             parsed.videoId = postRes.postId;
             parsed.objectStoryId = `${parsed.pageId}_${postRes.postId}`;
             parsed.sourceObjectId = postRes.postId;
-            parsed.verifiedWithGraph = false;
             warnings.push('Chưa lấy được post_id từ Reel. Tool sẽ thử object_story_id dự phòng; nếu Meta không chấp nhận sẽ báo lỗi khi tạo quảng cáo.');
           } else if (postRes.postId) {
             parsed.postId = postRes.postId;
             parsed.objectStoryId = postRes.pageIdFromLink ? `${postRes.pageIdFromLink}_${postRes.postId}` : `${parsed.pageId}_${postRes.postId}`;
             warnings.push('Chưa xác minh được Post ID qua Graph. Tool sẽ thử tạo bằng object_story_id dự phòng.');
-          } else {
-            errors.push('Không xác định được Post ID thật từ link này.');
-          }
+          } else errors.push('Không xác định được Post ID thật từ link này.');
         }
       }
     }
-
     if (!row.ctaLink || !String(row.ctaLink).trim()) errors.push('Thiếu link Shopee/CTA');
-
-    let status = errors.length ? ROW_STATUS.POST_ERROR : ROW_STATUS.VALID;
-    results.push({ index: i, status, errors, warnings, parsed, normalized: base.normalized });
+    results.push({ index: i, status: errors.length ? ROW_STATUS.POST_ERROR : ROW_STATUS.VALID, errors, warnings, parsed, normalized: base.normalized });
   }
-
   res.json({ results });
 });
 
 router.post('/create', requireAuth, async (req, res, next) => {
   const { row, adAccountId, currency, draftMode } = req.body || {};
   if (!row || !adAccountId || !row.ctaLink) return next();
-
   const result = { index: row.index, status: ROW_STATUS.CREATED, errors: [], ids: {}, mode: 'EXISTING_POST_SHOPEE' };
+
   try {
     const token = req.session.fbToken;
     const pageId = row.parsed?.pageId;
@@ -174,6 +155,13 @@ router.post('/create', requireAuth, async (req, res, next) => {
     } catch (e) {
       const status = e instanceof MetaApiError && [10,200,294].includes(e.code) ? ROW_STATUS.PERMISSION : ROW_STATUS.CREATE_ERROR;
       throw new RowError(`Meta không cho phép gắn CTA/link Shopee vào bài viết có sẵn: ${e.message}`, status, metaDetails(e));
+    }
+
+    const creativeInfo = await getAdCreative(token, creative.id, 'id,object_story_id,effective_object_story_id,call_to_action,object_story_spec');
+    const returnedCta = creativeInfo.call_to_action?.type || creativeInfo.object_story_spec?.link_data?.call_to_action?.type || creativeInfo.object_story_spec?.video_data?.call_to_action?.type;
+    const returnedLink = creativeInfo.call_to_action?.value?.link || creativeInfo.object_story_spec?.link_data?.call_to_action?.value?.link || creativeInfo.object_story_spec?.video_data?.call_to_action?.value?.link;
+    if (returnedCta !== cta || !returnedLink || !sameUrl(returnedLink, link)) {
+      throw new RowError(`Meta đã tạo creative nhưng KHÔNG gắn được nút ${cta} với link Shopee. Existing Post này không hỗ trợ ghi đè CTA/link qua API. Hãy thêm CTA/link vào bài gốc hoặc dùng bài khác.`, ROW_STATUS.CREATE_ERROR);
     }
 
     const adStatus = resolveAdStatus(row.statusRaw, draftMode);
