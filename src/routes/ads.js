@@ -112,6 +112,7 @@ router.post('/validate', requireAuth, async (req, res) => {
   }
 
   const slugCache = new Map();
+  const postResolveCache = new Map();
   const results = [];
 
   for (let i = 0; i < rows.length; i++) {
@@ -262,10 +263,19 @@ router.post('/validate', requireAuth, async (req, res) => {
             const ownerPage = owned.pages.find((p) => p.id === parsed.pageId);
             tokenToUse = ownerPage?.access_token || postToken;
             
-            try {
-              resolved = await resolvePostFromGraph(tokenToUse, parsed.pageId, row.postLink, postRes.postId, postRes.kind);
-            } catch (err) {
-              resolveErrorMsg = err.message;
+            const cacheKey = `${parsed.pageId}|${postRes.kind || ''}|${postRes.postId || ''}|${row.postLink}`;
+            if (postResolveCache.has(cacheKey)) {
+              const cached = postResolveCache.get(cacheKey);
+              resolved = cached.resolved;
+              resolveErrorMsg = cached.error;
+            } else {
+              try {
+                resolved = await resolvePostFromGraph(tokenToUse, parsed.pageId, row.postLink, postRes.postId, postRes.kind);
+                postResolveCache.set(cacheKey, { resolved, error: null });
+              } catch (err) {
+                resolveErrorMsg = err.message;
+                postResolveCache.set(cacheKey, { resolved: null, error: resolveErrorMsg });
+              }
             }
           }
 

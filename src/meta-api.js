@@ -264,53 +264,49 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
   const normalizedInputUrl = normalizeFbUrl(postLink);
   
   let posts = [];
+  const postFields = 'id,permalink_url,from{id,name},created_time,type,object_id,attachments{media,type,target,url,subattachments{media,type,target,url}}';
   
-  // 1. Lấy danh sách posts
-  try {
-    const res = await call('GET', `${pageId}/posts`, {
-      token,
-      params: {
-        fields: 'id,permalink_url,from{id,name},created_time,attachments{media,type,target}',
-        limit: 100
-      }
-    });
-    if (res && Array.isArray(res.data)) {
-      posts = posts.concat(res.data);
-    }
-  } catch (err) {
-    console.error(`Lỗi khi gọi /${pageId}/posts:`, err.message);
-  }
-
-  // 2. Lấy danh sách published_posts để tránh bỏ sót
-  try {
-    const res = await call('GET', `${pageId}/published_posts`, {
-      token,
-      params: {
-        fields: 'id,permalink_url,from{id,name},created_time,attachments{media,type,target}',
-        limit: 100
-      }
-    });
-    if (res && Array.isArray(res.data)) {
-      const existingIds = new Set(posts.map(p => p.id));
-      for (const p of res.data) {
-        if (!existingIds.has(p.id)) {
-          posts.push(p);
+  const addPostsFromEdge = async (edge) => {
+    try {
+      const res = await call('GET', `${pageId}/${edge}`, {
+        token,
+        params: { fields: postFields, limit: 100 }
+      });
+      if (res && Array.isArray(res.data)) {
+        const existingIds = new Set(posts.map(p => p.id));
+        for (const p of res.data) {
+          if (!existingIds.has(p.id)) posts.push(p);
         }
       }
+    } catch (err) {
+      console.error(`Lỗi khi gọi /${pageId}/${edge}:`, err.message);
     }
-  } catch (err) {
-    console.error(`Lỗi khi gọi /${pageId}/published_posts:`, err.message);
-  }
+  };
+
+  // /feed thường chứa cả bài video/reel mà /posts hoặc /published_posts có thể bỏ sót.
+  await addPostsFromEdge('posts');
+  await addPostsFromEdge('published_posts');
+  await addPostsFromEdge('feed');
+
+  const valueHasId = (value, id) => {
+    if (!value || !id) return false;
+    return String(value).includes(String(id));
+  };
+
+  const attachmentHasId = (att, id) => {
+    if (!att || !id) return false;
+    if (att.target?.id === id || att.media?.id === id) return true;
+    if (valueHasId(att.url, id) || valueHasId(att.target?.url, id) || valueHasId(att.media?.source, id)) return true;
+    const sub = att.subattachments?.data || [];
+    return sub.some((child) => attachmentHasId(child, id));
+  };
 
   const containsVideoId = (post, videoId) => {
     if (!videoId) return false;
     const attachments = post.attachments?.data || [];
-    for (const att of attachments) {
-      if (att.target?.id === videoId || att.media?.id === videoId) {
-        return true;
-      }
-    }
-    return false;
+    if (post.object_id === videoId) return true;
+    if (valueHasId(post.permalink_url, videoId)) return true;
+    return attachments.some((att) => attachmentHasId(att, videoId));
   };
 
   // Tìm trong danh sách posts thu thập được
@@ -330,13 +326,7 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
       if (kind === 'reel' || kind === 'video') {
         videoId = parsedId;
       } else {
-        const attachments = post.attachments?.data || [];
-        for (const att of attachments) {
-          if (att.target?.id) {
-            videoId = att.target.id;
-            break;
-          }
-        }
+        videoId = findAttachmentVideoId(post.attachments?.data || []);
       }
       
       return {
@@ -351,7 +341,33 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
     }
   }
 
-  // 3. Fallback tìm trực tiếp cho mọi loại bài viết/reel/video nếu có parsedId
+  // 3. Reels/video: tìm video object của Page rồi lấy post_id nếu Meta trả về.
+  if (parsedId && (kind === 'reel' || kind === 'video')) {
+    const video = await findPageVideoById(token, pageId, parsedId);
+    if (video?.post_id) {
+      try {
+        const post = await call('GET', video.post_id, {
+          token,
+          params: { fields: 'id,permalink_url,from{id,name},created_time,type,object_id' }
+        });
+        if (post?.id && (!post.from?.id || post.from.id === pageId)) {
+          return {
+            post,
+            objectStoryId: post.id,
+            postId: post.id.includes('_') ? post.id.split('_')[1] : post.id,
+            videoId: video.id,
+            sourceObjectId: video.id,
+            permalinkUrl: post.permalink_url || video.permalink_url,
+            fromPageId: post.from?.id || video.from?.id || pageId,
+          };
+        }
+      } catch (err) {
+        console.error(`Lỗi khi lấy post_id ${video.post_id} của video ${parsedId}:`, err.message);
+      }
+    }
+  }
+
+  // 4. Fallback tìm trực tiếp cho mọi loại bài viết/reel/video nếu có parsedId
   if (parsedId) {
     const candidates = [
       parsedId.includes('_') ? parsedId : `${pageId}_${parsedId}`,
@@ -383,6 +399,39 @@ export async function resolvePostFromGraph(token, pageId, postLink, parsedId, ki
     }
   }
 
+  return null;
+}
+
+function findAttachmentVideoId(attachments) {
+  for (const att of attachments || []) {
+    if (att.target?.id) return att.target.id;
+    if (att.media?.id) return att.media.id;
+    const nested = findAttachmentVideoId(att.subattachments?.data || []);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+async function findPageVideoById(token, pageId, videoId) {
+  const videoFields = 'id,post_id,permalink_url,from{id,name},created_time,source,description,title';
+  const edges = ['videos', 'video_reels'];
+  for (const edge of edges) {
+    try {
+      const res = await call('GET', `${pageId}/${edge}`, {
+        token,
+        params: { fields: videoFields, limit: 100 }
+      });
+      const videos = Array.isArray(res?.data) ? res.data : [];
+      const found = videos.find((video) => (
+        video.id === videoId ||
+        String(video.post_id || '').includes(videoId) ||
+        String(video.permalink_url || '').includes(videoId)
+      ));
+      if (found) return found;
+    } catch (err) {
+      console.error(`Lỗi khi gọi /${pageId}/${edge}:`, err.message);
+    }
+  }
   return null;
 }
 
