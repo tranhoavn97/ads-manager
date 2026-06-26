@@ -1,7 +1,8 @@
 import express from 'express';
 import { requireAuth } from './auth.js';
-import { getPages, checkPostExists, createCampaign, createAdSet, createAdCreative, createAd, MetaApiError } from '../meta-api.js';
-import { resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, ROW_STATUS } from '../validators.js';
+import { getPages, checkPostExists, createCampaign, createAdSet, createAdCreative, createAd, MetaApiError, resolvePostFromGraph } from '../meta-api.js';
+import { resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, validateRow, ROW_STATUS } from '../validators.js';
+import { parsePageId, parsePostId, parsePageSlugFromPostLink } from '../parsers.js';
 import { resolveCta } from '../campaign-mapper.js';
 
 const router = express.Router();
@@ -9,11 +10,124 @@ const ZERO = new Set(['VND','JPY','KRW','CLP','ISK','HUF','TWD','UGX','VUV','XAF
 const minor = (v, c) => Math.round(Number(v) * (ZERO.has(String(c || '').toUpperCase()) ? 1 : 100));
 const metaDetails = (e) => e instanceof MetaApiError ? { metaErrorCode: e.code ?? null, metaErrorSubcode: e.subcode ?? null, fbtraceId: e.fbtrace ?? null } : {};
 
+function normPageKey(s) {
+  return (s ?? '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
+}
+
+function makeOwnedMaps(pages) {
+  const idMap = new Map(pages.map((p) => [String(p.id), p]));
+  const usernameMap = new Map();
+  for (const p of pages) {
+    if (p.username) usernameMap.set(p.username.toLowerCase(), String(p.id));
+    const m = (p.link || '').match(/facebook\.com\/([^/?#]+)/i);
+    if (m?.[1] && !/^profile\.php$/i.test(m[1])) usernameMap.set(m[1].toLowerCase(), String(p.id));
+    if (p.name && normPageKey(p.name)) usernameMap.set(normPageKey(p.name), String(p.id));
+  }
+  return { idMap, usernameMap };
+}
+
+function setPage(parsed, maps, pageId) {
+  if (!pageId) return;
+  const id = String(pageId);
+  parsed.pageId = id;
+  parsed.pageName = maps.idMap.get(id)?.name || parsed.pageName || null;
+}
+
 class RowError extends Error {
   constructor(message, status = ROW_STATUS.CREATE_ERROR, details = {}) {
     super(message); this.status = status; this.details = details;
   }
 }
+
+router.post('/validate', requireAuth, async (req, res, next) => {
+  const { rows } = req.body || {};
+  if (!Array.isArray(rows)) return next();
+
+  const token = req.session.fbToken;
+  const pages = await getPages(token);
+  const maps = makeOwnedMaps(pages);
+  const results = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const base = validateRow({ ...row, campaignType: 'Traffic', contentMode: row.contentMode || 'Bài viết có sẵn', ctaHandling: row.ctaHandling || 'CTA tự động' });
+    const errors = [...base.errors];
+    const warnings = [...base.warnings];
+    const parsed = { pageId: null, pageName: null, postId: null, videoId: null, objectStoryId: null, sourceObjectId: null, permalinkUrl: null, verifiedWithGraph: false };
+
+    // Page từ cột Page hoặc từ slug trong link bài viết.
+    if (row.pageLink) {
+      const pageRes = parsePageId(row.pageLink);
+      if (pageRes.id) setPage(parsed, maps, pageRes.id);
+      else if (pageRes.slug) {
+        const key = pageRes.slug.toLowerCase();
+        const id = maps.usernameMap.get(key) || maps.usernameMap.get(normPageKey(key));
+        if (id) setPage(parsed, maps, id);
+      }
+    }
+
+    const postRes = parsePostId(row.postLink);
+    if (postRes.error) {
+      errors.push(postRes.error);
+    } else {
+      if (!parsed.pageId && postRes.pageIdFromLink) setPage(parsed, maps, postRes.pageIdFromLink);
+      if (!parsed.pageId) {
+        const slug = parsePageSlugFromPostLink(row.postLink);
+        const id = slug ? (maps.usernameMap.get(slug.toLowerCase()) || maps.usernameMap.get(normPageKey(slug))) : null;
+        if (id) setPage(parsed, maps, id);
+      }
+      if (!parsed.pageId) {
+        errors.push('Không tự nhận diện được Page từ link này. Hãy nhập Page ID hoặc link Page ở cột Page.');
+      } else {
+        const page = maps.idMap.get(parsed.pageId);
+        if (!page) {
+          errors.push('Page không thuộc tài khoản Facebook đang đăng nhập.');
+        } else if (Array.isArray(page.tasks) && !page.tasks.includes('ADVERTISE')) {
+          errors.push('Tài khoản không có quyền ADVERTISE trên Page này.');
+        } else {
+          const pageToken = page.access_token || token;
+          let resolved = null;
+          try {
+            resolved = await resolvePostFromGraph(pageToken, parsed.pageId, row.postLink, postRes.postId, postRes.kind);
+          } catch (err) {
+            warnings.push(`Graph không trả object_story_id trực tiếp: ${err.message}`);
+          }
+
+          if (resolved?.objectStoryId) {
+            parsed.postId = resolved.postId;
+            parsed.videoId = resolved.videoId;
+            parsed.objectStoryId = resolved.objectStoryId;
+            parsed.sourceObjectId = resolved.sourceObjectId;
+            parsed.permalinkUrl = resolved.permalinkUrl;
+            parsed.verifiedWithGraph = true;
+          } else if (postRes.postId && (postRes.kind === 'reel' || postRes.kind === 'video')) {
+            // Cho phép đi tiếp bằng candidate PAGE_ID_VIDEO_ID để bước tạo creative xác minh thật với Meta.
+            // Nếu Meta không chấp nhận, dòng sẽ FAILED rõ ràng, không tạo dark post.
+            parsed.postId = postRes.postId;
+            parsed.videoId = postRes.postId;
+            parsed.objectStoryId = `${parsed.pageId}_${postRes.postId}`;
+            parsed.sourceObjectId = postRes.postId;
+            parsed.verifiedWithGraph = false;
+            warnings.push('Chưa lấy được post_id từ Reel. Tool sẽ thử object_story_id dự phòng; nếu Meta không chấp nhận sẽ báo lỗi khi tạo quảng cáo.');
+          } else if (postRes.postId) {
+            parsed.postId = postRes.postId;
+            parsed.objectStoryId = postRes.pageIdFromLink ? `${postRes.pageIdFromLink}_${postRes.postId}` : `${parsed.pageId}_${postRes.postId}`;
+            warnings.push('Chưa xác minh được Post ID qua Graph. Tool sẽ thử tạo bằng object_story_id dự phòng.');
+          } else {
+            errors.push('Không xác định được Post ID thật từ link này.');
+          }
+        }
+      }
+    }
+
+    if (!row.ctaLink || !String(row.ctaLink).trim()) errors.push('Thiếu link Shopee/CTA');
+
+    let status = errors.length ? ROW_STATUS.POST_ERROR : ROW_STATUS.VALID;
+    results.push({ index: i, status, errors, warnings, parsed, normalized: base.normalized });
+  }
+
+  res.json({ results });
+});
 
 router.post('/create', requireAuth, async (req, res, next) => {
   const { row, adAccountId, currency, draftMode } = req.body || {};
@@ -36,8 +150,15 @@ router.post('/create', requireAuth, async (req, res, next) => {
     const page = pages.find(p => String(p.id) === String(pageId));
     if (!page) throw new RowError('Page không thuộc tài khoản đang đăng nhập.', ROW_STATUS.PERMISSION);
     if (Array.isArray(page.tasks) && !page.tasks.includes('ADVERTISE')) throw new RowError('Không có quyền ADVERTISE trên Page.', ROW_STATUS.PERMISSION);
-    const post = await checkPostExists(page.access_token || token, postId);
-    if (!post?.id) throw new RowError('Không tìm thấy bài viết gốc.');
+
+    let realPostId = postId;
+    try {
+      const fresh = row.parsed?.videoId ? await resolvePostFromGraph(page.access_token || token, pageId, row.postLink, row.parsed.videoId, 'reel') : null;
+      if (fresh?.objectStoryId) realPostId = fresh.objectStoryId;
+    } catch {}
+
+    const post = await checkPostExists(page.access_token || token, realPostId);
+    if (!post?.id) throw new RowError('Không tìm thấy bài viết gốc. Nếu đây là Reel, Meta chưa map Video ID sang Post ID cho Page này.');
 
     const requested = resolveCta(row.cta)?.code || 'SHOP_NOW';
     const cta = ['SHOP_NOW','LEARN_MORE'].includes(requested) ? requested : 'SHOP_NOW';
@@ -46,7 +167,7 @@ router.post('/create', requireAuth, async (req, res, next) => {
     try {
       creative = await createAdCreative(token, accountId, {
         name: `${row.adName || 'Ad'} - existing post Shopee`,
-        object_story_id: postId,
+        object_story_id: realPostId,
         call_to_action: { type: cta, value: { link } },
       });
       result.ids.creativeId = creative.id;
@@ -69,10 +190,7 @@ router.post('/create', requireAuth, async (req, res, next) => {
     const campaign = await createCampaign(token, accountId, campaignData);
     result.ids.campaignId = campaign.id;
 
-    const adsetData = {
-      name: row.adsetName, campaign_id: campaign.id, billing_event: 'IMPRESSIONS', optimization_goal: 'LINK_CLICKS', destination_type: 'WEBSITE', status: adStatus,
-      targeting: { geo_locations: { countries }, age_min: 18, age_max: 65 },
-    };
+    const adsetData = { name: row.adsetName, campaign_id: campaign.id, billing_event: 'IMPRESSIONS', optimization_goal: 'LINK_CLICKS', destination_type: 'WEBSITE', status: adStatus, targeting: { geo_locations: { countries }, age_min: 18, age_max: 65 } };
     if (budgetLevel === 'adset') Object.assign(adsetData, { [budgetField]: budget, bid_strategy: 'LOWEST_COST_WITHOUT_CAP' });
     if (row.normalized?.startTime) adsetData.start_time = row.normalized.startTime;
     if (row.normalized?.endTime) adsetData.end_time = row.normalized.endTime;
