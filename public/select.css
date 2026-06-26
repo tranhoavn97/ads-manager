@@ -86,6 +86,13 @@
 .ns-option.ns-disabled.ns-active { background: transparent; }
 .ns-empty { padding: 16px 10px; text-align: center; color: var(--muted); font-size: 13px; }
 
+/* Chấm trạng thái (data-dot trên <option>) */
+.ns-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+.ns-dot-ok { background: #22C55E; }
+.ns-dot-bad { background: #EF4444; }
+.ns-dot-warn { background: #F59E0B; }
+.ns-label .ns-dot { margin-right: 8px; vertical-align: middle; }
+
 @media (prefers-reduced-motion: reduce) {
   .ns-popup, .ns-arrow, .ns-option, .ns-check { transition: none; }
 }

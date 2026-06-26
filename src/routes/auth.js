@@ -68,7 +68,7 @@ router.get('/callback', async (req, res) => {
 
     // Token chỉ lưu trong phiên phía máy chủ, KHÔNG gửi cho trình duyệt
     req.session.fbToken = accessToken;
-    req.session.user = { id: me.id, name: me.name };
+    req.session.user = { id: me.id, name: me.name, picture: me.picture?.data?.url || '' };
 
     res.redirect('/');
   } catch (err) {
@@ -98,7 +98,7 @@ router.post('/token', async (req, res) => {
     }
 
     req.session.fbToken = raw;
-    req.session.user = { id: me.id, name: me.name };
+    req.session.user = { id: me.id, name: me.name, picture: me.picture?.data?.url || '' };
     res.json({ ok: true, user: req.session.user, missingPermissions });
   } catch (err) {
     const msg = err instanceof MetaApiError ? err.message : 'Token không hợp lệ hoặc đã hết hạn.';
@@ -106,11 +106,17 @@ router.post('/token', async (req, res) => {
   }
 });
 
-router.get('/status', (req, res) => {
-  res.json({
-    loggedIn: Boolean(req.session.fbToken),
-    user: req.session.user || null,
-  });
+router.get('/status', async (req, res) => {
+  const user = req.session.user || null;
+  // Bổ sung avatar cho phiên cũ (đăng nhập trước khi có trường picture)
+  if (req.session.fbToken && user && !user.picture) {
+    try {
+      const me = await getMe(req.session.fbToken);
+      user.picture = me.picture?.data?.url || '';
+      req.session.user = user;
+    } catch { /* bỏ qua nếu lỗi */ }
+  }
+  res.json({ loggedIn: Boolean(req.session.fbToken), user });
 });
 
 router.post('/logout', (req, res) => {

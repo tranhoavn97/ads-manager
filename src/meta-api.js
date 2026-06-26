@@ -141,7 +141,13 @@ export async function getLongLivedToken({ appId, appSecret, shortToken }) {
 }
 
 export async function getMe(token) {
-  return call('GET', 'me', { token, params: { fields: 'id,name' } });
+  // Thử lấy kèm ảnh đại diện; nếu token thiếu quyền ảnh thì lùi về id,name
+  // để KHÔNG làm hỏng đăng nhập.
+  try {
+    return await call('GET', 'me', { token, params: { fields: 'id,name,picture.width(72).height(72)' } });
+  } catch (err) {
+    return call('GET', 'me', { token, params: { fields: 'id,name' } });
+  }
 }
 
 // --------- Tài khoản quảng cáo & Page ---------
@@ -149,7 +155,7 @@ export async function getMe(token) {
 export async function getAdAccounts(token) {
   const data = await call('GET', 'me/adaccounts', {
     token,
-    params: { fields: 'id,account_id,name,account_status,currency,timezone_name,amount_spent', limit: 200 },
+    params: { fields: 'id,account_id,name,account_status,currency,timezone_name', limit: 200 },
   });
   return data.data || [];
 }
@@ -440,45 +446,42 @@ async function getAllPages(token, path, params, maxItems = 5000) {
     if (out.length >= maxItems) break;
     const next = data.paging?.cursors?.after;
     if (!next || !data.paging?.next) break;
+    await new Promise((r) => setTimeout(r, 120)); // nhịp nhẹ tránh rate-limit
     data = await call('GET', path, { token, params: { ...params, after: next } });
   }
   return out;
 }
 
-const INSIGHTS_FIELDS = 'spend,impressions,reach,clicks,ctr,cpm,cpc,frequency,actions';
+const INSIGHTS_FIELDS = 'spend,impressions,reach,clicks,ctr,cpm,actions';
 
-function insightsExpansion(datePreset) {
-  const dp = datePreset || 'last_30d';
-  return `insights.date_preset(${dp}){${INSIGHTS_FIELDS}}`;
+// Lấy insights PHẲNG theo cấp (campaign|adset|ad) — 1 truy vấn nhẹ, không lồng
+// → tránh lỗi "reduce the amount of data" và giảm mạnh số lần gọi API.
+export async function getInsights(token, adAccountId, level, datePreset) {
+  const idField = level === 'campaign' ? 'campaign_id' : level === 'adset' ? 'adset_id' : 'ad_id';
+  const rows = await getAllPages(token, actPath(adAccountId, 'insights'), {
+    level,
+    date_preset: datePreset || 'last_30d',
+    fields: `${idField},${INSIGHTS_FIELDS}`,
+    limit: 200,
+  }, 4000);
+  const map = {};
+  for (const r of rows) if (r[idField]) map[r[idField]] = r;
+  return map;
 }
 
-export async function getCampaigns(token, adAccountId, datePreset) {
-  const fields = [
-    'id', 'name', 'status', 'effective_status', 'objective',
-    'daily_budget', 'lifetime_budget', 'budget_remaining', 'bid_strategy',
-    'start_time', 'stop_time', 'created_time', 'updated_time',
-    insightsExpansion(datePreset),
-  ].join(',');
-  return getAllPages(token, actPath(adAccountId, 'campaigns'), { fields, limit: 200 });
+export async function getCampaigns(token, adAccountId) {
+  const fields = 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,stop_time,created_time,updated_time';
+  return getAllPages(token, actPath(adAccountId, 'campaigns'), { fields, limit: 100 });
 }
 
-export async function getAdSets(token, adAccountId, datePreset) {
-  const fields = [
-    'id', 'name', 'status', 'effective_status', 'campaign_id', 'optimization_goal',
-    'billing_event', 'daily_budget', 'lifetime_budget', 'budget_remaining', 'bid_strategy',
-    'start_time', 'end_time',
-    insightsExpansion(datePreset),
-  ].join(',');
-  return getAllPages(token, actPath(adAccountId, 'adsets'), { fields, limit: 200 });
+export async function getAdSets(token, adAccountId) {
+  const fields = 'id,name,status,effective_status,campaign_id,optimization_goal,billing_event,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,end_time';
+  return getAllPages(token, actPath(adAccountId, 'adsets'), { fields, limit: 100 });
 }
 
-export async function getAds(token, adAccountId, datePreset) {
-  const fields = [
-    'id', 'name', 'status', 'effective_status', 'adset_id', 'campaign_id',
-    'creative{id,thumbnail_url,object_story_id,effective_object_story_id}',
-    insightsExpansion(datePreset),
-  ].join(',');
-  return getAllPages(token, actPath(adAccountId, 'ads'), { fields, limit: 200 });
+export async function getAds(token, adAccountId) {
+  const fields = 'id,name,status,effective_status,adset_id,campaign_id,creative{id,thumbnail_url,object_story_id,effective_object_story_id}';
+  return getAllPages(token, actPath(adAccountId, 'ads'), { fields, limit: 100 });
 }
 
 // Cập nhật chung (đổi tên, đổi trạng thái, đổi ngân sách…)

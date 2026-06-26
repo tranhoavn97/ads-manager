@@ -494,15 +494,16 @@ async function init() {
 
 function bindEvents() {
   $('#logoutBtn').addEventListener('click', logout);
-  $('#toUploadBtn').addEventListener('click', enterDashboard);
 
-  // Tab chính: Quản lý / Tạo hàng loạt
-  $$('.apptab').forEach((btn) => btn.addEventListener('click', () => switchTab(btn.dataset.view)));
+  // Sidebar trái: điều hướng + accordion nhóm + thu gọn
+  $$('.sb-item').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.view)));
+  $$('.sb-group-head').forEach((h) => h.addEventListener('click', () => {
+    if ($('#sidebar').classList.contains('collapsed')) return; // thu gọn thì không gập nhóm
+    h.closest('.sb-group').classList.toggle('expanded');
+  }));
+  $('#sbBrand')?.addEventListener('click', toggleSidebar);
   $('#accSelect')?.addEventListener('change', onAccChange);
-  $('#switchAccBtn')?.addEventListener('click', () => {
-    $('#appbar').classList.add('hidden');
-    showView('account');
-  });
+  $('#accStatus')?.addEventListener('click', () => { if (!State.adAccounts.length) loadAdAccounts(0); });
   $('#templateBtn').addEventListener('click', downloadTemplate);
   $('#manualStartBtn')?.addEventListener('click', startManualTable);
   $('#addRowBtn')?.addEventListener('click', () => addBlankRow(true));
@@ -560,11 +561,15 @@ function setStep(n) {
 }
 
 async function onLoggedIn() {
-  $('#userBadge').classList.remove('hidden');
-  $('#userName').textContent = State.user?.name || 'Đã đăng nhập';
-  showView('account');
-  setStep(2);
-  await loadAdAccounts();
+  const u = State.user || {};
+  $('#userName').textContent = u.name || 'Đã đăng nhập';
+  const av = $('#userAvatar');
+  if (av) {
+    if (u.picture) { av.src = u.picture; av.classList.remove('hidden'); }
+    else av.classList.add('hidden');
+  }
+  enterDashboard();          // vào dashboard ngay
+  loadAdAccounts();          // tải tài khoản (tự thử lại nếu bị giới hạn)
 }
 
 async function logout() {
@@ -572,25 +577,41 @@ async function logout() {
   location.reload();
 }
 
-// Vào bảng điều khiển (dashboard có tab) sau khi đã chọn tài khoản
+// Vào bảng điều khiển ngay sau khi đăng nhập (không cần màn chọn tài khoản)
 function enterDashboard() {
-  const acc = State.selectedAccount;
-  if (!acc) return toast('Hãy chọn tài khoản quảng cáo', 'err');
-  $('#appbar').classList.remove('hidden');
+  $('#sidebar').classList.remove('hidden');
   populateAccSelect();
+  if (localStorage.getItem('mp_sidebar_collapsed') === '1') $('#sidebar').classList.add('collapsed');
   switchTab('manage');
+}
+
+// Thu gọn / mở rộng sidebar (nhớ trạng thái)
+function toggleSidebar() {
+  const sb = $('#sidebar');
+  const collapsed = sb.classList.toggle('collapsed');
+  try { localStorage.setItem('mp_sidebar_collapsed', collapsed ? '1' : '0'); } catch { /* hết dung lượng */ }
 }
 
 // Đổ danh sách tài khoản vào dropdown trên thanh tab + đồng bộ nhãn
 function populateAccSelect() {
   const sel = $('#accSelect');
   if (!sel) return;
-  const usable = State.adAccounts.filter((a) => a.usable);
-  sel.innerHTML = usable
-    .map((a) => `<option value="${esc(a.id)}">${esc(a.name)} · ${esc(a.currency)}</option>`)
+  sel.innerHTML = State.adAccounts
+    .map((a) => `<option value="${esc(a.id)}" data-dot="${a.usable ? 'ok' : 'bad'}">${esc(a.name)} · ${esc(a.currency)}</option>`)
     .join('');
   if (State.selectedAccount) sel.value = State.selectedAccount.id;
   if (window.NiceSelect) NiceSelect.refresh(sel);
+  updateAccStatus();
+}
+
+// Chấm xanh/đỏ + nhãn tình trạng tài khoản đang chọn
+function updateAccStatus() {
+  const a = State.selectedAccount;
+  const dot = $('#accDot'); const txt = $('#accStatusText');
+  if (!dot || !txt) return;
+  if (!a) { dot.className = 'acc-dot'; txt.textContent = '—'; return; }
+  dot.className = 'acc-dot ' + (a.usable ? 'ok' : 'bad');
+  txt.textContent = a.statusLabel || (a.usable ? 'Đang hoạt động' : 'Không khả dụng');
 }
 
 // Đổi tài khoản ngay từ dropdown (không cần quay lại màn chọn)
@@ -600,30 +621,29 @@ function onAccChange(e) {
   if (!acc) return;
   if (State.selectedAccount && acc.id === State.selectedAccount.id) return;
   State.selectedAccount = acc;
+  updateAccStatus();
   Logger.info(`Đổi tài khoản: ${acc.name} (${acc.id} · ${acc.currency}).`);
   toast(`Đã chọn ${acc.name}`, 'ok');
-  // Nếu đang ở tab Quản lý → tải lại dữ liệu của tài khoản mới
+  // Đổi tài khoản: xoá dữ liệu cũ, KHÔNG tự tải (tránh rate-limit). Người dùng bấm "Làm mới".
   _manageLoadedFor = null;
-  const onManage = !$('#view-manage').classList.contains('hidden');
-  if (onManage && typeof Manage !== 'undefined') {
-    _manageLoadedFor = acc.id;
-    Manage.load();
+  if (typeof Manage !== 'undefined') {
+    Manage.campaigns = []; Manage.adsets = []; Manage.ads = [];
+    if (!$('#view-manage').classList.contains('hidden')) {
+      const body = $('#treeBody');
+      if (body) body.innerHTML = '<tr><td colspan="12" class="loading">Đã đổi tài khoản — bấm “Làm mới” để tải chiến dịch.</td></tr>';
+      const sum = $('#manageSummary'); if (sum) sum.innerHTML = '';
+    }
   }
 }
 
 // Chuyển tab Quản lý <-> Tạo hàng loạt
 let _manageLoadedFor = null;
 function switchTab(view) {
-  $$('.apptab').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  $$('.sb-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   showView(view);
-  if (view === 'manage' && typeof Manage !== 'undefined') {
-    // Lần đầu vào tab Quản lý cho tài khoản này thì tự nạp dữ liệu
-    const accId = State.selectedAccount?.id;
-    if (_manageLoadedFor !== accId) {
-      _manageLoadedFor = accId;
-      Manage.load();
-    }
-  }
+  // KHÔNG tự tải tab Quản lý: tài khoản lớn dễ bị Meta rate-limit.
+  // Người dùng bấm "Làm mới" để tải khi cần.
+  if (view === 'posts' && typeof Posts !== 'undefined') Posts.activate();
 }
 
 // Đăng nhập trực tiếp bằng access token (không qua OAuth)
@@ -649,33 +669,42 @@ async function loginWithToken() {
 // ============================================================
 //  Bước 2: tài khoản quảng cáo
 // ============================================================
-async function loadAdAccounts() {
-  const list = $('#adAccountList');
-  list.innerHTML = '<div class="loading">Đang tải danh sách tài khoản…</div>';
+// Backoff THƯA (rate-limit của Meta hồi theo thời gian — gọi dồn sẽ kéo dài giới hạn)
+const ACCT_RETRY_WAITS = [60000, 120000];
+async function loadAdAccounts(retry = 0) {
   try {
-    const accounts = await api('/api/accounts/adaccounts');
-    State.adAccounts = accounts;
-    if (!accounts.length) {
-      list.innerHTML = '<div class="loading">Không tìm thấy tài khoản quảng cáo nào. Kiểm tra quyền ads_management.</div>';
-      return;
+    State.adAccounts = (await api('/api/accounts/adaccounts')) || [];
+    if (State.adAccounts.length) {
+      if (!State.selectedAccount || !State.adAccounts.some((a) => a.id === State.selectedAccount.id)) {
+        const usable = State.adAccounts.filter((a) => a.usable);
+        State.selectedAccount = usable[0] || State.adAccounts[0];
+      }
+      populateAccSelect();
+      Logger.ok(`Đã tải ${State.adAccounts.length} tài khoản quảng cáo.`);
+    } else {
+      setAccLoadingMsg('Không có tài khoản');
+      Logger.warn('Không tìm thấy tài khoản quảng cáo (kiểm tra quyền ads_management).');
     }
-    list.innerHTML = '';
-    accounts.forEach((a) => {
-      const card = document.createElement('div');
-      card.className = 'account-card' + (a.usable ? '' : ' disabled');
-      card.innerHTML = `
-        <div class="ac-name">${esc(a.name)}</div>
-        <div class="ac-id">${esc(a.id)}</div>
-        <div class="ac-meta">
-          <span class="chip">${esc(a.currency)}</span>
-          <span class="chip ${a.usable ? 'ok' : 'bad'}">${esc(a.statusLabel)}</span>
-        </div>`;
-      if (a.usable) card.addEventListener('click', () => selectAccount(a, card));
-      list.appendChild(card);
-    });
   } catch (err) {
-    list.innerHTML = `<div class="alert alert-error">${esc(err.message)}</div>`;
+    State.adAccounts = [];
+    const limited = /too many calls|rate limit|#17|#80004|#4\b/i.test(err.message);
+    if (limited && retry < ACCT_RETRY_WAITS.length) {
+      const wait = ACCT_RETRY_WAITS[retry];
+      setAccLoadingMsg(`Bị giới hạn — tự thử lại sau ${Math.round(wait / 1000)}s…`);
+      Logger.warn(`Tài khoản bị Meta giới hạn tần suất — tự thử lại sau ${Math.round(wait / 1000)}s (lần ${retry + 1}/${ACCT_RETRY_WAITS.length}).`);
+      setTimeout(() => loadAdAccounts(retry + 1), wait);
+    } else {
+      setAccLoadingMsg(limited ? 'Bị giới hạn — bấm để thử lại' : 'Lỗi tải — bấm để thử lại');
+      Logger.err('Không tải được tài khoản quảng cáo: ' + err.message);
+    }
   }
+}
+
+// Hiển thị trạng thái khi đang/không tải được tài khoản
+function setAccLoadingMsg(msg) {
+  const dot = $('#accDot'); const txt = $('#accStatusText');
+  if (dot) dot.className = 'acc-dot';
+  if (txt) txt.textContent = msg;
 }
 
 function selectAccount(acc, card) {

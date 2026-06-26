@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireAuth } from './auth.js';
 import {
-  getCampaigns, getAdSets, getAds,
+  getCampaigns, getAdSets, getAds, getInsights,
   updateNode, deleteNode, duplicateNode, MetaApiError,
 } from '../meta-api.js';
 
@@ -20,9 +20,9 @@ function majorToMinor(amount, currency) {
   return Math.round(Number(amount) * factor);
 }
 
-// Rút gọn block insights của Meta về dạng phẳng dễ render
+// Rút gọn 1 hàng insights (đã gắn vào node) về dạng phẳng dễ render
 function flattenInsights(node) {
-  const ins = node.insights?.data?.[0];
+  const ins = node.insights;
   if (!ins) return null;
   let results = 0;
   if (Array.isArray(ins.actions)) {
@@ -100,11 +100,19 @@ router.get('/overview', requireAuth, async (req, res) => {
   const { adAccountId, datePreset = 'last_30d', currency = '' } = req.query;
   if (!adAccountId) return res.status(400).json({ error: 'Thiếu adAccountId' });
   try {
-    const [campaigns, adsets, ads] = await Promise.all([
-      getCampaigns(req.session.fbToken, adAccountId, datePreset),
-      getAdSets(req.session.fbToken, adAccountId, datePreset),
-      getAds(req.session.fbToken, adAccountId, datePreset),
+    const token = req.session.fbToken;
+    // Lấy thực thể (nhẹ) + insights phẳng theo cấp song song, rồi gắn insights vào từng node
+    const [campaigns, adsets, ads, ci, si, ai] = await Promise.all([
+      getCampaigns(token, adAccountId),
+      getAdSets(token, adAccountId),
+      getAds(token, adAccountId),
+      getInsights(token, adAccountId, 'campaign', datePreset).catch(() => ({})),
+      getInsights(token, adAccountId, 'adset', datePreset).catch(() => ({})),
+      getInsights(token, adAccountId, 'ad', datePreset).catch(() => ({})),
     ]);
+    campaigns.forEach((c) => { c.insights = ci[c.id] || null; });
+    adsets.forEach((a) => { a.insights = si[a.id] || null; });
+    ads.forEach((a) => { a.insights = ai[a.id] || null; });
     res.json({
       campaigns: campaigns.map((c) => shapeCampaign(c, currency)),
       adsets: adsets.map((a) => shapeAdSet(a, currency)),

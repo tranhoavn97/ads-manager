@@ -1,0 +1,76 @@
+/* =====================================================================
+   posts.css — Tab "Dọn dẹp bài viết Page"
+   ===================================================================== */
+
+/* ---------- Thanh chọn Page ---------- */
+.posts-pagesbar { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.posts-pagesbar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.chk { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-soft); cursor: pointer; user-select: none; }
+.chk input { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+
+.posts-pages { display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow-y: auto; }
+.pp-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px 6px 6px; border: 1px solid var(--border); border-radius: 9999px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer;
+  transition: all .15s ease; position: relative; box-shadow: var(--shadow-sm);
+}
+.pp-chip:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.pp-chip.on { border-color: var(--primary); background: var(--primary-wash); color: var(--primary-ink); }
+.pp-av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
+.pp-av-ph { display: grid; place-items: center; background: var(--surface-2); color: var(--muted); font-weight: 700; font-size: 12px; }
+.pp-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-check { display: none; color: var(--primary); font-weight: 800; }
+.pp-chip.on .pp-check { display: inline; }
+.pp-warn { width: 16px; height: 16px; border-radius: 50%; background: #FEF2F2; color: #DC2626; font-weight: 800; font-size: 11px; display: grid; place-items: center; }
+
+/* ---------- Bộ lọc ---------- */
+.posts-filters { padding: 16px 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.ff { display: flex; flex-direction: column; gap: 5px; min-width: 130px; }
+.ff.grow { flex: 1 1 200px; }
+.ff > span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.ff .input-inline { min-height: 44px; }
+.posts-filters .btn { min-height: 44px; }
+
+.posts-scanprogress { padding: 12px 18px; border-top: 1px solid var(--border); font-size: 13.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 10px; }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--primary); animation: pspin .7s linear infinite; flex: none; }
+@keyframes pspin { to { transform: rotate(360deg); } }
+
+/* ---------- Hàng đợi xoá ---------- */
+.posts-queuebar { padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.pq-progress { height: 8px; border-radius: 9999px; background: var(--border); overflow: hidden; }
+.pq-bar { height: 100%; width: 0; background: var(--grad-h, linear-gradient(90deg,#0052FF,#4D7CFF)); transition: width .25s ease; }
+.pq-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; font-size: 13px; color: var(--ink-soft); }
+.pq-actions { display: flex; gap: 8px; }
+.pq-actions .btn { padding: 6px 14px; }
+
+/* ---------- Bảng bài viết ---------- */
+.posts-table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 880px; }
+.posts-table th {
+  text-align: left; padding: 11px 14px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); background: var(--surface-2); border-bottom: 1px solid var(--border); position: sticky; top: 0; white-space: nowrap; z-index: 1;
+}
+.posts-table th.num, .posts-table td.num { text-align: right; white-space: nowrap; }
+.posts-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.posts-table tr:hover td { background: var(--primary-wash); }
+.pt-chk { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+.pt-thumb { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; border: 1px solid var(--border); display: block; }
+.pt-thumb-ph { background: var(--surface-2); }
+.pt-msg { max-width: 360px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; }
+.pt-page { font-weight: 600; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-date { color: var(--muted); font-size: 12.5px; }
+.pt-eng { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pt-type { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 9999px; }
+.pt-type.post { background: #EEF3FF; color: #0052FF; }
+.pt-type.video { background: #F3EEFF; color: #7C3AED; }
+.pt-status { font-size: 12px; font-weight: 600; }
+.pt-status.ok { color: #059669; } .pt-status.bad { color: #DC2626; } .pt-status.warn { color: #B45309; } .pt-status.muted { color: var(--muted); }
+
+tr.pst-success td { background: #F0FDF4 !important; opacity: .7; }
+tr.pst-failed td { background: #FEF2F2 !important; }
+tr.pst-processing td { background: #FFFBEB !important; }
+
+@media (max-width: 720px) {
+  .ff { min-width: 120px; flex: 1 1 140px; }
+  .pp-name { max-width: 110px; }
+}

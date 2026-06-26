@@ -15,6 +15,9 @@
   const SEARCH_THRESHOLD = 8; // > 8 lựa chọn thì hiện ô tìm
   let openInst = null;
 
+  const escTxt = (s) => (s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+  const dotHtml = (o) => (o && o.dataset && o.dataset.dot) ? `<span class="ns-dot ns-dot-${o.dataset.dot}"></span>` : '';
+
   const isCompact = (sel) => sel.classList.contains('select-inline');
 
   function enhance(sel) {
@@ -56,7 +59,8 @@
   function syncLabel(inst) {
     const opt = currentOption(inst.sel);
     const label = inst.trigger.querySelector('.ns-label');
-    label.textContent = (opt ? opt.textContent.trim() : '') || '—';
+    const txt = (opt ? opt.textContent.trim() : '') || '—';
+    label.innerHTML = dotHtml(opt) + escTxt(txt);
     const placeholder = opt && (opt.disabled || opt.value === '');
     label.classList.toggle('ns-placeholder', !!placeholder);
   }
@@ -116,7 +120,7 @@
       el.className = 'ns-option' + (o.disabled ? ' ns-disabled' : '');
       el.setAttribute('role', 'option');
       el.setAttribute('aria-selected', o.index === selIdx && !o.disabled ? 'true' : 'false');
-      el.innerHTML = CHECK + '<span class="ns-otext"></span>';
+      el.innerHTML = CHECK + dotHtml(o) + '<span class="ns-otext"></span>';
       el.querySelector('.ns-otext').textContent = o.textContent.trim();
       if (!o.disabled) {
         el.addEventListener('mouseenter', () => setActive(inst, i));

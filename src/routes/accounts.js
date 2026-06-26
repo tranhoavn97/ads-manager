@@ -21,22 +21,31 @@ router.get('/campaign-types', (req, res) => {
   res.json(CAMPAIGN_TYPE_OPTIONS);
 });
 
+// Cache danh sách tài khoản theo token (giảm gọi lại + còn dùng được khi bị rate-limit)
+const ACCT_CACHE = new Map();
+const ACCT_TTL = 5 * 60 * 1000;
+
 router.get('/adaccounts', requireAuth, async (req, res) => {
+  const token = req.session.fbToken;
+  const cached = ACCT_CACHE.get(token);
+  if (cached && Date.now() - cached.ts < ACCT_TTL) return res.json(cached.data);
   try {
-    const accounts = await getAdAccounts(req.session.fbToken);
-    res.json(
-      accounts.map((a) => ({
-        id: a.id,
-        accountId: a.account_id,
-        name: a.name,
-        currency: a.currency,
-        timezone: a.timezone_name,
-        status: a.account_status,
-        statusLabel: ACCOUNT_STATUS_VI[a.account_status] || 'Không rõ',
-        usable: a.account_status === 1,
-      }))
-    );
+    const accounts = await getAdAccounts(token);
+    const shaped = accounts.map((a) => ({
+      id: a.id,
+      accountId: a.account_id,
+      name: a.name,
+      currency: a.currency,
+      timezone: a.timezone_name,
+      status: a.account_status,
+      statusLabel: ACCOUNT_STATUS_VI[a.account_status] || 'Không rõ',
+      usable: a.account_status === 1,
+    }));
+    ACCT_CACHE.set(token, { data: shaped, ts: Date.now() });
+    res.json(shaped);
   } catch (err) {
+    // Bị rate-limit nhưng đã có cache cũ → vẫn trả về để app dùng được
+    if (cached) return res.json(cached.data);
     handle(err, res);
   }
 });
