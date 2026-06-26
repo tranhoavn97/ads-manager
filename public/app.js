@@ -720,7 +720,7 @@ function selectAccount(acc, card) {
 // ============================================================
 const HEADER_KEYS = [
   ['adAccountId', ['tai khoan quang cao', 'tai khoan', 'ad account', 'ad_account', 'account_id', 'account']],
-  ['pageLink', ['link page', 'link trang', 'trang fanpage', 'fanpage', 'page']],
+  ['pageLink', ['ten page', 'ten fanpage', 'page name', 'link page', 'link trang', 'trang fanpage', 'fanpage', 'page']],
   ['postLink', ['link bai viet', 'bai viet', 'reel', 'anh', 'post', 'link bai', 'bai/reel']],
   ['contentMode', ['che do noi dung', 'che do', 'noidung', 'content mode']],
   ['ctaHandling', ['xu ly cta', 'xu ly', 'cta handling', 'handle cta']],
@@ -853,7 +853,7 @@ function addBlankRow(editImmediately) {
   // Cuộn tới dòng mới + focus ô đầu tiên để gõ liền
   const sc = $('.table-scroll');
   if (sc) sc.scrollTop = sc.scrollHeight;
-  const firstInput = $(`#tableBody tr:last-child .page-link-input`);
+  const firstInput = $(`#tableBody tr:last-child .post-link-input`);
   if (firstInput) firstInput.focus();
   Logger.info(`Thêm 1 dòng trống (#${row.index + 1}).`);
 }
@@ -930,12 +930,12 @@ function clientParsePageId(input) {
   if (!raw) return { id: null };
   if (/^\d+$/.test(raw)) return { id: raw };
 
-  if (/^[a-zA-Z0-9.]{5,}$/.test(raw) && !raw.includes('/') && !raw.toLowerCase().includes('facebook') && !raw.toLowerCase().includes('fb.com')) {
+  if (!raw.includes('/') && !raw.includes('\\') && !/^https?:/i.test(raw) && !raw.toLowerCase().includes('facebook') && !raw.toLowerCase().includes('fb.com')) {
     return { id: null, slug: raw, vanity: true };
   }
 
   const url = tryUrl(raw);
-  if (!url || !isFbHost(url)) return { id: null, error: 'Link Page không phải domain Facebook hợp lệ' };
+  if (!url || !isFbHost(url)) return { id: null, error: 'Tên/Link Page không phải domain Facebook hợp lệ' };
   const pid = url.searchParams.get('id');
   if (pid && /^\d+$/.test(pid)) return { id: pid };
   const segs = url.pathname.split('/').filter(Boolean);
@@ -951,7 +951,7 @@ function clientParsePageId(input) {
   
   const ignoredPaths = new Set(['groups', 'events', 'marketplace', 'gaming', 'watch', 'live', 'photos', 'videos', 'reels', 'reel', 'stories', 'ads']);
   if (ignoredPaths.has(segs[0]?.toLowerCase())) {
-    return { id: null, error: `Link Page không hợp lệ (đường dẫn ${segs[0]} là của hệ thống)` };
+    return { id: null, error: `Tên/Link Page không hợp lệ (đường dẫn ${segs[0]} là của hệ thống)` };
   }
   
   if (segs[0]) return { id: null, slug: segs[0], vanity: true };
@@ -987,14 +987,17 @@ function clientParsePostId(input) {
 }
 
 function clientParseRow(r) {
-  const parsed = { pageId: null, postId: null, objectStoryId: null, pageVanity: null };
+  const parsed = { pageId: null, pageName: null, postId: null, objectStoryId: null, pageVanity: null };
   
   if (!r.contentMode) r.contentMode = 'Sử dụng bài viết có sẵn';
   if (!r.ctaHandling) r.ctaHandling = 'Tự động';
 
   const pg = clientParsePageId(r.pageLink);
   parsed.pageId = pg.id || null;
-  if (pg.vanity) parsed.pageVanity = pg.slug;
+  if (pg.vanity) {
+    parsed.pageVanity = pg.slug;
+    parsed.pageName = pg.slug;
+  }
   if (pg.error) r.warnings.push(pg.error);
 
   if (r.postLink && r.postLink.toString().trim()) {
@@ -1054,7 +1057,6 @@ function clientPreCheck(rows) {
     clientParseRow(r); // tách Page ID / Post ID ngay để xem trước
     
     const missing = [];
-    if (!r.pageLink) missing.push('link Page');
     if (!r.postLink || r.postLink.toString().trim() === '') {
       missing.push('link bài viết');
     }
@@ -1076,7 +1078,7 @@ function clientPreCheck(rows) {
     }
 
     if (r.parsed.pageVanity && !r.parsed.pageId) {
-      r.warnings.push(`Page "@${r.parsed.pageVanity}" là tên (vanity) — cần đăng nhập bằng tài khoản quản lý Page để lấy ID số. Hoặc thay bằng link/ID dạng số.`);
+      r.warnings.push(`Page "${r.parsed.pageVanity}" sẽ được đối chiếu với các Page bạn quản lý khi kiểm tra Facebook.`);
     }
   });
 }
@@ -1109,6 +1111,16 @@ function updateCounts() {
 // ============================================================
 //  Bảng dữ liệu
 // ============================================================
+function pageDisplay(r) {
+  const label = r.parsed?.pageName || r.pageName || r.pageLink || (r.postLink ? 'Tự nhận diện' : '—');
+  const title = [
+    r.parsed?.pageName ? `Tên: ${r.parsed.pageName}` : '',
+    r.parsed?.pageId ? `ID: ${r.parsed.pageId}` : '',
+    r.pageLink ? `Gợi ý: ${r.pageLink}` : '',
+  ].filter(Boolean).join('\n') || label;
+  return { label, title };
+}
+
 function renderTable() {
   const body = $('#tableBody');
   body.innerHTML = '';
@@ -1122,18 +1134,19 @@ function renderTable() {
   });
 
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="10" class="loading">Không có dòng nào khớp bộ lọc.</td></tr>';
+    body.innerHTML = '<tr><td colspan="13" class="loading">Không có dòng nào khớp bộ lọc.</td></tr>';
   }
 
   rows.forEach((r) => {
     const tr = document.createElement('tr');
     const hasErr = r.errors?.length;
+    const page = pageDisplay(r);
     
     if (State.editing.has(r.index)) {
       tr.innerHTML = `
         <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
-        <!-- Link Page -->
-        <td><input type="text" class="input-inline page-link-input" value="${esc(r.pageLink || '')}" placeholder="Link Page"></td>
+        <!-- Tên Page -->
+        <td><input type="text" class="input-inline page-link-input" value="${esc(r.pageLink || '')}" placeholder="Tên Page"></td>
         <!-- Bài viết & Chế độ -->
         <td>
           <input type="text" class="input-inline post-link-input" value="${esc(r.postLink || '')}" placeholder="Link bài viết" style="margin-bottom: 6px;">
@@ -1257,9 +1270,10 @@ function renderTable() {
     } else {
       tr.innerHTML = `
         <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
-        <!-- Link Page -->
+        <!-- Tên Page -->
         <td>
-          <div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.pageLink || '')}">${esc(r.pageLink || '—')}</div>
+          <div class="cell-strong" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(page.title)}">${esc(page.label)}</div>
+          ${r.parsed?.pageId ? `<div class="cell-sub mono">${esc(r.parsed.pageId)}</div>` : ''}
         </td>
         <!-- Bài viết & Chế độ -->
         <td>
@@ -1416,6 +1430,7 @@ function openDrawer(index) {
       <dt>Ngân sách</dt><dd>${esc(r.budget || '—')} · ${budgetModeLabel(r)} · ${budgetLevelLabel(r)}</dd>
       <dt>Thời gian</dt><dd>${esc(r.startDate || '—')} ${r.startTimeRaw ? esc(r.startTimeRaw) : '00:00'} ${r.endDate ? `→ ${esc(r.endDate)} ${r.endTimeRaw ? esc(r.endTimeRaw) : '23:59'}` : ''}</dd>
       ${hasPost ? `
+        <dt>Page</dt><dd>${esc(r.parsed?.pageName || r.pageLink || '—')}</dd>
         <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
         <dt>Post ID thật</dt><dd class="mono">${esc(r.parsed?.postId || '—')}</dd>
         <dt>Video/Media ID</dt><dd class="mono">${esc(r.parsed?.videoId || '—')}</dd>
@@ -1426,6 +1441,7 @@ function openDrawer(index) {
         </dd>
         ${noteHtml}
       ` : `
+        <dt>Page</dt><dd>${esc(r.parsed?.pageName || r.pageLink || '—')}</dd>
         <dt>Page ID</dt><dd class="mono">${esc(r.parsed?.pageId || '—')}</dd>
         <dt>Object ID</dt><dd class="mono">${esc(r.parsed?.objectStoryId || r.parsed?.postId || '—')}</dd>
       `}
@@ -1662,13 +1678,13 @@ function showResults(results, draft) {
 // ============================================================
 function downloadTemplate() {
   const headers = [
-    'Link Page', 'Link bài viết', 'Chế độ nội dung', 'Xử lý CTA', 'Link CTA', 'Nút CTA',
+    'Tên Page', 'Link bài viết', 'Chế độ nội dung', 'Xử lý CTA', 'Link CTA', 'Nút CTA',
     'Tên chiến dịch', 'Tên nhóm quảng cáo', 'Tên quảng cáo', 'Loại chiến dịch',
     'Quốc gia', 'Ngân sách', 'Loại ngân sách', 'Ngày bắt đầu', 'Giờ bắt đầu',
     'Ngày kết thúc', 'Giờ kết thúc', 'Trạng thái', 'Ghi chú'
   ];
   const sample = [
-    'https://www.facebook.com/HaiDangReviewtaphoa',
+    '',
     'https://www.facebook.com/reel/1925057404843374/',
     'Sử dụng bài viết có sẵn',
     'Tự động',

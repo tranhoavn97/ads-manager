@@ -56,8 +56,30 @@ test('validateRow flags errors for missing required fields', () => {
 
   const res = validateRow(row);
   assert.strictEqual(res.status, ROW_STATUS.MISSING);
-  assert.strictEqual(res.errors.includes('Thiếu link Page'), true);
   assert.strictEqual(res.errors.includes('Thiếu link bài viết'), true);
+});
+
+test('validateRow allows blank page field when post link is present', () => {
+  const row = {
+    contentMode: 'NEW_CTA_CREATIVE',
+    ctaHandling: 'AUTO',
+    pageLink: '',
+    postLink: 'https://www.facebook.com/myPageName/posts/1234567890',
+    campaignName: 'Campaign 1',
+    adsetName: 'Adset 1',
+    adName: 'Ad 1',
+    campaignType: 'Tin nhắn',
+    country: 'Việt Nam',
+    budget: '500000',
+    budgetMode: 'Hàng ngày',
+    startDate: '24/06/2026',
+    statusRaw: 'Bật',
+    ctaLink: 'https://example.com'
+  };
+
+  const res = validateRow(row);
+  assert.strictEqual(res.status, ROW_STATUS.VALID);
+  assert.deepStrictEqual(res.errors, []);
 });
 
 test('validateRow passes valid rows', () => {

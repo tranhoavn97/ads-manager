@@ -8,9 +8,9 @@ import {
   getAdCreative, uploadAdImageFromUrl, getTokenPermissions
 } from '../meta-api.js';
 import { config } from '../config.js';
-import { parsePageId, parsePostId, buildObjectStoryId, normalizeFbUrl } from '../parsers.js';
-import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, resolveContentMode, resolveCtaHandling, ROW_STATUS } from '../validators.js';
-import { resolveCampaignType, resolveCta, defaultCtaForType } from '../campaign-mapper.js';
+import { parsePageId, parsePostId, parsePageSlugFromPostLink, normalizeFbUrl } from '../parsers.js';
+import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, resolveContentMode, ROW_STATUS } from '../validators.js';
+import { resolveCampaignType, resolveCta } from '../campaign-mapper.js';
 
 const router = express.Router();
 
@@ -25,23 +25,34 @@ function budgetToMinorUnit(amount, currency) {
 // Lấy danh sách Page sở hữu + map slug->id (cache trong 1 request)
 async function loadOwnedPages(token) {
   const pages = await getPages(token);
+  const idMap = new Map(pages.map((p) => [p.id, p]));
   const idSet = new Set(pages.map((p) => p.id));
   const advertiseSet = new Set(
     pages.filter((p) => !Array.isArray(p.tasks) || p.tasks.includes('ADVERTISE')).map((p) => p.id)
   );
   // Map tên vanity (username / slug trong link / tên đã bỏ dấu) -> ID số
   const usernameMap = new Map();
-  const norm = (s) => (s ?? '').toString().toLowerCase().normalize('NFD')
-    .replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
   for (const p of pages) {
     if (p.username) usernameMap.set(p.username.toLowerCase(), p.id);
     // Tách slug từ trường link (vd https://facebook.com/HaiDangReviewtaphoa)
     const m = (p.link || '').match(/facebook\.com\/([^/?#]+)/i);
     if (m && m[1] && !/^profile\.php$/i.test(m[1])) usernameMap.set(m[1].toLowerCase(), p.id);
     // Khớp theo tên Page đã bỏ dấu/khoảng trắng (vd "Hải Đăng Review tạp hóa" -> haidangreviewtaphoa)
-    if (p.name && norm(p.name)) usernameMap.set(norm(p.name), p.id);
+    if (p.name && normPageKey(p.name)) usernameMap.set(normPageKey(p.name), p.id);
   }
-  return { pages, idSet, advertiseSet, usernameMap };
+  return { pages, idMap, idSet, advertiseSet, usernameMap };
+}
+
+function normPageKey(s) {
+  return (s ?? '').toString().toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
+}
+
+function setParsedPage(parsed, owned, pageId, pageName = null) {
+  if (!pageId) return;
+  const id = String(pageId);
+  parsed.pageId = id;
+  parsed.pageName = pageName || owned.idMap.get(id)?.name || parsed.pageName || null;
 }
 
 // Hàm kiểm tra khả năng truy cập của URL CTA
@@ -110,6 +121,7 @@ router.post('/validate', requireAuth, async (req, res) => {
     const warnings = [...base.warnings];
     const parsed = {
       pageId: null,
+      pageName: null,
       postId: null,
       videoId: null,
       objectStoryId: null,
@@ -149,28 +161,33 @@ router.post('/validate', requireAuth, async (req, res) => {
         errors.push(pageRes.error);
       } else if (pageRes.needsResolve) {
         const key = pageRes.slug.toLowerCase();
-        const normKey = key.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+        const normKey = normPageKey(key);
         if (slugCache.has(key)) {
-          parsed.pageId = slugCache.get(key);
+          const cached = slugCache.get(key);
+          setParsedPage(parsed, owned, cached.id, cached.name);
         } else if (owned.usernameMap.has(key) || owned.usernameMap.has(normKey)) {
-          parsed.pageId = owned.usernameMap.get(key) || owned.usernameMap.get(normKey);
-          slugCache.set(key, parsed.pageId);
+          const ownedPageId = owned.usernameMap.get(key) || owned.usernameMap.get(normKey);
+          const ownedPage = owned.idMap.get(ownedPageId);
+          setParsedPage(parsed, owned, ownedPageId, ownedPage?.name);
+          slugCache.set(key, { id: ownedPageId, name: ownedPage?.name || null });
         } else {
           let resolvedId = null;
+          let resolvedName = null;
           try {
             const r = await resolvePageSlug(req.session.fbToken, pageRes.slug);
             resolvedId = r.id;
+            resolvedName = r.name || null;
           } catch {}
           if (!resolvedId) resolvedId = await scrapePageId(pageRes.slug);
           if (resolvedId) {
-            parsed.pageId = resolvedId;
-            slugCache.set(key, resolvedId);
+            setParsedPage(parsed, owned, resolvedId, resolvedName);
+            slugCache.set(key, { id: resolvedId, name: resolvedName });
           } else {
-            errors.push(`Không lấy được Page ID từ tên "${pageRes.slug}". Hãy thay cột Link Page bằng ID Page dạng số (hoặc link có ID số).`);
+            errors.push(`Không lấy được Page ID từ tên "${pageRes.slug}". Có thể để trống ô Page để hệ thống tự nhận diện từ link bài viết, hoặc nhập ID/link Page dạng số.`);
           }
         }
       } else {
-        parsed.pageId = pageRes.id;
+        setParsedPage(parsed, owned, pageRes.id);
       }
     }
 
@@ -179,7 +196,6 @@ router.post('/validate', requireAuth, async (req, res) => {
       const ctype = resolveCampaignType(row.campaignType);
       const isTraffic = ctype && ctype.id === 'traffic';
       const mode = base.normalized?.contentMode || creativeMode || 'NEW_CTA_CREATIVE';
-      const ctaHand = base.normalized?.ctaHandling || 'AUTO';
       const willUseLink = !!(ctype && ctype.needsLink && !isTraffic && row.ctaLink && row.ctaLink.toString().trim());
       const postRes = parsePostId(row.postLink);
       
@@ -196,31 +212,83 @@ router.post('/validate', requireAuth, async (req, res) => {
         } else {
           let pageId = parsed.pageId || postRes.pageIdFromLink;
           const postToken = req.session.fbToken;
+          let tokenToUse = postToken;
+          let resolved = null;
+          let resolveErrorMsg = null;
           
+          if (pageId) {
+            setParsedPage(parsed, owned, pageId);
+          }
+
+          if (!pageId) {
+            const pageSlugFromPost = parsePageSlugFromPostLink(row.postLink);
+            if (pageSlugFromPost) {
+              const key = pageSlugFromPost.toLowerCase();
+              const normKey = normPageKey(key);
+              if (slugCache.has(key)) {
+                const cached = slugCache.get(key);
+                setParsedPage(parsed, owned, cached.id, cached.name);
+                pageId = parsed.pageId;
+              } else if (owned.usernameMap.has(key) || owned.usernameMap.has(normKey)) {
+                const ownedPageId = owned.usernameMap.get(key) || owned.usernameMap.get(normKey);
+                const ownedPage = owned.idMap.get(ownedPageId);
+                setParsedPage(parsed, owned, ownedPageId, ownedPage?.name);
+                slugCache.set(key, { id: ownedPageId, name: ownedPage?.name || null });
+                pageId = parsed.pageId;
+              } else {
+                try {
+                  const r = await resolvePageSlug(postToken, pageSlugFromPost);
+                  if (r?.id) {
+                    setParsedPage(parsed, owned, r.id, r.name || null);
+                    slugCache.set(key, { id: r.id, name: r.name || null });
+                    pageId = parsed.pageId;
+                  }
+                } catch {}
+              }
+            }
+          }
+
           if (!pageId && postRes.postId) {
             try {
               const postObj = await verifyPostDetails(postToken, postRes.postId);
               if (postObj && postObj.from?.id) {
-                pageId = postObj.from.id;
+                setParsedPage(parsed, owned, postObj.from.id, postObj.from.name);
+                pageId = parsed.pageId;
               }
             } catch (e) {}
           }
           
           if (pageId) {
-            parsed.pageId = pageId;
             const ownerPage = owned.pages.find((p) => p.id === parsed.pageId);
-            const tokenToUse = ownerPage?.access_token || postToken;
-            
-            let resolved = null;
-            let resolveErrorMsg = null;
+            tokenToUse = ownerPage?.access_token || postToken;
             
             try {
               resolved = await resolvePostFromGraph(tokenToUse, parsed.pageId, row.postLink, postRes.postId, postRes.kind);
             } catch (err) {
               resolveErrorMsg = err.message;
             }
-            
-            if (resolved) {
+          }
+
+          if (!resolved && !pageId && postRes.postId) {
+            for (const candidatePage of owned.pages) {
+              try {
+                const candidateToken = candidatePage.access_token || postToken;
+                const found = await resolvePostFromGraph(candidateToken, candidatePage.id, row.postLink, postRes.postId, postRes.kind);
+                if (found) {
+                  resolved = found;
+                  tokenToUse = candidateToken;
+                  setParsedPage(parsed, owned, found.fromPageId || candidatePage.id, found.post?.from?.name || candidatePage.name);
+                  pageId = parsed.pageId;
+                  warnings.push(`Đã tự nhận diện Page "${parsed.pageName || parsed.pageId}" từ link bài viết.`);
+                  break;
+                }
+              } catch (err) {
+                resolveErrorMsg = err.message;
+              }
+            }
+          }
+          
+          if (resolved) {
               let verified = null;
               try {
                 verified = await verifyPostDetails(tokenToUse, resolved.objectStoryId);
@@ -244,10 +312,14 @@ router.post('/validate', requireAuth, async (req, res) => {
                   parsed.sourceObjectId = resolved.sourceObjectId;
                   parsed.permalinkUrl = verified.permalink_url;
                   parsed.verifiedWithGraph = true;
+                  if (verified.from?.id || verified.from?.name) {
+                    setParsedPage(parsed, owned, verified.from?.id || parsed.pageId, verified.from?.name);
+                  }
                   
                   console.log(`[VERIFIED POST ID RESOLUTION] SUCCESS
 - URL đầu vào: ${row.postLink}
 - Page ID: ${parsed.pageId}
+- Page Name: ${parsed.pageName || 'Không có'}
 - ID parse từ URL: ${postRes.postId}
 - Video ID tìm thấy: ${resolved.videoId || 'Không có'}
 - Post ID Meta trả về: ${resolved.postId}
@@ -262,42 +334,43 @@ router.post('/validate', requireAuth, async (req, res) => {
                   resolveErrorMsg = `Xác minh thất bại: ${reasons.join(', ')}`;
                 }
               }
-            }
+          }
             
-            if (!parsed.verifiedWithGraph) {
+          if (!parsed.verifiedWithGraph) {
+            if (!parsed.pageId) {
+              errors.push('Không tự nhận diện được Page từ link bài viết này. Hãy dùng link bài viết có chứa Page/ID, hoặc nhập Tên/Link Page để làm gợi ý.');
+            } else {
               errors.push("Không xác định được Post ID thật từ link này. Tool sẽ không tự ghép Page ID với Video ID.");
-              if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
-              
-              console.log(`[VERIFIED POST ID RESOLUTION] FAILED
+            }
+            if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
+            
+            console.log(`[VERIFIED POST ID RESOLUTION] FAILED
 - URL đầu vào: ${row.postLink}
 - Page ID: ${parsed.pageId}
+- Page Name: ${parsed.pageName || 'Không có'}
 - ID parse từ URL: ${postRes.postId || 'Không có'}
 - Video ID tìm thấy: Không có
 - Post ID Meta trả về: Không có
 - Object Story ID cuối cùng: Không có
 - Kết quả xác minh: Thất bại (${resolveErrorMsg || 'Không tìm thấy bài viết trùng khớp trên Page'})`);
-            } else {
-              if (mode === 'EXISTING_POST_STRICT') {
-                if (!parsed.hasOldCta) {
-                  errors.push('Bài viết chưa có CTA. Chế độ dùng đúng bài viết gốc không thể tự thêm CTA. Hãy tự thêm CTA trong Ads Manager hoặc chọn chế độ Tạo quảng cáo mới.');
-                  if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
-                } else {
-                  const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
-                  if (hasCtaInput) {
-                    warnings.push('Bài viết gốc đã có sẵn CTA. Link CTA và Nút CTA trong Excel sẽ được bỏ qua.');
-                  }
-                }
-              } else if (mode === 'NEW_CTA_CREATIVE') {
-                if (!row.ctaLink || !row.ctaLink.toString().trim()) {
-                  errors.push('Thiếu link CTA để tạo quảng cáo mới có CTA (dark post)');
-                  if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
-                }
-                warnings.push('Chế độ tạo quảng cáo mới (dark post) sao chép từ bài viết gốc. Post ID của quảng cáo sẽ khác bài viết gốc.');
-              }
-            }
           } else {
-            errors.push('Thiếu Page ID để thực hiện xác thực bài viết.');
-            if (status === ROW_STATUS.VALID) status = ROW_STATUS.POST_ERROR;
+            if (mode === 'EXISTING_POST_STRICT') {
+              if (!parsed.hasOldCta) {
+                errors.push('Bài viết chưa có CTA. Chế độ dùng đúng bài viết gốc không thể tự thêm CTA. Hãy tự thêm CTA trong Ads Manager hoặc chọn chế độ Tạo quảng cáo mới.');
+                if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
+              } else {
+                const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
+                if (hasCtaInput) {
+                  warnings.push('Bài viết gốc đã có sẵn CTA. Link CTA và Nút CTA trong Excel sẽ được bỏ qua.');
+                }
+              }
+            } else if (mode === 'NEW_CTA_CREATIVE') {
+              if (!row.ctaLink || !row.ctaLink.toString().trim()) {
+                errors.push('Thiếu link CTA để tạo quảng cáo mới có CTA (dark post)');
+                if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
+              }
+              warnings.push('Chế độ tạo quảng cáo mới (dark post) sao chép từ bài viết gốc. Post ID của quảng cáo sẽ khác bài viết gốc.');
+            }
           }
         }
       }
@@ -305,6 +378,8 @@ router.post('/validate', requireAuth, async (req, res) => {
 
     // 2) Kiểm tra Page thuộc tài khoản đang đăng nhập (chạy sau khi đã resolve qua pageLink hoặc postLink)
     if (parsed.pageId) {
+      const ownedPage = owned.idMap.get(parsed.pageId);
+      if (ownedPage?.name) parsed.pageName = parsed.pageName || ownedPage.name;
       if (!owned.idSet.has(parsed.pageId)) {
         errors.push('Page không thuộc tài khoản Facebook đang đăng nhập (không quản lý Page này).');
         if (status === ROW_STATUS.VALID) status = ROW_STATUS.PERMISSION;

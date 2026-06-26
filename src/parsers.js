@@ -26,7 +26,7 @@ function isFacebookHost(url) {
 }
 
 /**
- * Phân tích Page ID từ link Page.
+ * Phân tích Page ID từ tên/link Page.
  * Trả về: { id, slug, needsResolve, error }
  *  - id: Page ID dạng số nếu lấy được trực tiếp
  *  - slug: tên vanity (vd "highlandscoffee") cần gọi Graph API để lấy ID số
@@ -41,14 +41,15 @@ export function parsePageId(input) {
     return { id: raw, slug: null, needsResolve: false, error: null };
   }
 
-  // Nếu chỉ là vanity name / username trực tiếp (không phải URL)
-  if (/^[a-zA-Z0-9.]{5,}$/.test(raw) && !raw.includes('/') && !raw.toLowerCase().includes('facebook') && !raw.toLowerCase().includes('fb.com')) {
+  // Nếu chỉ là vanity/name trực tiếp (không phải URL).
+  // Cho phép cả tên Page có dấu/khoảng trắng để map với Page đang quản lý.
+  if (!raw.includes('/') && !raw.includes('\\') && !/^https?:/i.test(raw) && !raw.toLowerCase().includes('facebook') && !raw.toLowerCase().includes('fb.com')) {
     return { id: null, slug: raw, needsResolve: true, error: null };
   }
 
   const url = tryParseUrl(raw);
   if (!url || !isFacebookHost(url)) {
-    return { id: null, slug: null, needsResolve: false, error: 'Link Page không phải domain Facebook hợp lệ' };
+    return { id: null, slug: null, needsResolve: false, error: 'Tên/Link Page không phải domain Facebook hợp lệ' };
   }
 
   // profile.php?id=NUM
@@ -91,7 +92,7 @@ export function parsePageId(input) {
   // Các path hệ thống của FB không phải page
   const ignoredPaths = new Set(['groups', 'events', 'marketplace', 'gaming', 'watch', 'live', 'photos', 'videos', 'reels', 'reel', 'stories', 'ads']);
   if (ignoredPaths.has(segments[0]?.toLowerCase())) {
-    return { id: null, slug: null, needsResolve: false, error: `Link Page không hợp lệ (đường dẫn ${segments[0]} là của hệ thống)` };
+    return { id: null, slug: null, needsResolve: false, error: `Tên/Link Page không hợp lệ (đường dẫn ${segments[0]} là của hệ thống)` };
   }
 
   // Vanity name -> cần resolve qua Graph API
@@ -203,6 +204,33 @@ export function parsePostId(input) {
   }
 
   return { postId: null, pageIdFromLink: null, kind: null, opaque: false, error: 'Không nhận dạng được bài viết/reel/ảnh từ link' };
+}
+
+/**
+ * Lấy vanity/slug Page từ các link bài viết có dạng /<page>/posts|videos|photos/...
+ * Không xử lý các link hệ thống như /reel/<id> vì URL không chứa Page.
+ */
+export function parsePageSlugFromPostLink(input) {
+  const raw = (input ?? '').toString().trim();
+  if (!raw || /^\d+$/.test(raw) || /^(\d+)_(\d+)$/.test(raw)) return null;
+
+  const url = tryParseUrl(raw);
+  if (!url || !isFacebookHost(url)) return null;
+
+  const segments = url.pathname.split('/').filter(Boolean);
+  if (segments.length < 2) return null;
+
+  const first = segments[0]?.toLowerCase();
+  const second = segments[1]?.toLowerCase();
+  const ignoredFirst = new Set([
+    'groups', 'events', 'marketplace', 'gaming', 'watch', 'live',
+    'photo.php', 'permalink.php', 'story.php', 'reel', 'reels',
+    'video', 'videos', 'photos', 'stories', 'ads', 'share', 'shares'
+  ]);
+  if (!first || ignoredFirst.has(first)) return null;
+
+  if (['posts', 'videos', 'photos'].includes(second)) return segments[0];
+  return null;
 }
 
 function numericOrOpaque(idCandidate, pageIdFromLink, kind) {
