@@ -11,13 +11,7 @@ const LOG_FILE = path.join(LOG_DIR, 'api_calls.log');
 
 async function logApiCall(method, pathStr, params, statusCode, duration, errorMsg, headers) {
   try {
-    if (!fs.existsSync(LOG_DIR)) {
-      fs.mkdirSync(LOG_DIR, { recursive: true });
-    }
-    const appUsage = headers?.['x-app-usage'] || null;
-    const adAccountUsage = headers?.['x-ad-account-usage'] || null;
-    const bizUsage = headers?.['x-business-use-case-usage'] || null;
-    
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
     const logEntry = {
       timestamp: new Date().toISOString(),
       method,
@@ -27,24 +21,17 @@ async function logApiCall(method, pathStr, params, statusCode, duration, errorMs
       durationMs: duration,
       error: errorMsg || null,
       rateLimit: {
-        appUsage,
-        adAccountUsage,
-        bizUsage
-      }
+        appUsage: headers?.['x-app-usage'] || null,
+        adAccountUsage: headers?.['x-ad-account-usage'] || null,
+        bizUsage: headers?.['x-business-use-case-usage'] || null,
+      },
     };
-    
     await fs.promises.appendFile(LOG_FILE, JSON.stringify(logEntry) + '\n', 'utf8');
-    console.log(`[API Call] ${method} ${pathStr} - Status: ${statusCode} - ${duration}ms${appUsage ? ` (App: ${appUsage})` : ''}`);
+    console.log(`[API Call] ${method} ${pathStr} - Status: ${statusCode} - ${duration}ms`);
   } catch (err) {
     console.error('Lỗi khi ghi log API:', err.message);
   }
 }
-
-// ============================================================
-//  Lớp bọc Meta Marketing API (Graph API)
-//  - Tất cả lời gọi đều dùng access token của phiên đăng nhập
-//  - Lỗi Graph API được chuẩn hoá và dịch sang tiếng Việt
-// ============================================================
 
 export class MetaApiError extends Error {
   constructor(message, { code, subcode, type, fbtrace, status } = {}) {
@@ -58,7 +45,6 @@ export class MetaApiError extends Error {
   }
 }
 
-// Bản đồ mã lỗi phổ biến của Meta -> thông điệp tiếng Việt
 const ERROR_VI = {
   190: 'Token đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại Facebook.',
   10: 'Ứng dụng chưa được cấp quyền cần thiết. Hãy duyệt app hoặc thêm vai trò cho tài khoản.',
@@ -75,8 +61,7 @@ function translateError(fbError, httpStatus) {
   const subcode = fbError?.error_subcode;
   const base = ERROR_VI[code];
   const original = fbError?.error_user_msg || fbError?.message || 'Lỗi không xác định từ Meta API';
-  const message = base ? `${base} (Chi tiết: ${original})` : original;
-  return new MetaApiError(message, {
+  return new MetaApiError(base ? `${base} (Chi tiết: ${original})` : original, {
     code,
     subcode,
     type: fbError?.type,
@@ -89,19 +74,10 @@ async function call(method, path, { token, params = {}, data = null } = {}) {
   const url = `${graphBase}/${path.replace(/^\//, '')}`;
   const start = Date.now();
   try {
-    const res = await axios({
-      method,
-      url,
-      params: { access_token: token, ...params },
-      data,
-      timeout: 30000,
-      headers: { 'Content-Type': 'application/json' },
-    });
-    const duration = Date.now() - start;
-    await logApiCall(method, path, params, res.status, duration, null, res.headers);
+    const res = await axios({ method, url, params: { access_token: token, ...params }, data, timeout: 30000, headers: { 'Content-Type': 'application/json' } });
+    await logApiCall(method, path, params, res.status, Date.now() - start, null, res.headers);
     return res.data;
   } catch (err) {
-    const duration = Date.now() - start;
     let finalError = err;
     let statusCode = 502;
     if (err.response?.data?.error) {
@@ -113,290 +89,164 @@ async function call(method, path, { token, params = {}, data = null } = {}) {
     } else {
       finalError = new MetaApiError(`Lỗi kết nối tới Meta API: ${err.message}`, { status: 502 });
     }
-    await logApiCall(method, path, params, statusCode, duration, finalError.message, err.response?.headers);
+    await logApiCall(method, path, params, statusCode, Date.now() - start, finalError.message, err.response?.headers);
     throw finalError;
   }
 }
 
-// --------- Đăng nhập / thông tin người dùng ---------
-
 export async function exchangeCodeForToken({ code, appId, appSecret, redirectUri }) {
-  const data = await call('GET', 'oauth/access_token', {
-    params: { client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code },
-    token: undefined,
-  });
-  return data; // { access_token, token_type, expires_in }
+  return call('GET', 'oauth/access_token', { params: { client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code }, token: undefined });
 }
-
 export async function getLongLivedToken({ appId, appSecret, shortToken }) {
-  const data = await call('GET', 'oauth/access_token', {
-    params: {
-      grant_type: 'fb_exchange_token',
-      client_id: appId,
-      client_secret: appSecret,
-      fb_exchange_token: shortToken,
-    },
-  });
-  return data; // { access_token, expires_in }
+  return call('GET', 'oauth/access_token', { params: { grant_type: 'fb_exchange_token', client_id: appId, client_secret: appSecret, fb_exchange_token: shortToken } });
 }
-
 export async function getMe(token) {
-  // Thử lấy kèm ảnh đại diện; nếu token thiếu quyền ảnh thì lùi về id,name
-  // để KHÔNG làm hỏng đăng nhập.
-  try {
-    return await call('GET', 'me', { token, params: { fields: 'id,name,picture.width(72).height(72)' } });
-  } catch (err) {
-    return call('GET', 'me', { token, params: { fields: 'id,name' } });
-  }
+  try { return await call('GET', 'me', { token, params: { fields: 'id,name,picture.width(72).height(72)' } }); }
+  catch { return call('GET', 'me', { token, params: { fields: 'id,name' } }); }
 }
-
-// --------- Tài khoản quảng cáo & Page ---------
-
 export async function getAdAccounts(token) {
-  const data = await call('GET', 'me/adaccounts', {
-    token,
-    params: { fields: 'id,account_id,name,account_status,currency,timezone_name', limit: 200 },
-  });
+  const data = await call('GET', 'me/adaccounts', { token, params: { fields: 'id,account_id,name,account_status,currency,timezone_name', limit: 200 } });
   return data.data || [];
 }
-
 export async function getPages(token) {
-  const data = await call('GET', 'me/accounts', {
-    token,
-    params: { fields: 'id,name,username,link,access_token,tasks', limit: 200 },
-  });
+  const data = await call('GET', 'me/accounts', { token, params: { fields: 'id,name,username,link,access_token,tasks', limit: 200 } });
   return data.data || [];
 }
-
-// Lấy ID số của Page từ tên vanity (slug) qua Graph API
 export async function resolvePageSlug(token, slug) {
-  const data = await call('GET', encodeURIComponent(slug), {
-    token,
-    params: { fields: 'id,name' },
-  });
-  return data; // { id, name }
+  return call('GET', encodeURIComponent(slug), { token, params: { fields: 'id,name' } });
 }
-
-// Dò Page ID số từ trang công khai (m.facebook.com) khi Graph API bị chặn.
-// Trả về chuỗi ID hoặc null.
 export async function scrapePageId(slug) {
   const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
-  const url = `https://m.facebook.com/${encodeURIComponent(slug)}`;
   try {
-    const res = await axios.get(url, {
-      headers: { 'User-Agent': ua, 'Accept-Language': 'vi-VN,vi;q=0.9', Accept: 'text/html' },
-      timeout: 15000,
-      maxRedirects: 5,
-    });
+    const res = await axios.get(`https://m.facebook.com/${encodeURIComponent(slug)}`, { headers: { 'User-Agent': ua, 'Accept-Language': 'vi-VN,vi;q=0.9', Accept: 'text/html' }, timeout: 15000, maxRedirects: 5 });
     const html = String(res.data || '');
-    const m =
-      html.match(/"pageID":"?(\d{6,})"?/) ||
-      html.match(/"delegate_page":\s*\{\s*"id":\s*"(\d{6,})"/) ||
-      html.match(/"entity_id":"(\d{6,})"/) ||
-      html.match(/fb:\/\/page\/\?id=(\d{6,})/) ||
-      html.match(/"pageID"\s*:\s*(\d{6,})/);
+    const m = html.match(/"pageID":"?(\d{6,})"?/) || html.match(/"delegate_page":\s*\{\s*"id":\s*"(\d{6,})"/) || html.match(/"entity_id":"(\d{6,})"/) || html.match(/fb:\/\/page\/\?id=(\d{6,})/) || html.match(/"pageID"\s*:\s*(\d{6,})/);
     return m ? m[1] : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
-
-// Kiểm tra bài viết có tồn tại / dùng được không
 export async function checkPostExists(token, objectStoryId) {
-  try {
-    return await call('GET', objectStoryId, {
-      token,
-      params: { fields: 'id,from{id,name},call_to_action,message,object_id,type,attachments{media,type,target}' }
-    });
-  } catch (err) {
-    if (err instanceof MetaApiError && (err.code === 100 || err.message.includes('fields') || err.message.includes('parameter'))) {
-      return await call('GET', objectStoryId, { token, params: { fields: 'id' } });
-    }
+  try { return await call('GET', objectStoryId, { token, params: { fields: 'id,from{id,name},call_to_action,message,object_id,type,attachments{media,type,target}' } }); }
+  catch (err) {
+    if (err instanceof MetaApiError && (err.code === 100 || err.message.includes('fields') || err.message.includes('parameter'))) return call('GET', objectStoryId, { token, params: { fields: 'id' } });
     throw err;
   }
 }
-
-// --------- Tạo Campaign / Ad Set / Creative / Ad ---------
 
 function actPath(adAccountId, suffix) {
   const id = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
   return `${id}/${suffix}`;
 }
+export async function createCampaign(token, adAccountId, payload) { return call('POST', actPath(adAccountId, 'campaigns'), { token, data: payload }); }
+export async function createAdSet(token, adAccountId, payload) { return call('POST', actPath(adAccountId, 'adsets'), { token, data: payload }); }
+export async function createAdCreative(token, adAccountId, payload) { return call('POST', actPath(adAccountId, 'adcreatives'), { token, data: payload }); }
+export async function createAd(token, adAccountId, payload) { return call('POST', actPath(adAccountId, 'ads'), { token, data: payload }); }
 
-export async function createCampaign(token, adAccountId, payload) {
-  return call('POST', actPath(adAccountId, 'campaigns'), { token, data: payload });
-}
-
-export async function createAdSet(token, adAccountId, payload) {
-  return call('POST', actPath(adAccountId, 'adsets'), { token, data: payload });
-}
-
-export async function createAdCreative(token, adAccountId, payload) {
-  return call('POST', actPath(adAccountId, 'adcreatives'), { token, data: payload });
-}
-
-export async function createAd(token, adAccountId, payload) {
-  return call('POST', actPath(adAccountId, 'ads'), { token, data: payload });
-}
-
-/**
- * So sánh lỏng trùng khớp URL bài viết
- */
 export function isPermalinkMatch(permalinkUrl, userInputUrl, parsedId) {
   if (!permalinkUrl || !userInputUrl) return false;
-  
-  const normPermalink = normalizeFbUrl(permalinkUrl);
-  const normInput = normalizeFbUrl(userInputUrl);
-  
-  if (normPermalink === normInput) return true;
-  
-  if (parsedId && (permalinkUrl.includes(parsedId) || userInputUrl.includes(parsedId))) {
-    return true;
-  }
-  
-  return false;
+  const p = normalizeFbUrl(permalinkUrl);
+  const u = normalizeFbUrl(userInputUrl);
+  return p === u || !!(parsedId && (permalinkUrl.includes(parsedId) || userInputUrl.includes(parsedId)));
 }
 
-/**
- * Dò tìm bài đăng chứa video/Reel hoặc khớp URL từ Graph API
- */
+function cleanPostId(id, pageId) {
+  if (!id) return null;
+  const s = String(id);
+  if (s.includes('_')) return s;
+  return pageId ? `${pageId}_${s}` : s;
+}
+
+function buildResolved(post, pageId, videoId = null) {
+  const objectStoryId = cleanPostId(post.id || post.post_id, pageId);
+  if (!objectStoryId) return null;
+  return {
+    post,
+    objectStoryId,
+    postId: objectStoryId.includes('_') ? objectStoryId.split('_')[1] : objectStoryId,
+    videoId: videoId || post.object_id || null,
+    sourceObjectId: videoId || post.object_id || null,
+    permalinkUrl: post.permalink_url || post.permalink || post.link || null,
+    fromPageId: post.from?.id || pageId,
+  };
+}
+
+async function tryGetObject(token, id, fields) {
+  try { return await call('GET', id, { token, params: { fields } }); }
+  catch (err) { console.error(`Bỏ qua object ${id}:`, err.message); return null; }
+}
+
+async function directResolveVideoOrPost(token, pageId, parsedId, kind) {
+  if (!parsedId) return null;
+  const ids = [...new Set([parsedId, `${pageId}_${parsedId}`])];
+  const postFields = 'id,post_id,permalink_url,from{id,name},created_time,type,object_id,attachments{media,type,target,url,subattachments{media,type,target,url}}';
+  const videoFields = 'id,post_id,permalink_url,permalink,from{id,name},created_time,source,description,title';
+
+  for (const id of ids) {
+    const post = await tryGetObject(token, id, postFields);
+    if (post?.id && (!post.from?.id || String(post.from.id) === String(pageId))) return buildResolved(post, pageId, kind === 'video' || kind === 'reel' ? parsedId : null);
+  }
+
+  if (kind === 'video' || kind === 'reel') {
+    const video = await tryGetObject(token, parsedId, videoFields);
+    if (video?.post_id) {
+      const post = await tryGetObject(token, video.post_id, postFields);
+      if (post?.id && (!post.from?.id || String(post.from.id) === String(pageId))) return buildResolved(post, pageId, video.id || parsedId);
+      return buildResolved({ id: video.post_id, permalink_url: video.permalink_url || video.permalink, from: video.from }, pageId, video.id || parsedId);
+    }
+  }
+  return null;
+}
+
 export async function resolvePostFromGraph(token, pageId, postLink, parsedId, kind) {
   const normalizedInputUrl = normalizeFbUrl(postLink);
-  
-  let posts = [];
+
+  // Ưu tiên resolve trực tiếp Reel/Video ID trước. Nhiều link /reel/{id} chỉ chứa video_id,
+  // Graph object video đôi khi trả post_id nhanh hơn việc quét feed.
+  const direct = await directResolveVideoOrPost(token, pageId, parsedId, kind);
+  if (direct) return direct;
+
   const postFields = 'id,permalink_url,from{id,name},created_time,type,object_id,attachments{media,type,target,url,subattachments{media,type,target,url}}';
-  
-  const addPostsFromEdge = async (edge) => {
+  const posts = [];
+  const seen = new Set();
+  const addPostsFromEdge = async (edge, limit = 100) => {
     try {
-      const res = await call('GET', `${pageId}/${edge}`, {
-        token,
-        params: { fields: postFields, limit: 100 }
-      });
-      if (res && Array.isArray(res.data)) {
-        const existingIds = new Set(posts.map(p => p.id));
-        for (const p of res.data) {
-          if (!existingIds.has(p.id)) posts.push(p);
-        }
+      const res = await call('GET', `${pageId}/${edge}`, { token, params: { fields: postFields, limit } });
+      for (const p of (Array.isArray(res?.data) ? res.data : [])) {
+        if (p.id && !seen.has(p.id)) { seen.add(p.id); posts.push(p); }
       }
-    } catch (err) {
-      console.error(`Lỗi khi gọi /${pageId}/${edge}:`, err.message);
-    }
+    } catch (err) { console.error(`Lỗi khi gọi /${pageId}/${edge}:`, err.message); }
   };
 
-  // /feed thường chứa cả bài video/reel mà /posts hoặc /published_posts có thể bỏ sót.
-  await addPostsFromEdge('posts');
-  await addPostsFromEdge('published_posts');
-  await addPostsFromEdge('feed');
+  await addPostsFromEdge('posts', 100);
+  await addPostsFromEdge('published_posts', 100);
+  await addPostsFromEdge('feed', 100);
+  await addPostsFromEdge('promotable_posts', 100);
 
-  const valueHasId = (value, id) => {
-    if (!value || !id) return false;
-    return String(value).includes(String(id));
-  };
-
+  const valueHasId = (value, id) => !!value && !!id && String(value).includes(String(id));
   const attachmentHasId = (att, id) => {
     if (!att || !id) return false;
-    if (att.target?.id === id || att.media?.id === id) return true;
+    if (String(att.target?.id || '') === String(id) || String(att.media?.id || '') === String(id)) return true;
     if (valueHasId(att.url, id) || valueHasId(att.target?.url, id) || valueHasId(att.media?.source, id)) return true;
-    const sub = att.subattachments?.data || [];
-    return sub.some((child) => attachmentHasId(child, id));
+    return (att.subattachments?.data || []).some((child) => attachmentHasId(child, id));
   };
-
   const containsVideoId = (post, videoId) => {
     if (!videoId) return false;
-    const attachments = post.attachments?.data || [];
-    if (post.object_id === videoId) return true;
+    if (String(post.object_id || '') === String(videoId)) return true;
     if (valueHasId(post.permalink_url, videoId)) return true;
-    return attachments.some((att) => attachmentHasId(att, videoId));
+    return (post.attachments?.data || []).some((att) => attachmentHasId(att, videoId));
   };
 
-  // Tìm trong danh sách posts thu thập được
   for (const post of posts) {
-    const normPostUrl = normalizeFbUrl(post.permalink_url);
-    const isUrlMatch = normPostUrl && normalizedInputUrl && (normPostUrl === normalizedInputUrl);
-    
-    let isVideoMatch = false;
-    if (kind === 'reel' || kind === 'video') {
-      isVideoMatch = containsVideoId(post, parsedId);
-    }
-    
+    const isUrlMatch = normalizeFbUrl(post.permalink_url) === normalizedInputUrl;
+    const isVideoMatch = (kind === 'reel' || kind === 'video') && containsVideoId(post, parsedId);
     const isIdMatch = post.id === parsedId || post.id === `${pageId}_${parsedId}`;
-
-    if (isUrlMatch || isVideoMatch || isIdMatch) {
-      let videoId = null;
-      if (kind === 'reel' || kind === 'video') {
-        videoId = parsedId;
-      } else {
-        videoId = findAttachmentVideoId(post.attachments?.data || []);
-      }
-      
-      return {
-        post,
-        objectStoryId: post.id,
-        postId: post.id.includes('_') ? post.id.split('_')[1] : post.id,
-        videoId,
-        sourceObjectId: videoId,
-        permalinkUrl: post.permalink_url,
-        fromPageId: post.from?.id || pageId,
-      };
-    }
+    if (isUrlMatch || isVideoMatch || isIdMatch) return buildResolved(post, pageId, (kind === 'reel' || kind === 'video') ? parsedId : findAttachmentVideoId(post.attachments?.data || []));
   }
 
-  // 3. Reels/video: tìm video object của Page rồi lấy post_id nếu Meta trả về.
-  if (parsedId && (kind === 'reel' || kind === 'video')) {
-    const video = await findPageVideoById(token, pageId, parsedId);
-    if (video?.post_id) {
-      try {
-        const post = await call('GET', video.post_id, {
-          token,
-          params: { fields: 'id,permalink_url,from{id,name},created_time,type,object_id' }
-        });
-        if (post?.id && (!post.from?.id || post.from.id === pageId)) {
-          return {
-            post,
-            objectStoryId: post.id,
-            postId: post.id.includes('_') ? post.id.split('_')[1] : post.id,
-            videoId: video.id,
-            sourceObjectId: video.id,
-            permalinkUrl: post.permalink_url || video.permalink_url,
-            fromPageId: post.from?.id || video.from?.id || pageId,
-          };
-        }
-      } catch (err) {
-        console.error(`Lỗi khi lấy post_id ${video.post_id} của video ${parsedId}:`, err.message);
-      }
-    }
-  }
-
-  // 4. Fallback tìm trực tiếp cho mọi loại bài viết/reel/video nếu có parsedId
-  if (parsedId) {
-    const candidates = [
-      parsedId.includes('_') ? parsedId : `${pageId}_${parsedId}`,
-      parsedId
-    ];
-    for (const candidateId of candidates) {
-      try {
-        const post = await call('GET', candidateId, {
-          token,
-          params: { fields: 'id,permalink_url,from{id,name},created_time,type,object_id' }
-        });
-        if (post && post.id) {
-          const isPageMatch = post.from?.id === pageId;
-          if (isPageMatch) {
-            return {
-              post,
-              objectStoryId: post.id,
-              postId: post.id.includes('_') ? post.id.split('_')[1] : post.id,
-              videoId: post.type === 'video' ? post.object_id : (kind === 'video' || kind === 'reel' ? parsedId : null),
-              sourceObjectId: post.type === 'video' ? post.object_id : (kind === 'video' || kind === 'reel' ? parsedId : null),
-              permalinkUrl: post.permalink_url,
-              fromPageId: post.from?.id || pageId,
-            };
-          }
-        }
-      } catch (err) {
-        // Bỏ qua lỗi direct fetch
-      }
-    }
+  const video = parsedId && (kind === 'reel' || kind === 'video') ? await findPageVideoById(token, pageId, parsedId) : null;
+  if (video?.post_id) {
+    const post = await tryGetObject(token, video.post_id, postFields);
+    if (post?.id && (!post.from?.id || String(post.from.id) === String(pageId))) return buildResolved(post, pageId, video.id || parsedId);
+    return buildResolved({ id: video.post_id, permalink_url: video.permalink_url, from: video.from }, pageId, video.id || parsedId);
   }
 
   return null;
@@ -413,80 +263,35 @@ function findAttachmentVideoId(attachments) {
 }
 
 async function findPageVideoById(token, pageId, videoId) {
-  const videoFields = 'id,post_id,permalink_url,from{id,name},created_time,source,description,title';
-  const edges = ['videos', 'video_reels'];
-  for (const edge of edges) {
+  const fields = 'id,post_id,permalink_url,from{id,name},created_time,source,description,title';
+  for (const edge of ['videos', 'video_reels']) {
     try {
-      const res = await call('GET', `${pageId}/${edge}`, {
-        token,
-        params: { fields: videoFields, limit: 100 }
-      });
-      const videos = Array.isArray(res?.data) ? res.data : [];
-      const found = videos.find((video) => (
-        video.id === videoId ||
-        String(video.post_id || '').includes(videoId) ||
-        String(video.permalink_url || '').includes(videoId)
-      ));
+      const res = await call('GET', `${pageId}/${edge}`, { token, params: { fields, limit: 100 } });
+      const found = (Array.isArray(res?.data) ? res.data : []).find((v) => String(v.id) === String(videoId) || String(v.post_id || '').includes(videoId) || String(v.permalink_url || '').includes(videoId));
       if (found) return found;
-    } catch (err) {
-      console.error(`Lỗi khi gọi /${pageId}/${edge}:`, err.message);
-    }
+    } catch (err) { console.error(`Lỗi khi gọi /${pageId}/${edge}:`, err.message); }
   }
   return null;
 }
 
-/**
- * Kiểm tra xác thực thông tin chi tiết của object_story_id
- */
 export async function verifyPostDetails(token, objectStoryId) {
-  return call('GET', objectStoryId, {
-    token,
-    params: { fields: 'id,permalink_url,from{id,name},created_time,call_to_action,message,object_id,type,attachments{media,type,target}' }
-  });
+  return call('GET', objectStoryId, { token, params: { fields: 'id,permalink_url,from{id,name},created_time,call_to_action,message,object_id,type,attachments{media,type,target}' } });
 }
-
-/**
- * Cập nhật nút kêu gọi hành động (CTA) cho bài đăng hiện có trên trang
- */
 export async function updatePostCta(token, objectStoryId, ctaType, ctaLink) {
-  const payload = {
-    call_to_action: {
-      type: ctaType
-    }
-  };
-  if (ctaLink) {
-    payload.call_to_action.value = { link: ctaLink };
-  }
+  const payload = { call_to_action: { type: ctaType } };
+  if (ctaLink) payload.call_to_action.value = { link: ctaLink };
   return call('POST', objectStoryId, { token, data: payload });
 }
-
-/**
- * Đọc thông tin ad creative từ Meta
- */
 export async function getAdCreative(token, creativeId, fields = 'id,object_story_id,effective_object_story_id,call_to_action') {
   return call('GET', creativeId, { token, params: { fields } });
 }
-
-/**
- * Tải ảnh lên thư viện của tài khoản quảng cáo từ một URL từ xa
- */
 export async function uploadAdImageFromUrl(token, adAccountId, imageUrl) {
-  const data = await call('POST', actPath(adAccountId, 'adimages'), {
-    token,
-    data: { url: imageUrl }
-  });
+  const data = await call('POST', actPath(adAccountId, 'adimages'), { token, data: { url: imageUrl } });
   const keys = Object.keys(data?.images || {});
-  if (keys.length > 0) {
-    return data.images[keys[0]].hash;
-  }
+  if (keys.length > 0) return data.images[keys[0]].hash;
   throw new Error('Không lấy được hash ảnh từ Meta API.');
 }
 
-// ============================================================
-//  QUẢN LÝ (Ads Manager thu gọn): đọc cây + sửa/bật-tắt/xoá
-// ============================================================
-
-// Lấy toàn bộ các trang của một edge (tự theo paging.next)
 async function getAllPages(token, path, params, maxItems = 5000) {
   let out = [];
   let data = await call('GET', path, { token, params });
@@ -495,70 +300,37 @@ async function getAllPages(token, path, params, maxItems = 5000) {
     if (out.length >= maxItems) break;
     const next = data.paging?.cursors?.after;
     if (!next || !data.paging?.next) break;
-    await new Promise((r) => setTimeout(r, 120)); // nhịp nhẹ tránh rate-limit
+    await new Promise((r) => setTimeout(r, 120));
     data = await call('GET', path, { token, params: { ...params, after: next } });
   }
   return out;
 }
 
 const INSIGHTS_FIELDS = 'spend,impressions,reach,clicks,ctr,cpm,actions';
-
-// Lấy insights PHẲNG theo cấp (campaign|adset|ad) — 1 truy vấn nhẹ, không lồng
-// → tránh lỗi "reduce the amount of data" và giảm mạnh số lần gọi API.
 export async function getInsights(token, adAccountId, level, datePreset) {
   const idField = level === 'campaign' ? 'campaign_id' : level === 'adset' ? 'adset_id' : 'ad_id';
-  const rows = await getAllPages(token, actPath(adAccountId, 'insights'), {
-    level,
-    date_preset: datePreset || 'last_30d',
-    fields: `${idField},${INSIGHTS_FIELDS}`,
-    limit: 200,
-  }, 4000);
+  const rows = await getAllPages(token, actPath(adAccountId, 'insights'), { level, date_preset: datePreset || 'last_30d', fields: `${idField},${INSIGHTS_FIELDS}`, limit: 200 }, 4000);
   const map = {};
   for (const r of rows) if (r[idField]) map[r[idField]] = r;
   return map;
 }
-
 export async function getCampaigns(token, adAccountId) {
-  const fields = 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,stop_time,created_time,updated_time';
-  return getAllPages(token, actPath(adAccountId, 'campaigns'), { fields, limit: 100 });
+  return getAllPages(token, actPath(adAccountId, 'campaigns'), { fields: 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,stop_time,created_time,updated_time', limit: 100 });
 }
-
 export async function getAdSets(token, adAccountId) {
-  const fields = 'id,name,status,effective_status,campaign_id,optimization_goal,billing_event,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,end_time';
-  return getAllPages(token, actPath(adAccountId, 'adsets'), { fields, limit: 100 });
+  return getAllPages(token, actPath(adAccountId, 'adsets'), { fields: 'id,name,status,effective_status,campaign_id,optimization_goal,billing_event,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,end_time', limit: 100 });
 }
-
 export async function getAds(token, adAccountId) {
-  const fields = 'id,name,status,effective_status,adset_id,campaign_id,creative{id,thumbnail_url,object_story_id,effective_object_story_id}';
-  return getAllPages(token, actPath(adAccountId, 'ads'), { fields, limit: 100 });
+  return getAllPages(token, actPath(adAccountId, 'ads'), { fields: 'id,name,status,effective_status,adset_id,campaign_id,creative{id,thumbnail_url,object_story_id,effective_object_story_id}', limit: 100 });
 }
-
-// Cập nhật chung (đổi tên, đổi trạng thái, đổi ngân sách…)
-export async function updateNode(token, id, payload) {
-  return call('POST', String(id), { token, data: payload });
-}
-
-// Xoá một node (campaign/adset/ad)
-export async function deleteNode(token, id) {
-  return call('DELETE', String(id), { token });
-}
-
-// Nhân bản (campaign/adset/ad) qua endpoint /copies
+export async function updateNode(token, id, payload) { return call('POST', String(id), { token, data: payload }); }
+export async function deleteNode(token, id) { return call('DELETE', String(id), { token }); }
 export async function duplicateNode(token, id, level) {
   const data = { status_option: 'PAUSED' };
   if (level === 'campaign') data.deep_copy = true;
   return call('POST', `${id}/copies`, { token, data });
 }
-
-/**
- * Kiểm tra các quyền (scopes) đã được cấp của token
- */
 export async function getTokenPermissions(token) {
-  try {
-    const res = await call('GET', 'me/permissions', { token });
-    return res.data || [];
-  } catch (err) {
-    console.error('Lỗi lấy quyền từ token:', err.message);
-    throw err;
-  }
+  const res = await call('GET', 'me/permissions', { token });
+  return res.data || [];
 }
