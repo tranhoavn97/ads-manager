@@ -270,22 +270,7 @@ router.post('/validate', requireAuth, async (req, res) => {
           }
 
           if (!resolved && !pageId && postRes.postId) {
-            for (const candidatePage of owned.pages) {
-              try {
-                const candidateToken = candidatePage.access_token || postToken;
-                const found = await resolvePostFromGraph(candidateToken, candidatePage.id, row.postLink, postRes.postId, postRes.kind);
-                if (found) {
-                  resolved = found;
-                  tokenToUse = candidateToken;
-                  setParsedPage(parsed, owned, found.fromPageId || candidatePage.id, found.post?.from?.name || candidatePage.name);
-                  pageId = parsed.pageId;
-                  warnings.push(`Đã tự nhận diện Page "${parsed.pageName || parsed.pageId}" từ link bài viết.`);
-                  break;
-                }
-              } catch (err) {
-                resolveErrorMsg = err.message;
-              }
-            }
+            resolveErrorMsg = 'Link không chứa Page và Graph API không trả về Page sở hữu bài viết.';
           }
           
           if (resolved) {
@@ -338,7 +323,7 @@ router.post('/validate', requireAuth, async (req, res) => {
             
           if (!parsed.verifiedWithGraph) {
             if (!parsed.pageId) {
-              errors.push('Không tự nhận diện được Page từ link bài viết này. Hãy dùng link bài viết có chứa Page/ID, hoặc nhập Tên/Link Page để làm gợi ý.');
+              errors.push('Không tự nhận diện được Page từ link này. Với link reel/video ngắn chỉ có ID, hãy nhập Tên Page hoặc dùng link bài viết có chứa Page.');
             } else {
               errors.push("Không xác định được Post ID thật từ link này. Tool sẽ không tự ghép Page ID với Video ID.");
             }

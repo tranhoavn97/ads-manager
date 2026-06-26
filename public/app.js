@@ -1481,22 +1481,24 @@ async function validateRows() {
 
   try {
     const chunks = [];
-    const concurrency = 5;
-    for (let i = 0; i < targetRows.length; i += concurrency) {
-      chunks.push(targetRows.slice(i, i + concurrency));
+    const batchSize = 10;
+    for (let i = 0; i < targetRows.length; i += batchSize) {
+      chunks.push(targetRows.slice(i, i + batchSize));
     }
 
-    for (const chunk of chunks) {
-      await Promise.all(chunk.map(async (r) => {
-        r.status = 'verifying';
-        r.errors = [];
-        r.warnings = [];
-        renderTable();
+    targetRows.forEach((r) => {
+      r.status = 'verifying';
+      r.errors = [];
+      r.warnings = [];
+    });
+    renderTable();
 
-        try {
-          const payload = { rows: [stripForSend(r)], creativeMode: State.creativeMode };
-          const { results } = await api('/api/ads/validate', { method: 'POST', body: payload });
-          const res = results?.[0];
+    for (const chunk of chunks) {
+      try {
+        const payload = { rows: chunk.map(stripForSend), creativeMode: State.creativeMode };
+        const { results } = await api('/api/ads/validate', { method: 'POST', body: payload });
+        chunk.forEach((r, idx) => {
+          const res = results?.[idx];
           if (res) {
             r.status = res.status === 'valid' ? 'verified' : res.status;
             r.errors = res.errors || [];
@@ -1507,12 +1509,19 @@ async function validateRows() {
             r.status = 'error';
             r.errors = ['Không có kết quả xác minh từ API'];
           }
-        } catch (err) {
+        });
+      } catch (err) {
+        chunk.forEach((r) => {
           r.status = 'error';
           r.errors = [err.message || 'Lỗi kết nối API'];
-        }
+        });
+      } finally {
         renderTable();
-      }));
+        const checked = targetRows.filter((r) => r.status !== 'verifying').length;
+        if (checked < targetRows.length) {
+          Logger.info(`Đã kiểm tra ${checked}/${targetRows.length} dòng…`);
+        }
+      }
     }
 
     targetRows.forEach((r) => {
