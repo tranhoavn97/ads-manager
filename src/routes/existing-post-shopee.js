@@ -1,9 +1,8 @@
 import express from 'express';
 import { requireAuth } from './auth.js';
-import { getPages, checkPostExists, createCampaign, createAdSet, createAdCreative, createAd, getAdCreative, MetaApiError, resolvePostFromGraph } from '../meta-api.js';
+import { getPages, checkPostExists, createCampaign, createAdSet, createAdCreative, createAd, MetaApiError, resolvePostFromGraph } from '../meta-api.js';
 import { resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, validateRow, ROW_STATUS } from '../validators.js';
 import { parsePageId, parsePostId, parsePageSlugFromPostLink } from '../parsers.js';
-import { resolveCta } from '../campaign-mapper.js';
 
 const router = express.Router();
 const ZERO = new Set(['VND','JPY','KRW','CLP','ISK','HUF','TWD','UGX','VUV','XAF','XOF','PYG']);
@@ -12,10 +11,6 @@ const metaDetails = (e) => e instanceof MetaApiError ? { metaErrorCode: e.code ?
 
 function normPageKey(s) {
   return (s ?? '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
-}
-function sameUrl(a, b) {
-  const clean = (v) => String(v || '').trim().replace(/\/$/, '').replace(/^http:\/\//i, 'https://');
-  return clean(a) === clean(b) || clean(a).includes(clean(b)) || clean(b).includes(clean(a));
 }
 function makeOwnedMaps(pages) {
   const idMap = new Map(pages.map((p) => [String(p.id), p]));
@@ -50,8 +45,8 @@ router.post('/validate', requireAuth, async (req, res, next) => {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const base = validateRow({ ...row, campaignType: 'Traffic', contentMode: row.contentMode || 'Bài viết có sẵn', ctaHandling: row.ctaHandling || 'CTA tự động' });
-    const errors = [...base.errors];
+    const base = validateRow({ ...row, campaignType: 'Traffic', contentMode: 'Bài viết có sẵn', ctaHandling: 'Bỏ CTA', ctaLink: row.ctaLink || 'existing-post-only' });
+    const errors = [...base.errors].filter((err) => !/link CTA|link Shopee|CTA/i.test(err));
     const warnings = [...base.warnings];
     const parsed = { pageId: null, pageName: null, postId: null, videoId: null, objectStoryId: null, sourceObjectId: null, permalinkUrl: null, verifiedWithGraph: false };
 
@@ -104,7 +99,6 @@ router.post('/validate', requireAuth, async (req, res, next) => {
         }
       }
     }
-    if (!row.ctaLink || !String(row.ctaLink).trim()) errors.push('Thiếu link Shopee/CTA');
     results.push({ index: i, status: errors.length ? ROW_STATUS.POST_ERROR : ROW_STATUS.VALID, errors, warnings, parsed, normalized: base.normalized });
   }
   res.json({ results });
@@ -112,17 +106,15 @@ router.post('/validate', requireAuth, async (req, res, next) => {
 
 router.post('/create', requireAuth, async (req, res, next) => {
   const { row, adAccountId, currency, draftMode } = req.body || {};
-  if (!row || !adAccountId || !row.ctaLink) return next();
-  const result = { index: row.index, status: ROW_STATUS.CREATED, errors: [], ids: {}, mode: 'EXISTING_POST_SHOPEE' };
+  if (!row || !adAccountId) return next();
+  const result = { index: row.index, status: ROW_STATUS.CREATED, errors: [], ids: {}, mode: 'EXISTING_POST_ONLY' };
 
   try {
     const token = req.session.fbToken;
     const pageId = row.parsed?.pageId;
     const postId = row.parsed?.objectStoryId;
     const accountId = row.adAccountId || adAccountId;
-    const link = String(row.ctaLink).trim();
     if (!pageId || !postId) throw new RowError('Thiếu Page ID hoặc Post ID đã xác minh.');
-    if (!/^https?:\/\//i.test(link)) throw new RowError('Link Shopee phải bắt đầu bằng http:// hoặc https://.');
 
     const { codes: countries } = resolveCountries(row.country);
     if (!countries.length) throw new RowError('Thiếu quốc gia hợp lệ.');
@@ -141,27 +133,16 @@ router.post('/create', requireAuth, async (req, res, next) => {
     const post = await checkPostExists(page.access_token || token, realPostId);
     if (!post?.id) throw new RowError('Không tìm thấy bài viết gốc. Nếu đây là Reel, Meta chưa map Video ID sang Post ID cho Page này.');
 
-    const requested = resolveCta(row.cta)?.code || 'SHOP_NOW';
-    const cta = ['SHOP_NOW','LEARN_MORE'].includes(requested) ? requested : 'SHOP_NOW';
-
     let creative;
     try {
       creative = await createAdCreative(token, accountId, {
-        name: `${row.adName || 'Ad'} - existing post Shopee`,
+        name: `${row.adName || 'Ad'} - existing post`,
         object_story_id: realPostId,
-        call_to_action: { type: cta, value: { link } },
       });
       result.ids.creativeId = creative.id;
     } catch (e) {
       const status = e instanceof MetaApiError && [10,200,294].includes(e.code) ? ROW_STATUS.PERMISSION : ROW_STATUS.CREATE_ERROR;
-      throw new RowError(`Meta không cho phép gắn CTA/link Shopee vào bài viết có sẵn: ${e.message}`, status, metaDetails(e));
-    }
-
-    const creativeInfo = await getAdCreative(token, creative.id, 'id,object_story_id,effective_object_story_id,call_to_action,object_story_spec');
-    const returnedCta = creativeInfo.call_to_action?.type || creativeInfo.object_story_spec?.link_data?.call_to_action?.type || creativeInfo.object_story_spec?.video_data?.call_to_action?.type;
-    const returnedLink = creativeInfo.call_to_action?.value?.link || creativeInfo.object_story_spec?.link_data?.call_to_action?.value?.link || creativeInfo.object_story_spec?.video_data?.call_to_action?.value?.link;
-    if (returnedCta !== cta || !returnedLink || !sameUrl(returnedLink, link)) {
-      throw new RowError(`Meta đã tạo creative nhưng KHÔNG gắn được nút ${cta} với link Shopee. Existing Post này không hỗ trợ ghi đè CTA/link qua API. Hãy thêm CTA/link vào bài gốc hoặc dùng bài khác.`, ROW_STATUS.CREATE_ERROR);
+      throw new RowError(`Meta không cho phép tạo quảng cáo từ bài viết có sẵn này: ${e.message}`, status, metaDetails(e));
     }
 
     const adStatus = resolveAdStatus(row.statusRaw, draftMode);
@@ -178,7 +159,7 @@ router.post('/create', requireAuth, async (req, res, next) => {
     const campaign = await createCampaign(token, accountId, campaignData);
     result.ids.campaignId = campaign.id;
 
-    const adsetData = { name: row.adsetName, campaign_id: campaign.id, billing_event: 'IMPRESSIONS', optimization_goal: 'LINK_CLICKS', destination_type: 'WEBSITE', status: adStatus, targeting: { geo_locations: { countries }, age_min: 18, age_max: 65 } };
+    const adsetData = { name: row.adsetName, campaign_id: campaign.id, billing_event: 'IMPRESSIONS', optimization_goal: 'POST_ENGAGEMENT', status: adStatus, targeting: { geo_locations: { countries }, age_min: 18, age_max: 65 } };
     if (budgetLevel === 'adset') Object.assign(adsetData, { [budgetField]: budget, bid_strategy: 'LOWEST_COST_WITHOUT_CAP' });
     if (row.normalized?.startTime) adsetData.start_time = row.normalized.startTime;
     if (row.normalized?.endTime) adsetData.end_time = row.normalized.endTime;
