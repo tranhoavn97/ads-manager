@@ -22,23 +22,17 @@
     window.XLSX.utils.sheet_to_json = function patchedSheetToJson(ws, opts) {
       const out = original.call(this, ws, opts);
       if (!opts || opts.header !== 1 || !Array.isArray(out) || !Array.isArray(out[0])) return out;
-
       const headers = out[0].map((h) => norm(h));
       const idx = (patterns) => headers.findIndex((h) => patterns.some((p) => h === p || h.includes(p)));
       const campaignTypeCol = idx(['loai chien dich', 'muc tieu chien dich', 'muc tieu', 'objective']);
       const budgetLevelCol = idx(['cap ngan sach', 'ngan sach cap', 'cbo abo']);
       const budgetModeCol = idx(['loai ngan sach', 'kieu ngan sach', 'hang ngay tron doi']);
-
       for (let r = 1; r < out.length; r++) {
         const row = out[r];
         if (!Array.isArray(row)) continue;
         if (campaignTypeCol >= 0) {
           const v = norm(row[campaignTypeCol]);
           if (v.includes('luu luong') || v.includes('traffic') || v.includes('truy cap')) row[campaignTypeCol] = 'Traffic';
-          else if (v.includes('tin nhan') || v.includes('message')) row[campaignTypeCol] = 'Tin nhắn';
-          else if (v.includes('tuong tac') || v.includes('engagement')) row[campaignTypeCol] = 'Tương tác';
-          else if (v.includes('lead') || v.includes('tiem nang')) row[campaignTypeCol] = 'Lead';
-          else if (v.includes('doanh so') || v.includes('sales')) row[campaignTypeCol] = 'Doanh số';
         }
         if (budgetLevelCol >= 0) {
           const v = norm(row[budgetLevelCol]);
@@ -56,52 +50,20 @@
     window.XLSX.utils._mpPatched = true;
   }
 
-  function setCols(ws, widths) {
-    ws['!cols'] = widths.map((wch) => ({ wch }));
-  }
+  function setCols(ws, widths) { ws['!cols'] = widths.map((wch) => ({ wch })); }
 
   function downloadStandardTemplate() {
-    const headers = [
-      'Tên Page', 'Link bài viết', 'Chế độ nội dung', 'Xử lý CTA', 'Link CTA', 'Nút CTA',
-      'Tên chiến dịch', 'Loại chiến dịch', 'Tên nhóm quảng cáo', 'Tên quảng cáo',
-      'Quốc gia', 'Ngân sách', 'Cấp ngân sách', 'Loại ngân sách',
-      'Ngày bắt đầu', 'Giờ bắt đầu', 'Ngày kết thúc', 'Giờ kết thúc', 'Trạng thái', 'Ghi chú'
-    ];
-
+    const headers = ['Tên Page', 'Link bài viết', 'Chế độ nội dung', 'Tên chiến dịch', 'Loại chiến dịch', 'Tên nhóm quảng cáo', 'Tên quảng cáo', 'Quốc gia', 'Ngân sách', 'Cấp ngân sách', 'Loại ngân sách', 'Ngày bắt đầu', 'Giờ bắt đầu', 'Ngày kết thúc', 'Giờ kết thúc', 'Trạng thái', 'Ghi chú'];
     const rows = [
       headers,
-      ['Tún TV', 'https://www.facebook.com/reel/1528947745259708', 'Bài viết có sẵn', 'CTA tự động', 'https://s.shopee.vn/7AbSPiczTW', 'Mua ngay', '17387640570_SHPAAR27_campaign01', 'Traffic', '17387640570_SHPAAR27_adgroup01', '17387640570_SHPAAR27_ad01', 'Việt Nam', 200000, 'campaign', 'lifetime', '26/06/2026', '08:00', '30/06/2026', '23:59', 'Tạm dừng', 'Mẫu: Cấp chiến dịch + Trọn đời'],
-      ['', '', 'Bài viết có sẵn', 'CTA tự động', 'https://s.shopee.vn/xxxxx', 'Mua ngay', '', 'Traffic', '', '', 'Việt Nam', 200000, 'adset', 'daily', '', '08:00', '', '23:59', 'Tạm dừng', 'Mẫu: Cấp nhóm + Hàng ngày']
+      ['Tún TV', 'https://www.facebook.com/reel/1528947745259708', 'Bài viết có sẵn', '17387640570_SHPAAR27_campaign01', 'Traffic', '17387640570_SHPAAR27_adgroup01', '17387640570_SHPAAR27_ad01', 'Việt Nam', 200000, 'campaign', 'lifetime', '26/06/2026', '08:00', '30/06/2026', '23:59', 'Tạm dừng', 'Mẫu: dùng bài viết có sẵn'],
+      ['', '', 'Bài viết có sẵn', '', 'Traffic', '', '', 'Việt Nam', 200000, 'adset', 'daily', '', '08:00', '', '23:59', 'Tạm dừng', 'Mẫu: không nhập nút/link']
     ];
-
-    const guide = [
-      ['Nhóm', 'Giá trị nhập khuyến nghị', 'Nhãn hiển thị'],
-      ['Loại chiến dịch', 'Traffic', 'Lưu lượng truy cập'],
-      ['Cấp ngân sách', 'campaign', 'Cấp chiến dịch / CBO'],
-      ['Cấp ngân sách', 'adset', 'Cấp nhóm / ABO'],
-      ['Loại ngân sách', 'lifetime', 'Trọn đời'],
-      ['Loại ngân sách', 'daily', 'Hàng ngày'],
-      ['Chế độ nội dung', 'Bài viết có sẵn', 'Existing Post'],
-      ['Xử lý CTA', 'CTA tự động', 'Tự động'],
-      ['Nút CTA', 'Mua ngay', 'SHOP_NOW'],
-      ['Trạng thái', 'Tạm dừng', 'PAUSED'],
-      ['Trạng thái', 'Bật', 'ACTIVE']
-    ];
-
-    const help = [
-      ['Cột', 'Cách nhập'],
-      ['Loại chiến dịch', 'Nhập Traffic hoặc Lưu lượng truy cập. File mẫu dùng Traffic để app nhận chuẩn.'],
-      ['Cấp ngân sách', 'Nhập campaign để đặt ngân sách ở chiến dịch, hoặc adset để đặt ở nhóm quảng cáo.'],
-      ['Loại ngân sách', 'Nhập lifetime cho trọn đời, hoặc daily cho hàng ngày. Trọn đời bắt buộc có Ngày kết thúc.'],
-      ['Tên Page', 'Nhập tên Page, link Page hoặc Page ID. Khuyến nghị Page ID để chính xác nhất.'],
-      ['Link bài viết', 'Dán link post/reel/photo/video Facebook. Với Reel, tool sẽ cố lấy object_story_id từ Video ID.'],
-      ['Link CTA', 'Dán link Shopee đầy đủ, bắt đầu bằng https://'],
-      ['Trạng thái', 'Khuyến nghị Tạm dừng để kiểm tra trước khi bật.']
-    ];
-
+    const guide = [['Nhóm', 'Giá trị', 'Ghi chú'], ['Loại chiến dịch', 'Traffic', 'Lưu lượng truy cập'], ['Cấp ngân sách', 'campaign', 'Cấp chiến dịch'], ['Cấp ngân sách', 'adset', 'Cấp nhóm'], ['Loại ngân sách', 'lifetime', 'Trọn đời'], ['Loại ngân sách', 'daily', 'Hàng ngày'], ['Trạng thái', 'Tạm dừng', 'An toàn khi test'], ['Trạng thái', 'Bật', 'Chạy ngay']];
+    const help = [['Cột', 'Cách nhập'], ['Link bài viết', 'Dán link post/reel/photo/video Facebook.'], ['Loại chiến dịch', 'Nhập Traffic hoặc Lưu lượng truy cập.'], ['Cấp ngân sách', 'campaign hoặc adset.'], ['Loại ngân sách', 'lifetime hoặc daily.'], ['Ngày kết thúc', 'Bắt buộc khi dùng lifetime.']];
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    setCols(ws, [20, 48, 20, 18, 36, 16, 36, 18, 36, 34, 16, 14, 16, 16, 16, 14, 16, 14, 14, 36]);
+    setCols(ws, [20, 48, 20, 36, 18, 36, 34, 16, 14, 16, 16, 16, 14, 16, 14, 14, 36]);
     ws['!freeze'] = { xSplit: 0, ySplit: 1 };
     XLSX.utils.book_append_sheet(wb, ws, 'Quảng cáo');
     const opt = XLSX.utils.aoa_to_sheet(guide);
@@ -115,7 +77,6 @@
 
   adjustLoginUi();
   patchSheetParser();
-
   document.addEventListener('click', function (e) {
     const btn = e.target && e.target.closest && e.target.closest('#templateBtn');
     if (!btn || typeof XLSX === 'undefined') return;
