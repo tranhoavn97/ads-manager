@@ -86,8 +86,33 @@ function isAuthExpired(err) {
 
 function ctaCode(row) {
   const resolved = resolveCta(row.cta)?.code;
-  if (!resolved) return null;
+  if (!resolved) return row.ctaLink && String(row.ctaLink).trim() ? 'SHOP_NOW' : null;
   return ['SHOP_NOW', 'LEARN_MORE'].includes(resolved) ? resolved : 'SHOP_NOW';
+}
+
+function normalizedCtaLink(row) {
+  const raw = row.ctaLink == null ? '' : String(row.ctaLink).trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function creativeCtaLink(info) {
+  return info.call_to_action?.value?.link
+    || info.object_story_spec?.link_data?.call_to_action?.value?.link
+    || info.object_story_spec?.video_data?.call_to_action?.value?.link
+    || '';
+}
+
+function creativeCtaType(info) {
+  return info.call_to_action?.type
+    || info.object_story_spec?.link_data?.call_to_action?.type
+    || info.object_story_spec?.video_data?.call_to_action?.type
+    || '';
 }
 
 class RowError extends Error {
@@ -232,12 +257,18 @@ router.post('/create', requireAuth, async (req, res, next) => {
     if (!post?.id) throw new RowError('Không tìm thấy bài viết gốc. Nếu đây là Reel, Meta chưa map Video ID sang Post ID cho Page này.');
 
     const code = ctaCode(row);
-    const link = row.ctaLink ? String(row.ctaLink).trim() : '';
+    const link = normalizedCtaLink(row);
+    if (row.ctaLink && String(row.ctaLink).trim() && !link) {
+      throw new RowError('Link CTA không hợp lệ. Hãy nhập link bắt đầu bằng http:// hoặc https://.');
+    }
     let creativePayload = { name: `${row.adName || 'Ad'} - existing post`, object_story_id: objectStoryId };
     if (code && link) {
       creativePayload = {
         ...creativePayload,
-        call_to_action: { type: code, value: { link } },
+        call_to_action: {
+          type: code || row.cta || 'SHOP_NOW',
+          value: { link },
+        },
       };
     }
 
@@ -258,13 +289,18 @@ router.post('/create', requireAuth, async (req, res, next) => {
 
     if (code && link) {
       try {
-        const info = await getAdCreative(token, creative.id, 'id,call_to_action,object_story_spec');
-        const returnedCta = info.call_to_action?.type || info.object_story_spec?.link_data?.call_to_action?.type || info.object_story_spec?.video_data?.call_to_action?.type;
-        const returnedLink = info.call_to_action?.value?.link || info.object_story_spec?.link_data?.call_to_action?.value?.link || info.object_story_spec?.video_data?.call_to_action?.value?.link;
+        const info = await getAdCreative(token, creative.id, 'id,object_story_id,effective_object_story_id,call_to_action,object_story_spec');
+        const returnedCta = creativeCtaType(info);
+        const returnedLink = creativeCtaLink(info);
+        if (returnedCta && !returnedLink) {
+          result.warnings.push('Meta tạo nút CTA nhưng không trả link đích');
+          throw new RowError('Meta tạo nút CTA nhưng không trả link đích. Dòng này chưa được tạo Campaign/AdSet/Ad để tránh báo thành công giả.');
+        }
         if (returnedCta !== code || !returnedLink) {
           result.warnings.push('Meta bỏ qua CTA/link trên creative, nhưng vẫn tạo ads bằng bài viết có sẵn.');
         }
       } catch {
+        if (result.warnings.includes('Meta tạo nút CTA nhưng không trả link đích')) throw new RowError('Meta tạo nút CTA nhưng không trả link đích. Dòng này chưa được tạo Campaign/AdSet/Ad để tránh báo thành công giả.');
         result.warnings.push('Không đọc lại được CTA/link sau khi tạo creative; tiếp tục tạo ads bằng bài viết có sẵn.');
       }
     }

@@ -212,6 +212,7 @@ function resolveCtaCode(input) {
 function ctaForRow(row) {
   const override = resolveCtaCode(row?.cta);
   if (override) return { code: override, label: CTA_LABELS[override] || override, custom: true };
+  if (row?.ctaLink && String(row.ctaLink).trim()) return { code: 'SHOP_NOW', label: CTA_LABELS.SHOP_NOW || 'Mua ngay', custom: true };
   return null;
 }
 // Nhãn ngân sách (hiển thị trong ngăn chi tiết)
@@ -231,8 +232,10 @@ function ctaPillHtml(row, withCode = false) {
   if (!c) return '<span class="cta-pill cta-none">Không CTA</span>';
   const cls = CTA_CLASS[c.code] || 'cta-other';
   const dot = c.custom ? '<span class="custom-dot"></span>' : '';
-  const tip = c.custom ? 'Nút CTA tự điền trong file' : 'Nút CTA mặc định theo loại chiến dịch';
-  return `<span class="cta-pill ${cls}" title="${tip}">${dot}${esc(c.label)}</span>` +
+  const hasLink = !!(row?.ctaLink && String(row.ctaLink).trim());
+  const linkState = hasLink ? 'Có link' : 'Chưa có link';
+  const tip = hasLink ? 'Nút CTA có link đích trong file' : 'Nút CTA chưa có link đích trong file';
+  return `<span class="cta-pill ${cls}" title="${tip}">${dot}${esc(c.label)} + ${linkState}</span>` +
     (withCode ? ` <span class="cta-code">${esc(c.code)}</span>` : '');
 }
 
