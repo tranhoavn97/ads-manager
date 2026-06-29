@@ -53,26 +53,94 @@
   function setCols(ws, widths) { ws['!cols'] = widths.map((wch) => ({ wch })); }
 
   function downloadStandardTemplate() {
-    const headers = ['Tên Page', 'Link bài viết', 'Chế độ nội dung', 'Tên chiến dịch', 'Loại chiến dịch', 'Tên nhóm quảng cáo', 'Tên quảng cáo', 'Quốc gia', 'Ngân sách', 'Cấp ngân sách', 'Loại ngân sách', 'Ngày bắt đầu', 'Giờ bắt đầu', 'Ngày kết thúc', 'Giờ kết thúc', 'Trạng thái', 'Ghi chú'];
+    const headers = [
+      'Tên Page',
+      'Link bài viết',
+      'Chế độ nội dung',
+      'Tên chiến dịch',
+      'Loại chiến dịch',
+      'Tên nhóm quảng cáo',
+      'Tên quảng cáo',
+      'Quốc gia',
+      'Ngân sách',
+      'Cấp ngân sách',
+      'Loại ngân sách',
+      'Ngày bắt đầu',
+      'Giờ bắt đầu',
+      'Ngày kết thúc',
+      'Giờ kết thúc',
+      'Trạng thái',
+      'Nút CTA (tuỳ chọn)',
+      'Link CTA (tuỳ chọn)',
+      'Ghi chú',
+    ];
     const rows = [
       headers,
-      ['Tún TV', 'https://www.facebook.com/reel/1528947745259708', 'Bài viết có sẵn', '17387640570_SHPAAR27_campaign01', 'Traffic', '17387640570_SHPAAR27_adgroup01', '17387640570_SHPAAR27_ad01', 'Việt Nam', 200000, 'campaign', 'lifetime', '26/06/2026', '08:00', '30/06/2026', '23:59', 'Tạm dừng', 'Mẫu: dùng bài viết có sẵn'],
-      ['', '', 'Bài viết có sẵn', '', 'Traffic', '', '', 'Việt Nam', 200000, 'adset', 'daily', '', '08:00', '', '23:59', 'Tạm dừng', 'Mẫu: không nhập nút/link']
+      [
+        '123456789',
+        '123456789_987654321',
+        'Bài viết có sẵn',
+        'Traffic Existing Post 01',
+        'Traffic',
+        'Adset VN 01',
+        'Ad Existing Post 01',
+        'VN',
+        200000,
+        'Cấp nhóm',
+        'Hàng ngày',
+        '01/07/2026',
+        '08:00',
+        '',
+        '',
+        'Tạm dừng',
+        '',
+        '',
+        'Không CTA/link vẫn hợp lệ.',
+      ],
+      [
+        '123456789',
+        'https://www.facebook.com/page/posts/987654321',
+        'Bài viết có sẵn',
+        'Traffic Existing Post CBO Lifetime',
+        'Lưu lượng truy cập',
+        'Adset VN Lifetime',
+        'Ad Existing Post CTA',
+        'Việt Nam',
+        500000,
+        'Cấp chiến dịch',
+        'Trọn đời',
+        '01/07/2026',
+        '08:00',
+        '07/07/2026',
+        '23:59',
+        'Tạm dừng',
+        'SHOP_NOW',
+        'https://example.com',
+        'CTA/link là tuỳ chọn; nếu Meta bỏ qua app vẫn tạo existing post ad.',
+      ],
     ];
-    const guide = [['Nhóm', 'Giá trị', 'Ghi chú'], ['Loại chiến dịch', 'Traffic', 'Lưu lượng truy cập'], ['Cấp ngân sách', 'campaign', 'Cấp chiến dịch'], ['Cấp ngân sách', 'adset', 'Cấp nhóm'], ['Loại ngân sách', 'lifetime', 'Trọn đời'], ['Loại ngân sách', 'daily', 'Hàng ngày'], ['Trạng thái', 'Tạm dừng', 'An toàn khi test'], ['Trạng thái', 'Bật', 'Chạy ngay']];
-    const help = [['Cột', 'Cách nhập'], ['Link bài viết', 'Dán link post/reel/photo/video Facebook.'], ['Loại chiến dịch', 'Nhập Traffic hoặc Lưu lượng truy cập.'], ['Cấp ngân sách', 'campaign hoặc adset.'], ['Loại ngân sách', 'lifetime hoặc daily.'], ['Ngày kết thúc', 'Bắt buộc khi dùng lifetime.']];
+    const guide = [
+      ['Cột', 'Cách nhập'],
+      ['Tên Page', 'Nhập Page ID, link Page hoặc tên Page. Khuyến nghị Page ID.'],
+      ['Link bài viết', 'Nhập link post/photo/video/reel hoặc object_story_id dạng PAGE_ID_POST_ID.'],
+      ['Chế độ nội dung', 'Dùng Bài viết có sẵn. App không tạo dark post và không tạo bài mới.'],
+      ['Loại chiến dịch', 'Traffic hoặc Lưu lượng truy cập.'],
+      ['Cấp ngân sách', 'Cấp chiến dịch/campaign/CBO hoặc Cấp nhóm/adset/ABO.'],
+      ['Loại ngân sách', 'Hàng ngày/daily hoặc Trọn đời/lifetime. Trọn đời cần ngày kết thúc.'],
+      ['Nút CTA / Link CTA', 'Tuỳ chọn. Nếu Meta không nhận CTA/link, app retry bằng object_story_id không CTA.'],
+    ];
+
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    setCols(ws, [20, 48, 20, 36, 18, 36, 34, 16, 14, 16, 16, 16, 14, 16, 14, 14, 36]);
+    setCols(ws, [18, 42, 20, 34, 22, 30, 30, 14, 14, 18, 18, 16, 14, 16, 14, 14, 18, 36, 58]);
     ws['!freeze'] = { xSplit: 0, ySplit: 1 };
     XLSX.utils.book_append_sheet(wb, ws, 'Quảng cáo');
-    const opt = XLSX.utils.aoa_to_sheet(guide);
-    setCols(opt, [22, 26, 28]);
-    XLSX.utils.book_append_sheet(wb, opt, 'Danh sách chọn');
-    const hd = XLSX.utils.aoa_to_sheet(help);
-    setCols(hd, [24, 96]);
+
+    const hd = XLSX.utils.aoa_to_sheet(guide);
+    setCols(hd, [28, 100]);
     XLSX.utils.book_append_sheet(wb, hd, 'Hướng dẫn');
-    XLSX.writeFile(wb, 'mau_quang_cao_hang_loat_chuan_hoa.xlsx');
+
+    XLSX.writeFile(wb, 'mau_existing_post_traffic.xlsx');
   }
 
   adjustLoginUi();

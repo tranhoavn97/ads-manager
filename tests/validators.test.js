@@ -107,3 +107,22 @@ test('validateRow passes valid rows', () => {
   assert.strictEqual(res.normalized.budgetMode, 'daily');
   assert.strictEqual(res.normalized.campaignType.objective, 'OUTCOME_ENGAGEMENT');
 });
+
+test('validateRow accepts minimal existing-post traffic rows', () => {
+  const row = {
+    pageLink: '123456789',
+    postLink: '123456789_987654321',
+    budget: '500000',
+    startDate: '24/06/2026',
+    endDate: '30/06/2026',
+    budgetMode: 'Trọn đời'
+  };
+
+  const res = validateRow(row);
+  assert.strictEqual(res.status, ROW_STATUS.VALID);
+  assert.strictEqual(res.errors.length, 0);
+  assert.strictEqual(res.normalized.contentMode, 'EXISTING_POST_STRICT');
+  assert.strictEqual(res.normalized.campaignType.id, 'traffic');
+  assert.strictEqual(res.normalized.countries[0], 'VN');
+  assert.strictEqual(res.normalized.budgetMode, 'lifetime');
+});

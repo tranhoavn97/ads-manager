@@ -10,7 +10,7 @@ const State = {
   rows: [],          // dữ liệu từ file (đã chuẩn hoá khoá)
   filter: 'all',
   search: '',
-  creativeMode: 'NEW_CTA_CREATIVE',
+  creativeMode: 'EXISTING_POST_STRICT',
   editing: new Set(),   // các dòng đang ở chế độ nhập (sửa được nhiều dòng cùng lúc)
 };
 
@@ -210,16 +210,8 @@ function resolveCtaCode(input) {
   return CTA_BY_NORM[n] || null;
 }
 function ctaForRow(row) {
-  const isTraffic = resolveTypeId(row?.campaignType) === 'traffic';
-  const hasPost = !!(row?.postLink && row?.postLink.toString().trim());
-  if (isTraffic && hasPost) {
-    return { code: 'SHOP_NOW', label: CTA_LABELS['SHOP_NOW'] || 'Mua ngay', custom: true };
-  }
-
   const override = resolveCtaCode(row?.cta);
   if (override) return { code: override, label: CTA_LABELS[override] || override, custom: true };
-  const id = resolveTypeId(row?.campaignType);
-  if (id) { const code = TYPE_DEFAULT_CTA[id]; return { code, label: CTA_LABELS[code] || code, custom: false }; }
   return null;
 }
 // Nhãn ngân sách (hiển thị trong ngăn chi tiết)
@@ -236,7 +228,7 @@ function budgetLevelLabel(row) {
 
 function ctaPillHtml(row, withCode = false) {
   const c = ctaForRow(row);
-  if (!c) return '<span class="cta-pill cta-none">CTA: —</span>';
+  if (!c) return '<span class="cta-pill cta-none">Không CTA</span>';
   const cls = CTA_CLASS[c.code] || 'cta-other';
   const dot = c.custom ? '<span class="custom-dot"></span>' : '';
   const tip = c.custom ? 'Nút CTA tự điền trong file' : 'Nút CTA mặc định theo loại chiến dịch';
@@ -720,12 +712,12 @@ function selectAccount(acc, card) {
 // ============================================================
 const HEADER_KEYS = [
   ['adAccountId', ['tai khoan quang cao', 'tai khoan', 'ad account', 'ad_account', 'account_id', 'account']],
-  ['pageLink', ['ten page', 'ten fanpage', 'page name', 'link page', 'link trang', 'trang fanpage', 'fanpage', 'page']],
-  ['postLink', ['link bai viet', 'bai viet', 'reel', 'anh', 'post', 'link bai', 'bai/reel']],
+  ['pageLink', ['ten page', 'ten fanpage', 'page name', 'page id', 'id page', 'link page', 'link trang', 'trang fanpage', 'fanpage', 'page']],
+  ['postLink', ['link bai viet', 'id bai viet', 'post id', 'object story id', 'bai viet', 'reel', 'anh', 'post', 'link bai', 'bai/reel']],
   ['contentMode', ['che do noi dung', 'che do', 'noidung', 'content mode']],
   ['ctaHandling', ['xu ly cta', 'xu ly', 'cta handling', 'handle cta']],
-  ['ctaLink', ['link cta', 'website', 'link dich', 'url', 'link den', 'cta link']],
-  ['cta', ['nut cta', 'nut keu goi', 'keu goi', 'call to action', 'cta button', 'nut hanh dong']],
+  ['ctaLink', ['link cta', 'link cta tuy chon', 'website', 'link dich', 'url', 'link den', 'cta link']],
+  ['cta', ['nut cta', 'nut cta tuy chon', 'nut keu goi', 'keu goi', 'call to action', 'cta button', 'nut hanh dong']],
   ['campaignType', ['loai chien dich', 'loai', 'muc tieu', 'objective', 'type']],
   ['campaignName', ['ten chien dich', 'chien dich', 'campaign']],
   ['adsetName', ['ten nhom quang cao', 'nhom quang cao', 'ad set', 'adset', 'nhom']],
@@ -824,8 +816,8 @@ function blankRow() {
     index: nextRowIndex(),
     status: 'missing', errors: [], warnings: [], parsed: {}, normalized: {},
     pageLink: '', postLink: '', ctaLink: '', cta: '',
-    contentMode: 'Sử dụng bài viết có sẵn', ctaHandling: 'Tự động',
-    campaignType: '', campaignName: '', adsetName: '', adName: '',
+    contentMode: 'Sử dụng bài viết có sẵn', ctaHandling: 'Giữ CTA hiện tại',
+    campaignType: 'Traffic', campaignName: '', adsetName: '', adName: '',
     country: 'Việt Nam', budget: '', budgetMode: 'daily', budgetLevel: 'adset',
     startDate: '', startTimeRaw: '', endDate: '', endTimeRaw: '',
     statusRaw: 'Tạm dừng', notes: '',
@@ -989,8 +981,8 @@ function clientParsePostId(input) {
 function clientParseRow(r) {
   const parsed = { pageId: null, pageName: null, postId: null, objectStoryId: null, pageVanity: null };
   
-  if (!r.contentMode) r.contentMode = 'Sử dụng bài viết có sẵn';
-  if (!r.ctaHandling) r.ctaHandling = 'Tự động';
+  r.contentMode = 'Sử dụng bài viết có sẵn';
+  r.ctaHandling = 'Giữ CTA hiện tại';
 
   const pg = clientParsePageId(r.pageLink);
   parsed.pageId = pg.id || null;
@@ -1044,15 +1036,20 @@ function clientPreCheck(rows) {
     ['country', 'quốc gia'],
     ['budget', 'ngân sách'],
     ['budgetMode', 'loại ngân sách'],
-    ['startDate', 'ngày bắt đầu'],
-    ['statusRaw', 'trạng thái']
+    ['budgetLevel', 'cấp ngân sách'],
+    ['startDate', 'ngày bắt đầu']
   ];
   (rows || State.rows).forEach((r) => {
     r.errors = [];
     r.warnings = [];
     
-    if (!r.contentMode) r.contentMode = 'Sử dụng bài viết có sẵn';
-    if (!r.ctaHandling) r.ctaHandling = 'Tự động';
+    r.contentMode = 'Sử dụng bài viết có sẵn';
+    r.ctaHandling = 'Giữ CTA hiện tại';
+    if (!r.campaignType) r.campaignType = 'Traffic';
+    if (!r.country) r.country = 'Việt Nam';
+    if (!r.budgetMode) r.budgetMode = 'daily';
+    if (!r.budgetLevel) r.budgetLevel = 'adset';
+    if (!r.statusRaw) r.statusRaw = 'Tạm dừng';
 
     clientParseRow(r); // tách Page ID / Post ID ngay để xem trước
     
@@ -1061,11 +1058,6 @@ function clientPreCheck(rows) {
       missing.push('link bài viết');
     }
     
-    const isNewCta = r.contentMode === 'Tạo bản quảng cáo mới có CTA' || r.contentMode === 'NEW_CTA_CREATIVE';
-    if (isNewCta && (!r.ctaLink || r.ctaLink.toString().trim() === '')) {
-      missing.push('link CTA');
-    }
-
     otherRequired.forEach(([k, l]) => {
       if (!r[k]) missing.push(l);
     });
@@ -1121,6 +1113,19 @@ function pageDisplay(r) {
   return { label, title };
 }
 
+function oneLineCell(value, fallback = '—') {
+  const text = value == null || String(value).trim() === '' ? fallback : String(value);
+  return `<span class="cell-one-line" title="${esc(text)}">${esc(text)}</span>`;
+}
+
+function tableBudgetLevelLabel(value) {
+  return value === 'campaign' ? 'CBO' : 'ABO';
+}
+
+function tableBudgetModeLabel(value) {
+  return value === 'lifetime' ? 'Trọn đời' : 'Hàng ngày';
+}
+
 function renderTable() {
   const body = $('#tableBody');
   body.innerHTML = '';
@@ -1134,7 +1139,7 @@ function renderTable() {
   });
 
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="13" class="loading">Không có dòng nào khớp bộ lọc.</td></tr>';
+    body.innerHTML = '<tr><td colspan="21" class="loading">Không có dòng nào khớp bộ lọc.</td></tr>';
   }
 
   rows.forEach((r) => {
@@ -1144,96 +1149,55 @@ function renderTable() {
     
     if (State.editing.has(r.index)) {
       tr.innerHTML = `
-        <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
-        <!-- Tên Page -->
+        <td class="status-cell">${getStatusIconHtml(r)}</td>
         <td><input type="text" class="input-inline page-link-input" value="${esc(r.pageLink || '')}" placeholder="Tên Page"></td>
-        <!-- Bài viết & Chế độ -->
+        <td><input type="text" class="input-inline post-link-input" value="${esc(r.postLink || '')}" placeholder="Link bài viết"></td>
         <td>
-          <input type="text" class="input-inline post-link-input" value="${esc(r.postLink || '')}" placeholder="Link bài viết" style="margin-bottom: 6px;">
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <select class="select-inline content-mode-input">
-              <option value="Sử dụng bài viết có sẵn" ${r.contentMode === 'Sử dụng bài viết có sẵn' || r.contentMode === 'EXISTING_POST_STRICT' ? 'selected' : ''}>Bài viết có sẵn</option>
-              <option value="Tạo bản quảng cáo mới có CTA" ${r.contentMode === 'Tạo bản quảng cáo mới có CTA' || r.contentMode === 'NEW_CTA_CREATIVE' ? 'selected' : ''}>Tạo bài mới</option>
-            </select>
-            <select class="select-inline cta-handling-input">
-              <option value="Tự động" ${r.ctaHandling === 'Tự động' || !r.ctaHandling || r.ctaHandling === 'AUTO' ? 'selected' : ''}>CTA tự động</option>
-              <option value="Giữ CTA hiện tại" ${r.ctaHandling === 'Giữ CTA hiện tại' || r.ctaHandling === 'KEEP_CURRENT' ? 'selected' : ''}>Giữ CTA</option>
-              <option value="Không dùng CTA" ${r.ctaHandling === 'Không dùng CTA' || r.ctaHandling === 'NO_CTA' ? 'selected' : ''}>Bỏ CTA</option>
-            </select>
-          </div>
-        </td>
-        <!-- Chiến dịch & Loại -->
-        <td>
-          <input type="text" class="input-inline campaign-name-input" value="${esc(r.campaignName || '')}" style="margin-bottom: 4px;">
-          <select class="select-inline campaign-type-input">
-            <option value="" disabled ${!r.campaignType ? 'selected' : ''}>— Chọn loại —</option>
-            <option value="Tin nhắn" ${r.campaignType === 'Tin nhắn' || r.campaignType === 'tin_nhan' ? 'selected' : ''}>Tin nhắn</option>
-            <option value="Tương tác" ${r.campaignType === 'Tương tác' || r.campaignType === 'tuong_tac' ? 'selected' : ''}>Tương tác</option>
-            <option value="Traffic" ${r.campaignType === 'Traffic' || r.campaignType === 'traffic' ? 'selected' : ''}>Traffic</option>
-            <option value="Lead" ${r.campaignType === 'Lead' || r.campaignType === 'lead' ? 'selected' : ''}>Lead</option>
-            <option value="Doanh số" ${r.campaignType === 'Doanh số' || r.campaignType === 'doanh_so' ? 'selected' : ''}>Doanh số</option>
+          <select class="select-inline content-mode-input">
+            <option value="Sử dụng bài viết có sẵn" selected>Bài viết có sẵn</option>
           </select>
         </td>
-        <!-- Nhóm QC -->
+        <td><input type="text" class="input-inline campaign-name-input" value="${esc(r.campaignName || '')}"></td>
+        <td>
+          <select class="select-inline campaign-type-input">
+            <option value="Traffic" selected>Traffic</option>
+          </select>
+        </td>
         <td><input type="text" class="input-inline adset-name-input" value="${esc(r.adsetName || '')}"></td>
-        <!-- Quảng cáo -->
         <td><input type="text" class="input-inline ad-name-input" value="${esc(r.adName || '')}"></td>
-        <!-- Nút & Liên kết -->
-        <td>
-          <div class="cta-edit-group">
-            <select class="select-inline cta-input" style="margin-bottom: 4px;">
-              <option value="NO_BUTTON" ${r.cta === 'NO_BUTTON' ? 'selected' : ''}>Không nút</option>
-              <option value="SHOP_NOW" ${r.cta === 'SHOP_NOW' ? 'selected' : ''}>Mua ngay</option>
-              <option value="SEND_MESSAGE" ${r.cta === 'SEND_MESSAGE' ? 'selected' : ''}>Gửi tin nhắn</option>
-              <option value="LEARN_MORE" ${r.cta === 'LEARN_MORE' ? 'selected' : ''}>Tìm hiểu thêm</option>
-              <option value="SIGN_UP" ${r.cta === 'SIGN_UP' ? 'selected' : ''}>Đăng ký</option>
-              <option value="BOOK_NOW" ${r.cta === 'BOOK_NOW' ? 'selected' : ''}>Đặt ngay</option>
-              <option value="APPLY_NOW" ${r.cta === 'APPLY_NOW' ? 'selected' : ''}>Nộp đơn</option>
-            </select>
-            <input type="text" class="input-inline cta-link-input" value="${esc(r.ctaLink || '')}" placeholder="Link CTA">
-          </div>
-        </td>
-        <!-- Ngân sách -->
-        <td>
-          <div class="budget-edit-group">
-            <input type="text" class="input-inline budget-val-input" value="${esc(r.budget || '')}" style="margin-bottom: 4px;">
-            <div class="budget-options-inline" style="display: flex; flex-direction: column; gap: 4px;">
-              <select class="select-inline budget-level-input" title="ABO = ngân sách ở Nhóm · CBO = ngân sách ở Chiến dịch">
-                <option value="adset" ${r.budgetLevel === 'adset' ? 'selected' : ''}>ABO · Nhóm</option>
-                <option value="campaign" ${r.budgetLevel === 'campaign' ? 'selected' : ''}>CBO · Chiến dịch</option>
-              </select>
-              <select class="select-inline budget-mode-input">
-                <option value="daily" ${r.budgetMode === 'daily' ? 'selected' : ''}>Hàng ngày</option>
-                <option value="lifetime" ${r.budgetMode === 'lifetime' ? 'selected' : ''}>Trọn đời</option>
-              </select>
-            </div>
-          </div>
-        </td>
-        <!-- Thời gian -->
-        <td>
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <div style="display: flex; gap: 2px;">
-              <input type="text" class="input-inline start-date-input" value="${esc(r.startDate || '')}" placeholder="Bắt đầu" title="Ngày bắt đầu (dd/mm/yyyy)">
-              <input type="text" class="input-inline start-time-input" value="${esc(r.startTimeRaw || '')}" placeholder="Giờ" title="Giờ bắt đầu (hh:mm)">
-            </div>
-            <div style="display: flex; gap: 2px;">
-              <input type="text" class="input-inline end-date-input" value="${esc(r.endDate || '')}" placeholder="Kết thúc" title="Ngày kết thúc (dd/mm/yyyy)">
-              <input type="text" class="input-inline end-time-input" value="${esc(r.endTimeRaw || '')}" placeholder="Giờ" title="Giờ kết thúc (hh:mm)">
-            </div>
-          </div>
-        </td>
-        <!-- Quốc gia -->
         <td><input type="text" class="input-inline country-input" value="${esc(r.country || '')}"></td>
-        <!-- Trạng thái -->
+        <td><input type="text" class="input-inline budget-val-input" value="${esc(r.budget || '')}"></td>
+        <td>
+          <select class="select-inline budget-level-input" title="ABO = ngân sách ở Nhóm · CBO = ngân sách ở Chiến dịch">
+            <option value="adset" ${r.budgetLevel === 'adset' ? 'selected' : ''}>ABO</option>
+            <option value="campaign" ${r.budgetLevel === 'campaign' ? 'selected' : ''}>CBO</option>
+          </select>
+        </td>
+        <td>
+          <select class="select-inline budget-mode-input">
+            <option value="daily" ${r.budgetMode === 'daily' ? 'selected' : ''}>Hàng ngày</option>
+            <option value="lifetime" ${r.budgetMode === 'lifetime' ? 'selected' : ''}>Trọn đời</option>
+          </select>
+        </td>
+        <td><input type="text" class="input-inline start-date-input" value="${esc(r.startDate || '')}" placeholder="dd/mm/yyyy"></td>
+        <td><input type="text" class="input-inline start-time-input" value="${esc(r.startTimeRaw || '')}" placeholder="hh:mm"></td>
+        <td><input type="text" class="input-inline end-date-input" value="${esc(r.endDate || '')}" placeholder="dd/mm/yyyy"></td>
+        <td><input type="text" class="input-inline end-time-input" value="${esc(r.endTimeRaw || '')}" placeholder="hh:mm"></td>
         <td>
           <select class="select-inline status-input">
             <option value="Bật" ${r.statusRaw === 'Bật' || r.statusRaw === 'ACTIVE' || r.statusRaw === 'active' || r.statusRaw === '1' ? 'selected' : ''}>Bật</option>
             <option value="Tạm dừng" ${r.statusRaw === 'Tạm dừng' || r.statusRaw === 'PAUSED' || r.statusRaw === 'paused' || r.statusRaw === '0' || !r.statusRaw ? 'selected' : ''}>Tạm dừng</option>
           </select>
         </td>
-        <!-- Ghi chú -->
+        <td>
+          <select class="select-inline cta-input">
+            <option value="" ${!r.cta ? 'selected' : ''}>Không CTA</option>
+            <option value="SHOP_NOW" ${r.cta === 'SHOP_NOW' ? 'selected' : ''}>SHOP_NOW</option>
+            <option value="LEARN_MORE" ${r.cta === 'LEARN_MORE' ? 'selected' : ''}>LEARN_MORE</option>
+          </select>
+        </td>
+        <td><input type="text" class="input-inline cta-link-input" value="${esc(r.ctaLink || '')}" placeholder="Link CTA"></td>
         <td><input type="text" class="input-inline notes-input" value="${esc(r.notes || '')}"></td>
-        <!-- Thao tác -->
         <td>
           <div class="action-btn-group">
             <button class="done-row-btn" title="Xong dòng này">✓ Xong</button>
@@ -1269,55 +1233,26 @@ function renderTable() {
 
     } else {
       tr.innerHTML = `
-        <td style="text-align: center; vertical-align: middle;">${getStatusIconHtml(r)}</td>
-        <!-- Tên Page -->
-        <td>
-          <div class="cell-strong" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(page.title)}">${esc(page.label)}</div>
-          ${r.parsed?.pageId ? `<div class="cell-sub mono">${esc(r.parsed.pageId)}</div>` : ''}
-        </td>
-        <!-- Bài viết & Chế độ -->
-        <td>
-          <div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.postLink || '')}">${esc(r.postLink || '—')}</div>
-          <div class="cell-sub" style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">
-            <span class="chip-sm" style="background-color: var(--bg-hover); font-size: 11px; padding: 2px 6px; border-radius: 4px;">${esc(r.contentMode || 'Sử dụng bài viết có sẵn')}</span>
-            <span class="chip-sm" style="background-color: var(--bg-hover); font-size: 11px; padding: 2px 6px; border-radius: 4px;">CTA: ${esc(r.ctaHandling || 'Tự động')}</span>
-          </div>
-        </td>
-        <!-- Chiến dịch & Loại -->
-        <td>
-          <div class="cell-strong">${esc(r.campaignName || '—')}</div>
-          <div class="cell-sub" style="font-size: 11px; color: var(--text-muted);">${esc(r.campaignType || '—')}</div>
-        </td>
-        <!-- Nhóm QC -->
-        <td><div class="cell-strong">${esc(r.adsetName || '—')}</div></td>
-        <!-- Quảng cáo -->
-        <td><div class="cell-strong">${esc(r.adName || '—')}</div></td>
-        <!-- Nút & Liên kết -->
-        <td>
-          <div>${ctaPillHtml(r)}</div>
-          ${r.ctaLink ? `<div class="cell-sub" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${esc(r.ctaLink)}"><a href="${esc(r.ctaLink)}" target="_blank">${esc(r.ctaLink)}</a></div>` : ''}
-        </td>
-        <!-- Ngân sách -->
-        <td>
-          <div class="cell-strong">${esc(r.budget || '—')}</div>
-          <div class="cell-sub">${r.budgetLevel === 'campaign' ? 'CBO (Chiến dịch)' : 'ABO (Nhóm)'} · ${r.budgetMode === 'lifetime' ? 'Trọn đời' : 'Hàng ngày'}</div>
-        </td>
-        <!-- Thời gian -->
-        <td>
-          <div>Bắt đầu: ${esc(r.startDate || '—')} ${r.startTimeRaw ? esc(r.startTimeRaw) : ''}</div>
-          ${r.endDate ? `<div>Kết thúc: ${esc(r.endDate)} ${r.endTimeRaw ? esc(r.endTimeRaw) : ''}</div>` : ''}
-        </td>
-        <!-- Quốc gia -->
-        <td><div class="cell-strong">${esc(r.country || '—')}</div></td>
-        <!-- Trạng thái -->
-        <td>
-          <span class="chip-sm ${r.statusRaw === 'Bật' || r.statusRaw === 'ACTIVE' || r.statusRaw === 'active' || r.statusRaw === '1' ? 'ok' : 'bad'}">${esc(r.statusRaw || 'Tạm dừng')}</span>
-        </td>
-        <!-- Ghi chú -->
-        <td>
-          <div class="cell-sub" style="max-width: 150px; max-height: 40px; overflow: auto;" title="${esc(r.notes || '')}">${esc(r.notes || '—')}</div>
-        </td>
-        <!-- Thao tác -->
+        <td class="status-cell">${getStatusIconHtml(r)}</td>
+        <td>${oneLineCell(page.label)}</td>
+        <td>${oneLineCell(r.postLink)}</td>
+        <td>${oneLineCell(r.contentMode || 'Bài viết có sẵn')}</td>
+        <td>${oneLineCell(r.campaignName)}</td>
+        <td>${oneLineCell(r.campaignType || 'Traffic')}</td>
+        <td>${oneLineCell(r.adsetName)}</td>
+        <td>${oneLineCell(r.adName)}</td>
+        <td>${oneLineCell(r.country || 'VN')}</td>
+        <td>${oneLineCell(r.budget)}</td>
+        <td>${oneLineCell(tableBudgetLevelLabel(r.budgetLevel))}</td>
+        <td>${oneLineCell(tableBudgetModeLabel(r.budgetMode))}</td>
+        <td>${oneLineCell(r.startDate)}</td>
+        <td>${oneLineCell(r.startTimeRaw)}</td>
+        <td>${oneLineCell(r.endDate)}</td>
+        <td>${oneLineCell(r.endTimeRaw)}</td>
+        <td><span class="chip-sm ${r.statusRaw === 'Bật' || r.statusRaw === 'ACTIVE' || r.statusRaw === 'active' || r.statusRaw === '1' ? 'ok' : 'bad'}">${esc(r.statusRaw || 'Tạm dừng')}</span></td>
+        <td>${ctaPillHtml(r)}</td>
+        <td>${r.ctaLink ? `<a class="cell-one-line" href="${esc(r.ctaLink)}" target="_blank" title="${esc(r.ctaLink)}">${esc(r.ctaLink)}</a>` : oneLineCell('', '—')}</td>
+        <td>${oneLineCell(r.notes)}</td>
         <td>
           <div class="action-btn-group">
             <button class="edit-btn" data-i="${r.index}">Sửa</button>
@@ -1380,7 +1315,7 @@ function openDrawer(index) {
             noteHtml = `
               <dt>Ghi chú tạo QC</dt>
               <dd style="color: #ea580c; font-weight: 600;">
-                Bài viết gốc đã có sẵn nút CTA. Hệ thống sẽ thử gán/ghi đè link theo sheet. Nếu thất bại sẽ báo lỗi.
+                Bài viết gốc đã có sẵn nút CTA. Hệ thống sẽ thử gán link theo sheet; nếu Meta không nhận CTA/link thì vẫn tạo quảng cáo bằng bài viết có sẵn và ghi cảnh báo.
               </dd>
             `;
           } else {
@@ -1436,8 +1371,8 @@ function openDrawer(index) {
         <dt>Video/Media ID</dt><dd class="mono">${esc(r.parsed?.videoId || '—')}</dd>
         <dt>Object Story ID đã xác minh</dt><dd class="mono">${esc(r.parsed?.objectStoryId || '—')}</dd>
         <dt>URL bài viết Meta trả về</dt><dd class="mono">${r.parsed?.permalinkUrl ? `<a href="${esc(r.parsed.permalinkUrl)}" target="_blank">${esc(r.parsed.permalinkUrl)}</a>` : '—'}</dd>
-        <dt>Trạng thái</dt><dd style="color: ${r.parsed?.verifiedWithGraph ? '#16a34a' : '#dc2626'}; font-weight: 600;">
-          ${r.parsed?.verifiedWithGraph ? 'Đã xác minh với Graph API' : 'Chưa xác minh'}
+        <dt>Trạng thái</dt><dd style="color: ${r.parsed?.verifiedWithGraph || r.parsed?.fastResolved ? '#16a34a' : '#dc2626'}; font-weight: 600;">
+          ${r.parsed?.verifiedWithGraph ? 'Đã xác minh với Graph API' : (r.parsed?.fastResolved ? 'Đã lấy ID nhanh từ Page ID + Post ID' : 'Chưa xác minh')}
         </dd>
         ${noteHtml}
       ` : `
@@ -1481,7 +1416,7 @@ async function validateRows() {
 
   try {
     const chunks = [];
-    const batchSize = 10;
+    const batchSize = 20;
     for (let i = 0; i < targetRows.length; i += batchSize) {
       chunks.push(targetRows.slice(i, i + batchSize));
     }
@@ -1496,7 +1431,7 @@ async function validateRows() {
     for (const chunk of chunks) {
       try {
         const payload = { rows: chunk.map(stripForSend), creativeMode: State.creativeMode };
-        const { results } = await api('/api/ads/validate', { method: 'POST', body: payload });
+        const { results } = await api('/api/ads/validate', { method: 'POST', body: payload, timeoutMs: 45000 });
         chunk.forEach((r, idx) => {
           const res = results?.[idx];
           if (res) {
@@ -1511,6 +1446,14 @@ async function validateRows() {
           }
         });
       } catch (err) {
+        if (/access token/i.test(err.message || '')) {
+          chunk.forEach((r) => {
+            r.status = 'permission';
+            r.errors = ['Access Token đã hết hạn, vui lòng nhập token mới.'];
+          });
+          Logger.err('Access Token đã hết hạn, vui lòng nhập token mới.');
+          break;
+        }
         chunk.forEach((r) => {
           r.status = 'error';
           r.errors = [err.message || 'Lỗi kết nối API'];
@@ -1618,14 +1561,16 @@ async function runCreate(rows, draft) {
       const res = createRes.result;
       r.status = res.status;
       r.errors = res.errors || [];
+      r.warnings = res.warnings || [];
       r.ids = res.ids || {};
 
       if (res.status === 'created') {
         ok++;
-        Logger.ok(`✓ Dòng ${r.index + 1}: đã tạo thành công (campaign ${res.ids?.campaignId || '—'}${res.ids?.adId ? ' · ad ' + res.ids.adId : ''}).`);
+        Logger.ok(`SUCCESS Dòng ${r.index + 1}: đã tạo thành công (campaign ${res.ids?.campaignId || '—'}${res.ids?.adId ? ' · ad ' + res.ids.adId : ''}).`);
+        (r.warnings || []).forEach((w) => Logger.warn(`WARNING Dòng ${r.index + 1}: ${w}`));
       } else {
         fail++;
-        Logger.err(`✗ Dòng ${r.index + 1}: ${res.errors?.[0] || 'lỗi không xác định'}`);
+        Logger.err(`FAILED Dòng ${r.index + 1}: ${res.errors?.[0] || 'lỗi không xác định'}`);
       }
 
       resultsForModal.push({ index: r.index, status: res.status, errors: res.errors, ids: res.ids });
@@ -1732,11 +1677,14 @@ async function api(url, opts = {}) {
   const method = (opts.method || 'GET').toUpperCase();
   topLoader.start();
   Logger.info(`→ ${method} ${url}`);
+  const controller = new AbortController();
+  const timer = opts.timeoutMs ? setTimeout(() => controller.abort(), opts.timeoutMs) : null;
   try {
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: opts.body ? JSON.stringify(opts.body) : undefined,
+      signal: controller.signal,
     });
     let data = {};
     try { data = await res.json(); } catch { /* no body */ }
@@ -1745,9 +1693,12 @@ async function api(url, opts = {}) {
     topLoader.done();
     return data;
   } catch (err) {
-    Logger.err(`← LỖI ${url}: ${err.message}`);
+    const message = err.name === 'AbortError' ? 'Request quá lâu, vui lòng kiểm tra ít dòng hơn hoặc nhập token mới.' : err.message;
+    Logger.err(`← LỖI ${url}: ${message}`);
     topLoader.error();
-    throw err;
+    throw new Error(message);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

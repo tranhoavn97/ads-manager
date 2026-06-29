@@ -8,7 +8,7 @@ import {
   getAdCreative, uploadAdImageFromUrl, getTokenPermissions
 } from '../meta-api.js';
 import { config } from '../config.js';
-import { parsePageId, parsePostId, parsePageSlugFromPostLink, normalizeFbUrl } from '../parsers.js';
+import { parsePageId, parsePostId, parsePageSlugFromPostLink, normalizeFbUrl, buildObjectStoryId } from '../parsers.js';
 import { validateRow, resolveCountries, resolveAdStatus, resolveBudgetMode, resolveBudgetLevel, resolveContentMode, ROW_STATUS } from '../validators.js';
 import { resolveCampaignType, resolveCta } from '../campaign-mapper.js';
 
@@ -138,7 +138,7 @@ router.post('/validate', requireAuth, async (req, res) => {
     }
 
     // 0.1) Kiểm tra khả năng truy cập của link CTA
-    if (row.ctaLink && row.ctaLink.toString().trim()) {
+    if (row.ctaLink && row.ctaLink.toString().trim() && base.normalized?.contentMode !== 'EXISTING_POST_STRICT') {
       const urlCheck = await checkUrlAccessibility(row.ctaLink);
       if (!urlCheck.valid) {
         if (urlCheck.error.includes('HTTP')) {
@@ -221,7 +221,15 @@ router.post('/validate', requireAuth, async (req, res) => {
             setParsedPage(parsed, owned, pageId);
           }
 
-          if (!pageId) {
+          if (pageId && postRes.postId && mode === 'EXISTING_POST_STRICT') {
+            parsed.postId = postRes.postId;
+            if (postRes.kind === 'video' || postRes.kind === 'reel') parsed.videoId = postRes.postId;
+            parsed.objectStoryId = buildObjectStoryId(parsed.pageId, postRes.postId);
+            parsed.fastResolved = true;
+            parsed.verifiedWithGraph = false;
+          }
+
+          if (!parsed.objectStoryId && !pageId) {
             const pageSlugFromPost = parsePageSlugFromPostLink(row.postLink);
             if (pageSlugFromPost) {
               const key = pageSlugFromPost.toLowerCase();
@@ -249,7 +257,7 @@ router.post('/validate', requireAuth, async (req, res) => {
             }
           }
 
-          if (!pageId && postRes.postId) {
+          if (!parsed.objectStoryId && !pageId && postRes.postId) {
             try {
               const postObj = await verifyPostDetails(postToken, postRes.postId);
               if (postObj && postObj.from?.id) {
@@ -259,7 +267,7 @@ router.post('/validate', requireAuth, async (req, res) => {
             } catch (e) {}
           }
           
-          if (pageId) {
+          if (!parsed.objectStoryId && pageId) {
             const ownerPage = owned.pages.find((p) => p.id === parsed.pageId);
             tokenToUse = ownerPage?.access_token || postToken;
             
@@ -331,7 +339,7 @@ router.post('/validate', requireAuth, async (req, res) => {
               }
           }
             
-          if (!parsed.verifiedWithGraph) {
+          if (!parsed.objectStoryId) {
             if (!parsed.pageId) {
               errors.push('Không tự nhận diện được Page từ link này. Với link reel/video ngắn chỉ có ID, hãy nhập Tên Page hoặc dùng link bài viết có chứa Page.');
             } else {
@@ -350,14 +358,9 @@ router.post('/validate', requireAuth, async (req, res) => {
 - Kết quả xác minh: Thất bại (${resolveErrorMsg || 'Không tìm thấy bài viết trùng khớp trên Page'})`);
           } else {
             if (mode === 'EXISTING_POST_STRICT') {
-              if (!parsed.hasOldCta) {
-                errors.push('Bài viết chưa có CTA. Chế độ dùng đúng bài viết gốc không thể tự thêm CTA. Hãy tự thêm CTA trong Ads Manager hoặc chọn chế độ Tạo quảng cáo mới.');
-                if (status === ROW_STATUS.VALID) status = ROW_STATUS.MISSING;
-              } else {
-                const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
-                if (hasCtaInput) {
-                  warnings.push('Bài viết gốc đã có sẵn CTA. Link CTA và Nút CTA trong Excel sẽ được bỏ qua.');
-                }
+              const hasCtaInput = (row.ctaLink && row.ctaLink.toString().trim()) || (row.cta && row.cta.toString().trim());
+              if (hasCtaInput) {
+                warnings.push('Bài viết có sẵn sẽ được dùng nguyên bản; Link CTA và Nút CTA trong file sẽ được bỏ qua.');
               }
             } else if (mode === 'NEW_CTA_CREATIVE') {
               if (!row.ctaLink || !row.ctaLink.toString().trim()) {
@@ -410,22 +413,36 @@ router.post('/create', requireAuth, async (req, res) => {
   const result = { index: row.index, status: ROW_STATUS.CREATED, errors: [], ids: {} };
 
   try {
-    const ctype = resolveCampaignType(row.campaignType);
-    const resolvedCta = resolveCta(row.cta)?.code || ctype.default_cta || 'LEARN_MORE';
+    const data = {
+      contentMode: 'EXISTING_POST_STRICT',
+      ctaHandling: 'KEEP_CURRENT',
+      campaignType: 'Traffic',
+      country: 'VN',
+      budgetMode: 'daily',
+      budgetLevel: 'adset',
+      statusRaw: 'PAUSED',
+      ...row,
+    };
+    const ctype = resolveCampaignType(data.campaignType);
     if (!ctype) throw new RowError('Loại chiến dịch không hợp lệ', ROW_STATUS.CREATE_ERROR);
+    const resolvedCta = resolveCta(data.cta)?.code || ctype.default_cta || 'LEARN_MORE';
 
-    const { codes: countries } = resolveCountries(row.country);
+    const { codes: countries } = resolveCountries(data.country);
     if (!countries.length) throw new RowError('Thiếu quốc gia hợp lệ', ROW_STATUS.CREATE_ERROR);
 
-    const pageId = row.parsed?.pageId;
+    const pageId = data.parsed?.pageId;
     if (!pageId) throw new RowError('Thiếu Page ID', ROW_STATUS.CREATE_ERROR);
 
-    const objectStoryId = row.parsed?.objectStoryId;
+    let objectStoryId = data.parsed?.objectStoryId;
     if (!objectStoryId) {
       throw new RowError('Không có Post ID thật để tạo quảng cáo bằng bài viết gốc', ROW_STATUS.CREATE_ERROR);
     }
 
-    const targetAdAccountId = row.adAccountId || adAccountId;
+    const targetAdAccountId = data.adAccountId || adAccountId;
+    const nameSuffix = objectStoryId || `dong-${(data.index ?? 0) + 1}`;
+    const campaignName = data.campaignName?.toString().trim() || `Traffic ${nameSuffix}`;
+    const adsetName = data.adsetName?.toString().trim() || `Nhom quang cao ${nameSuffix}`;
+    const adName = data.adName?.toString().trim() || `Quang cao ${nameSuffix}`;
 
     // 0) XÁC MINH BÀI VIẾT VÀ CTA TRƯỚC KHI TẠO CHIẾN DỊCH
     // Lấy token của Page sở hữu bài viết
@@ -433,6 +450,18 @@ router.post('/create', requireAuth, async (req, res) => {
     const pagesData = await getPages(token);
     const ownerPage = pagesData.find((p) => p.id === ownerPageId);
     const pageToken = ownerPage?.access_token || token;
+
+    if (data.parsed?.fastResolved && data.parsed?.videoId) {
+      try {
+        const resolved = await resolvePostFromGraph(pageToken, pageId, data.postLink, data.parsed.videoId, 'reel');
+        if (resolved?.objectStoryId) {
+          objectStoryId = resolved.objectStoryId;
+          data.parsed.objectStoryId = resolved.objectStoryId;
+          data.parsed.postId = resolved.postId;
+          data.parsed.videoId = resolved.videoId || data.parsed.videoId;
+        }
+      } catch {}
+    }
 
     let postInfo;
     try {
@@ -445,34 +474,72 @@ router.post('/create', requireAuth, async (req, res) => {
       throw new RowError('Không tìm thấy bài viết gốc trên Facebook Page.', ROW_STATUS.CREATE_ERROR);
     }
 
-    const hasCta = !!(postInfo.call_to_action && postInfo.call_to_action.type && postInfo.call_to_action.type !== 'NO_BUTTON');
-    const resolvedMode = resolveContentMode(row.contentMode);
+    const resolvedMode = resolveContentMode(data.contentMode);
 
-    if (resolvedMode === 'EXISTING_POST_STRICT') {
-      if (!hasCta) {
-        throw new RowError('Bài viết chưa có CTA. Chế độ dùng đúng bài viết gốc không thể tự thêm CTA. Hãy tự thêm CTA trong Ads Manager hoặc chuyển sang NEW_CTA_CREATIVE.', ROW_STATUS.CREATE_ERROR);
-      }
-    } else if (resolvedMode === 'NEW_CTA_CREATIVE') {
-      if (!row.ctaLink || !row.ctaLink.toString().trim()) {
+    if (resolvedMode === 'NEW_CTA_CREATIVE') {
+      if (!data.ctaLink || !data.ctaLink.toString().trim()) {
         throw new RowError('Thiếu link CTA để tạo quảng cáo mới có CTA (dark post)', ROW_STATUS.CREATE_ERROR);
       }
     }
 
     // 1) CAMPAIGN
-    const adStatus = resolveAdStatus(row.statusRaw, draftMode);
+    const adStatus = resolveAdStatus(data.statusRaw, draftMode);
     const campaignStatus = draftMode ? 'PAUSED' : adStatus;
 
     // Ngân sách: hàng ngày/trọn đời + cấp chiến dịch (CBO)/nhóm
-    const budgetMinor = budgetToMinorUnit(row.normalized?.budget ?? row.budget, currency);
-    const budgetMode = row.normalized?.budgetMode || resolveBudgetMode(row.budgetMode);
-    const budgetLevel = row.normalized?.budgetLevel || resolveBudgetLevel(row.budgetLevel);
+    const budgetMinor = budgetToMinorUnit(data.normalized?.budget ?? data.budget, currency);
+    const budgetMode = data.normalized?.budgetMode || resolveBudgetMode(data.budgetMode);
+    const budgetLevel = data.normalized?.budgetLevel || resolveBudgetLevel(data.budgetLevel);
     const budgetField = budgetMode === 'lifetime' ? 'lifetime_budget' : 'daily_budget';
-    if (budgetMode === 'lifetime' && !row.normalized?.endTime) {
+    if (budgetMode === 'lifetime' && !data.normalized?.endTime) {
       throw new RowError('Ngân sách trọn đời cần Ngày kết thúc', ROW_STATUS.CREATE_ERROR);
     }
 
+    let creativePayload;
+    let creative;
+    if (resolvedMode === 'EXISTING_POST_STRICT') {
+      creativePayload = {
+        name: `${adName} - creative`,
+        object_story_id: objectStoryId
+      };
+      try {
+        creative = await createAdCreative(token, targetAdAccountId, creativePayload);
+        result.ids.creativeId = creative.id;
+      } catch (err) {
+        const message = err.message || '';
+        if (message.includes('không thể đưa vào quảng cáo') || message.includes('cannot be promoted') || message.includes('not be promoted')) {
+          const candidateId = data.parsed?.videoId || data.parsed?.postId || (objectStoryId.includes('_') ? objectStoryId.split('_')[1] : objectStoryId);
+          const retryKinds = ['reel', 'video', 'post'];
+          for (const kind of retryKinds) {
+            try {
+              const resolved = await resolvePostFromGraph(pageToken, pageId, data.postLink || candidateId, candidateId, kind);
+              if (!resolved?.objectStoryId || resolved.objectStoryId === objectStoryId) continue;
+              objectStoryId = resolved.objectStoryId;
+              data.parsed.objectStoryId = resolved.objectStoryId;
+              data.parsed.postId = resolved.postId;
+              data.parsed.videoId = resolved.videoId || data.parsed.videoId;
+              creativePayload = {
+                name: `${adName} - creative`,
+                object_story_id: objectStoryId
+              };
+              creative = await createAdCreative(token, targetAdAccountId, creativePayload);
+              result.ids.creativeId = creative.id;
+              break;
+            } catch {}
+          }
+          if (!creative) {
+            throw new RowError(`Bài viết/ID ${objectStoryId} không thể đưa vào quảng cáo theo phản hồi của Meta. App đã thử dùng đúng bài viết có sẵn và không chỉnh CTA, nhưng Meta vẫn từ chối bài này. Hãy chọn bài viết khác có thể quảng cáo, hoặc lấy đúng link bài viết gốc trong Page. Chi tiết Meta: ${message}`, ROW_STATUS.CREATE_ERROR);
+          }
+          result.warnings = result.warnings || [];
+          result.warnings.push(`Đã tự đổi sang Object Story ID ${objectStoryId} để dùng bài viết có sẵn.`);
+        } else {
+          throw new RowError('Không thể tạo creative: ' + err.message, ROW_STATUS.CREATE_ERROR);
+        }
+      }
+    }
+
     const campaignPayload = {
-      name: row.campaignName,
+      name: campaignName,
       objective: ctype.objective,
       status: campaignStatus,
       special_ad_categories: [],
@@ -488,7 +555,7 @@ router.post('/create', requireAuth, async (req, res) => {
 
     // 2) AD SET
     const adsetPayload = {
-      name: row.adsetName,
+      name: adsetName,
       campaign_id: campaign.id,
       billing_event: ctype.billing_event,
       optimization_goal: ctype.optimization_goal,
@@ -503,8 +570,8 @@ router.post('/create', requireAuth, async (req, res) => {
       adsetPayload[budgetField] = budgetMinor;
       adsetPayload.bid_strategy = 'LOWEST_COST_WITHOUT_CAP';
     }
-    if (row.normalized?.startTime) adsetPayload.start_time = row.normalized.startTime;
-    if (row.normalized?.endTime) adsetPayload.end_time = row.normalized.endTime;
+    if (data.normalized?.startTime) adsetPayload.start_time = data.normalized.startTime;
+    if (data.normalized?.endTime) adsetPayload.end_time = data.normalized.endTime;
     if (ctype.destination_type) adsetPayload.destination_type = ctype.destination_type;
     if (ctype.id === 'tin_nhan' || ctype.id === 'lead') {
       adsetPayload.promoted_object = { page_id: pageId };
@@ -514,16 +581,16 @@ router.post('/create', requireAuth, async (req, res) => {
     result.ids.adsetId = adset.id;
 
     // 3) AD CREATIVE
-    let creativePayload;
+    if (!creative) {
     if (resolvedMode === 'EXISTING_POST_STRICT') {
       creativePayload = {
-        name: `${row.adName} - creative`,
+        name: `${adName} - creative`,
         object_story_id: objectStoryId
       };
     } else { // NEW_CTA_CREATIVE
       const message = postInfo.message || '';
       let isVideo = postInfo.type === 'video';
-      let videoId = row.parsed?.videoId || postInfo.object_id;
+      let videoId = data.parsed?.videoId || postInfo.object_id;
 
       if (!videoId && postInfo.attachments?.data) {
         for (const att of postInfo.attachments.data) {
@@ -539,7 +606,7 @@ router.post('/create', requireAuth, async (req, res) => {
 
       if (isVideo && videoId) {
         creativePayload = {
-          name: `${row.adName} - creative`,
+          name: `${adName} - creative`,
           object_story_spec: {
             page_id: pageId,
             video_data: {
@@ -548,7 +615,7 @@ router.post('/create', requireAuth, async (req, res) => {
               call_to_action: {
                 type: resolvedCta,
                 value: {
-                  link: row.ctaLink
+                  link: data.ctaLink
                 }
               }
             }
@@ -568,17 +635,17 @@ router.post('/create', requireAuth, async (req, res) => {
         if (imageUrl) {
           const imageHash = await uploadAdImageFromUrl(token, targetAdAccountId, imageUrl);
           creativePayload = {
-            name: `${row.adName} - creative`,
+            name: `${adName} - creative`,
             object_story_spec: {
               page_id: pageId,
               link_data: {
-                link: row.ctaLink,
+                link: data.ctaLink,
                 image_hash: imageHash,
                 message: message,
                 call_to_action: {
                   type: resolvedCta,
                   value: {
-                    link: row.ctaLink
+                    link: data.ctaLink
                   }
                 }
               }
@@ -586,16 +653,16 @@ router.post('/create', requireAuth, async (req, res) => {
           };
         } else {
           creativePayload = {
-            name: `${row.adName} - creative`,
+            name: `${adName} - creative`,
             object_story_spec: {
               page_id: pageId,
               link_data: {
-                link: row.ctaLink,
+                link: data.ctaLink,
                 message: message,
                 call_to_action: {
                   type: resolvedCta,
                   value: {
-                    link: row.ctaLink
+                    link: data.ctaLink
                   }
                 }
               }
@@ -605,17 +672,50 @@ router.post('/create', requireAuth, async (req, res) => {
       }
     }
 
-    let creative;
     try {
       creative = await createAdCreative(token, targetAdAccountId, creativePayload);
       result.ids.creativeId = creative.id;
     } catch (err) {
-      throw new RowError('Không thể tạo creative: ' + err.message, ROW_STATUS.CREATE_ERROR);
+      const message = err.message || '';
+      if (message.includes('không thể đưa vào quảng cáo') || message.includes('cannot be promoted') || message.includes('not be promoted')) {
+        if (resolvedMode === 'EXISTING_POST_STRICT') {
+          const candidateId = data.parsed?.videoId || data.parsed?.postId || (objectStoryId.includes('_') ? objectStoryId.split('_')[1] : objectStoryId);
+          const retryKinds = ['reel', 'video', 'post'];
+          for (const kind of retryKinds) {
+            try {
+              const resolved = await resolvePostFromGraph(pageToken, pageId, data.postLink || candidateId, candidateId, kind);
+              if (!resolved?.objectStoryId || resolved.objectStoryId === objectStoryId) continue;
+              objectStoryId = resolved.objectStoryId;
+              data.parsed.objectStoryId = resolved.objectStoryId;
+              data.parsed.postId = resolved.postId;
+              data.parsed.videoId = resolved.videoId || data.parsed.videoId;
+              creativePayload = {
+                name: `${adName} - creative`,
+                object_story_id: objectStoryId
+              };
+              creative = await createAdCreative(token, targetAdAccountId, creativePayload);
+              result.ids.creativeId = creative.id;
+              break;
+            } catch {}
+          }
+          if (creative) {
+            result.warnings = result.warnings || [];
+            result.warnings.push(`Đã tự đổi sang Object Story ID ${objectStoryId} để dùng bài viết có sẵn.`);
+          }
+        }
+        if (creative) {
+          // Retry succeeded with a Graph-resolved Object Story ID.
+        } else {
+        throw new RowError(`Bài viết/ID ${objectStoryId} không thể đưa vào quảng cáo theo phản hồi của Meta. Hãy dùng link bài viết gốc có Post ID thật trên Page, hoặc chọn bài viết khác có thể quảng cáo. Chi tiết Meta: ${message}`, ROW_STATUS.CREATE_ERROR);
+        }
+      }
+      if (!creative) throw new RowError('Không thể tạo creative: ' + err.message, ROW_STATUS.CREATE_ERROR);
+    }
     }
 
     // 4) AD
     const ad = await createAd(token, targetAdAccountId, {
-      name: row.adName,
+      name: adName,
       adset_id: adset.id,
       creative: { creative_id: creative.id },
       status: adStatus,
@@ -640,11 +740,11 @@ router.post('/create', requireAuth, async (req, res) => {
         if (ctaType !== resolvedCta) {
           throw new Error(`Nút CTA hiển thị (${ctaType}) không khớp với ${resolvedCta}`);
         }
-        if (row.ctaLink && row.ctaLink.toString().trim() && ctaLink) {
+        if (data.ctaLink && data.ctaLink.toString().trim() && ctaLink) {
           const normCtaLink = normalizeFbUrl(ctaLink);
-          const normRowLink = normalizeFbUrl(row.ctaLink);
-          if (normCtaLink !== normRowLink && !ctaLink.includes(row.ctaLink) && !row.ctaLink.includes(ctaLink)) {
-            throw new Error(`Link CTA hiển thị (${ctaLink}) không khớp với link yêu cầu (${row.ctaLink})`);
+          const normRowLink = normalizeFbUrl(data.ctaLink);
+          if (normCtaLink !== normRowLink && !ctaLink.includes(data.ctaLink) && !data.ctaLink.includes(ctaLink)) {
+            throw new Error(`Link CTA hiển thị (${ctaLink}) không khớp với link yêu cầu (${data.ctaLink})`);
           }
         }
       }

@@ -200,6 +200,16 @@ export function validateRow(row) {
   const errors = [];
   const warnings = [];
   const normalized = {};
+  const data = {
+    contentMode: row.contentMode || 'Bài viết có sẵn',
+    ctaHandling: row.ctaHandling || 'Giữ CTA hiện tại',
+    campaignType: row.campaignType || 'Traffic',
+    country: row.country || 'Việt Nam',
+    budgetMode: row.budgetMode || 'Hàng ngày',
+    budgetLevel: row.budgetLevel || 'Cấp nhóm',
+    statusRaw: row.statusRaw || 'Tạm dừng',
+    ...row,
+  };
 
   const need = (val, label) => {
     if (val == null || val.toString().trim() === '') {
@@ -209,49 +219,40 @@ export function validateRow(row) {
     return true;
   };
 
-  const mode = resolveContentMode(row.contentMode);
+  const mode = resolveContentMode(data.contentMode);
   normalized.contentMode = mode;
 
-  const ctaHand = resolveCtaHandling(row.ctaHandling);
+  const ctaHand = resolveCtaHandling(data.ctaHandling);
   normalized.ctaHandling = ctaHand;
 
-  need(row.contentMode, 'chế độ nội dung');
-  need(row.ctaHandling, 'xử lý CTA');
-  need(row.postLink, 'link bài viết');
+  need(data.postLink, 'link bài viết');
 
   if (mode === 'NEW_CTA_CREATIVE') {
-    need(row.ctaLink, 'link CTA');
+    need(data.ctaLink, 'link CTA');
   }
 
-  need(row.campaignName, 'tên chiến dịch');
-  need(row.adsetName, 'tên nhóm quảng cáo');
-  need(row.adName, 'tên quảng cáo');
-  need(row.campaignType, 'loại chiến dịch');
-  need(row.country, 'quốc gia');
-  need(row.budget, 'ngân sách');
-  need(row.budgetMode, 'loại ngân sách');
-  need(row.startDate, 'ngày bắt đầu');
-  need(row.statusRaw, 'trạng thái');
+  need(data.budget, 'ngân sách');
+  need(data.startDate, 'ngày bắt đầu');
 
   // Loại chiến dịch
-  const ctype = resolveCampaignType(row.campaignType);
-  if (row.campaignType && !ctype) {
-    errors.push(`Loại chiến dịch "${row.campaignType}" không hợp lệ (chỉ nhận: Tin nhắn, Tương tác, Traffic, Lead, Doanh số)`);
+  const ctype = resolveCampaignType(data.campaignType);
+  if (data.campaignType && !ctype) {
+    errors.push(`Loại chiến dịch "${data.campaignType}" không hợp lệ (chỉ nhận: Tin nhắn, Tương tác, Traffic, Lead, Doanh số)`);
   } else if (ctype) {
     normalized.campaignType = ctype;
     
     // Loại cần website nhưng thiếu link CTA (chỉ check khi ctaHandling = AUTO và không phải chế độ dùng bài gốc)
     const needsLink = ctype.needsLink && mode !== 'EXISTING_POST_STRICT';
-    if (needsLink && ctaHand === 'AUTO' && (!row.ctaLink || row.ctaLink.toString().trim() === '')) {
+    if (needsLink && ctaHand === 'AUTO' && (!data.ctaLink || data.ctaLink.toString().trim() === '')) {
       errors.push(`Loại "${ctype.label}" cần link CTA (website đích) nhưng đang để trống`);
     }
   }
 
   // Quốc gia
-  if (row.country) {
-    const { codes, unknown } = resolveCountries(row.country);
+  if (data.country) {
+    const { codes, unknown } = resolveCountries(data.country);
     if (codes.length === 0) {
-      errors.push(`Không nhận dạng được quốc gia "${row.country}". Dùng tên tiếng Việt hoặc mã ISO (vd: VN, US)`);
+      errors.push(`Không nhận dạng được quốc gia "${data.country}". Dùng tên tiếng Việt hoặc mã ISO (vd: VN, US)`);
     } else {
       normalized.countries = codes;
       if (unknown.length) warnings.push(`Bỏ qua quốc gia không nhận dạng: ${unknown.join(', ')}`);
@@ -259,10 +260,10 @@ export function validateRow(row) {
   }
 
   // Ngân sách
-  if (row.budget) {
-    const b = parseNumber(row.budget);
+  if (data.budget) {
+    const b = parseNumber(data.budget);
     if (isNaN(b) || b <= 0) {
-      errors.push(`Ngân sách "${row.budget}" không hợp lệ`);
+      errors.push(`Ngân sách "${data.budget}" không hợp lệ`);
     } else {
       normalized.budget = b;
       if (b < 1000) warnings.push('Ngân sách có vẻ thấp — kiểm tra lại đơn vị tiền tệ của tài khoản');
@@ -270,18 +271,18 @@ export function validateRow(row) {
   }
 
   // Ngày & Giờ bắt đầu/kết thúc
-  const start = parseDate(row.startDate, row.startTimeRaw);
-  const end = parseDate(row.endDate, row.endTimeRaw);
+  const start = parseDate(data.startDate, data.startTimeRaw);
+  const end = parseDate(data.endDate, data.endTimeRaw);
   
-  if (row.startDate && !start) errors.push(`Ngày bắt đầu "${row.startDate}" không đọc được (dùng dd/mm/yyyy)`);
-  if (row.endDate && !end) errors.push(`Ngày kết thúc "${row.endDate}" không đọc được (dùng dd/mm/yyyy)`);
+  if (data.startDate && !start) errors.push(`Ngày bắt đầu "${data.startDate}" không đọc được (dùng dd/mm/yyyy)`);
+  if (data.endDate && !end) errors.push(`Ngày kết thúc "${data.endDate}" không đọc được (dùng dd/mm/yyyy)`);
   if (start && end && end <= start) errors.push('Ngày kết thúc phải sau ngày bắt đầu');
   if (start) normalized.startTime = start.toISOString();
   if (end) normalized.endTime = end.toISOString();
 
   // Ngân sách: hàng ngày/trọn đời + cấp chiến dịch (CBO)/nhóm
-  const budgetMode = resolveBudgetMode(row.budgetMode);
-  const budgetLevel = resolveBudgetLevel(row.budgetLevel);
+  const budgetMode = resolveBudgetMode(data.budgetMode);
+  const budgetLevel = resolveBudgetLevel(data.budgetLevel);
   normalized.budgetMode = budgetMode;
   normalized.budgetLevel = budgetLevel;
   if (budgetMode === 'lifetime' && !end) {

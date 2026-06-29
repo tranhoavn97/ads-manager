@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { config } from './src/config.js';
 import authRouter from './src/routes/auth.js';
 import accountsRouter from './src/routes/accounts.js';
+import existingPostRouter from './src/routes/existing-post-shopee.js';
 import adsRouter from './src/routes/ads.js';
 import manageRouter from './src/routes/manage.js';
 import postsRouter from './src/routes/posts.js';
@@ -31,6 +32,7 @@ app.use(
 // API
 app.use('/api/auth', authRouter);
 app.use('/api/accounts', accountsRouter);
+app.use('/api/ads', existingPostRouter);
 app.use('/api/ads', adsRouter);
 app.use('/api/manage', manageRouter);
 app.use('/api/posts', postsRouter);
