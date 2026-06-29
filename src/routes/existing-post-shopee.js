@@ -45,7 +45,7 @@ router.post('/validate', requireAuth, async (req, res, next) => {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const base = validateRow({ ...row, campaignType: 'Traffic', contentMode: 'Bài viết có sẵn', ctaHandling: 'Bỏ CTA', ctaLink: row.ctaLink || 'existing-post-only' });
+    const base = validateRow({ ...row, campaignType: 'Traffic', contentMode: 'Bài viết có sẵn', ctaHandling: 'Bỏ CTA', ctaLink: 'existing-post-only' });
     const errors = [...base.errors].filter((err) => !/link CTA|link Shopee|CTA/i.test(err));
     const warnings = [...base.warnings];
     const parsed = { pageId: null, pageName: null, postId: null, videoId: null, objectStoryId: null, sourceObjectId: null, permalinkUrl: null, verifiedWithGraph: false };
@@ -74,29 +74,14 @@ router.post('/validate', requireAuth, async (req, res, next) => {
         const page = maps.idMap.get(parsed.pageId);
         if (!page) errors.push('Page không thuộc tài khoản Facebook đang đăng nhập.');
         else if (Array.isArray(page.tasks) && !page.tasks.includes('ADVERTISE')) errors.push('Tài khoản không có quyền ADVERTISE trên Page này.');
-        else {
-          let resolved = null;
-          try { resolved = await resolvePostFromGraph(page.access_token || token, parsed.pageId, row.postLink, postRes.postId, postRes.kind); }
-          catch (err) { warnings.push(`Graph không trả object_story_id trực tiếp: ${err.message}`); }
-          if (resolved?.objectStoryId) {
-            parsed.postId = resolved.postId;
-            parsed.videoId = resolved.videoId;
-            parsed.objectStoryId = resolved.objectStoryId;
-            parsed.sourceObjectId = resolved.sourceObjectId;
-            parsed.permalinkUrl = resolved.permalinkUrl;
-            parsed.verifiedWithGraph = true;
-          } else if (postRes.postId && (postRes.kind === 'reel' || postRes.kind === 'video')) {
-            parsed.postId = postRes.postId;
-            parsed.videoId = postRes.postId;
-            parsed.objectStoryId = `${parsed.pageId}_${postRes.postId}`;
-            parsed.sourceObjectId = postRes.postId;
-            warnings.push('Chưa lấy được post_id từ Reel. Tool sẽ thử object_story_id dự phòng; nếu Meta không chấp nhận sẽ báo lỗi khi tạo quảng cáo.');
-          } else if (postRes.postId) {
-            parsed.postId = postRes.postId;
-            parsed.objectStoryId = postRes.pageIdFromLink ? `${postRes.pageIdFromLink}_${postRes.postId}` : `${parsed.pageId}_${postRes.postId}`;
-            warnings.push('Chưa xác minh được Post ID qua Graph. Tool sẽ thử tạo bằng object_story_id dự phòng.');
-          } else errors.push('Không xác định được Post ID thật từ link này.');
-        }
+        else if (postRes.postId) {
+          parsed.postId = postRes.postId;
+          parsed.videoId = (postRes.kind === 'reel' || postRes.kind === 'video') ? postRes.postId : null;
+          parsed.objectStoryId = postRes.pageIdFromLink ? `${postRes.pageIdFromLink}_${postRes.postId}` : `${parsed.pageId}_${postRes.postId}`;
+          parsed.sourceObjectId = postRes.postId;
+          parsed.verifiedWithGraph = false;
+          warnings.push('Đã tạo object_story_id dự phòng. Khi tạo quảng cáo, Meta sẽ xác minh lại bài viết thật.');
+        } else errors.push('Không xác định được Post ID thật từ link này.');
       }
     }
     results.push({ index: i, status: errors.length ? ROW_STATUS.POST_ERROR : ROW_STATUS.VALID, errors, warnings, parsed, normalized: base.normalized });
