@@ -20,7 +20,7 @@ const EDIT_FIELD_MAP = {
   '.content-mode-input': 'contentMode', '.cta-handling-input': 'ctaHandling',
   '.campaign-name-input': 'campaignName', '.campaign-type-input': 'campaignType',
   '.adset-name-input': 'adsetName', '.ad-name-input': 'adName',
-  '.cta-input': 'cta', '.cta-link-input': 'ctaLink',
+  '.cta-input': 'cta', '.cta-link-input': 'ctaLink', '.source-url-input': 'sourceUrl',
   '.budget-val-input': 'budget', '.budget-level-input': 'budgetLevel', '.budget-mode-input': 'budgetMode',
   '.start-date-input': 'startDate', '.start-time-input': 'startTimeRaw',
   '.end-date-input': 'endDate', '.end-time-input': 'endTimeRaw',
@@ -212,7 +212,7 @@ function resolveCtaCode(input) {
 function ctaForRow(row) {
   const override = resolveCtaCode(row?.cta);
   if (override) return { code: override, label: CTA_LABELS[override] || override, custom: true };
-  if (row?.ctaLink && String(row.ctaLink).trim()) return { code: 'SHOP_NOW', label: CTA_LABELS.SHOP_NOW || 'Mua ngay', custom: true };
+  if ((row?.ctaLink && String(row.ctaLink).trim()) || (row?.sourceUrl && String(row.sourceUrl).trim())) return { code: 'SHOP_NOW', label: CTA_LABELS.SHOP_NOW || 'Mua ngay', custom: true };
   return null;
 }
 // Nhãn ngân sách (hiển thị trong ngăn chi tiết)
@@ -232,7 +232,7 @@ function ctaPillHtml(row, withCode = false) {
   if (!c) return '<span class="cta-pill cta-none">Không CTA</span>';
   const cls = CTA_CLASS[c.code] || 'cta-other';
   const dot = c.custom ? '<span class="custom-dot"></span>' : '';
-  const hasLink = !!(row?.ctaLink && String(row.ctaLink).trim());
+  const hasLink = !!((row?.ctaLink && String(row.ctaLink).trim()) || (row?.sourceUrl && String(row.sourceUrl).trim()));
   const linkState = hasLink ? 'Có link' : 'Chưa có link';
   const tip = hasLink ? 'Nút CTA có link đích trong file' : 'Nút CTA chưa có link đích trong file';
   return `<span class="cta-pill ${cls}" title="${tip}">${dot}${esc(c.label)} + ${linkState}</span>` +
@@ -719,7 +719,8 @@ const HEADER_KEYS = [
   ['postLink', ['link bai viet', 'id bai viet', 'post id', 'object story id', 'bai viet', 'reel', 'anh', 'post', 'link bai', 'bai/reel']],
   ['contentMode', ['che do noi dung', 'che do', 'noidung', 'content mode']],
   ['ctaHandling', ['xu ly cta', 'xu ly', 'cta handling', 'handle cta']],
-  ['ctaLink', ['link cta', 'link cta tuy chon', 'website', 'link dich', 'url', 'link den', 'cta link']],
+  ['ctaLink', ['link cta', 'link cta tuy chon', 'website', 'link dich', 'link den', 'cta link']],
+  ['sourceUrl', ['url nguon', 'source url', 'source_url', 'url source', 'destination url', 'url']],
   ['cta', ['nut cta', 'nut cta tuy chon', 'nut keu goi', 'keu goi', 'call to action', 'cta button', 'nut hanh dong']],
   ['campaignType', ['loai chien dich', 'loai', 'muc tieu', 'objective', 'type']],
   ['campaignName', ['ten chien dich', 'chien dich', 'campaign']],
@@ -804,7 +805,7 @@ function handleFile(file) {
 //  Nhập tay trong bảng (thêm/nhân đôi/xoá dòng — không cần file)
 // ============================================================
 const ROW_FIELDS = [
-  'adAccountId', 'pageLink', 'postLink', 'contentMode', 'ctaHandling', 'ctaLink', 'cta',
+  'adAccountId', 'pageLink', 'postLink', 'contentMode', 'ctaHandling', 'ctaLink', 'sourceUrl', 'cta',
   'campaignType', 'campaignName', 'adsetName', 'adName', 'country',
   'budgetMode', 'budgetLevel', 'budget', 'startDate', 'startTimeRaw',
   'endDate', 'endTimeRaw', 'statusRaw', 'notes',
@@ -818,7 +819,7 @@ function blankRow() {
   return {
     index: nextRowIndex(),
     status: 'missing', errors: [], warnings: [], parsed: {}, normalized: {},
-    pageLink: '', postLink: '', ctaLink: '', cta: '',
+    pageLink: '', postLink: '', ctaLink: '', sourceUrl: '', cta: '',
     contentMode: 'Sử dụng bài viết có sẵn', ctaHandling: 'Giữ CTA hiện tại',
     campaignType: 'Traffic', campaignName: '', adsetName: '', adName: '',
     country: 'Việt Nam', budget: '', budgetMode: 'daily', budgetLevel: 'adset',
@@ -986,6 +987,7 @@ function clientParseRow(r) {
   
   r.contentMode = 'Sử dụng bài viết có sẵn';
   r.ctaHandling = 'Giữ CTA hiện tại';
+  if (!r.sourceUrl && r.ctaLink) r.sourceUrl = r.ctaLink;
 
   const pg = clientParsePageId(r.pageLink);
   parsed.pageId = pg.id || null;
@@ -1142,7 +1144,7 @@ function renderTable() {
   });
 
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="21" class="loading">Không có dòng nào khớp bộ lọc.</td></tr>';
+    body.innerHTML = '<tr><td colspan="22" class="loading">Không có dòng nào khớp bộ lọc.</td></tr>';
   }
 
   rows.forEach((r) => {
@@ -1200,6 +1202,7 @@ function renderTable() {
           </select>
         </td>
         <td><input type="text" class="input-inline cta-link-input" value="${esc(r.ctaLink || '')}" placeholder="Link CTA"></td>
+        <td><input type="text" class="input-inline source-url-input" value="${esc(r.sourceUrl || r.ctaLink || '')}" placeholder="URL nguồn"></td>
         <td><input type="text" class="input-inline notes-input" value="${esc(r.notes || '')}"></td>
         <td>
           <div class="action-btn-group">
@@ -1255,6 +1258,7 @@ function renderTable() {
         <td><span class="chip-sm ${r.statusRaw === 'Bật' || r.statusRaw === 'ACTIVE' || r.statusRaw === 'active' || r.statusRaw === '1' ? 'ok' : 'bad'}">${esc(r.statusRaw || 'Tạm dừng')}</span></td>
         <td>${ctaPillHtml(r)}</td>
         <td>${r.ctaLink ? `<a class="cell-one-line" href="${esc(r.ctaLink)}" target="_blank" title="${esc(r.ctaLink)}">${esc(r.ctaLink)}</a>` : oneLineCell('', '—')}</td>
+        <td>${(r.sourceUrl || r.ctaLink) ? `<a class="cell-one-line" href="${esc(r.sourceUrl || r.ctaLink)}" target="_blank" title="${esc(r.sourceUrl || r.ctaLink)}">${esc(r.sourceUrl || r.ctaLink)}</a>` : oneLineCell('', '—')}</td>
         <td>${oneLineCell(r.notes)}</td>
         <td>
           <div class="action-btn-group">
@@ -1493,7 +1497,7 @@ async function validateRows() {
 function stripForSend(r) {
   return {
     index: r.index,
-    pageLink: r.pageLink, postLink: r.postLink, ctaLink: r.ctaLink, cta: r.cta,
+    pageLink: r.pageLink, postLink: r.postLink, ctaLink: r.ctaLink, sourceUrl: r.sourceUrl || r.ctaLink, cta: r.cta,
     campaignName: r.campaignName, adsetName: r.adsetName, adName: r.adName,
     campaignType: r.campaignType, country: r.country, budget: r.budget,
     budgetMode: r.budgetMode, budgetLevel: r.budgetLevel,
@@ -1635,31 +1639,32 @@ function showResults(results, draft) {
 // ============================================================
 function downloadTemplate() {
   const headers = [
-    'Tên Page', 'Link bài viết', 'Chế độ nội dung', 'Xử lý CTA', 'Link CTA', 'Nút CTA',
-    'Tên chiến dịch', 'Tên nhóm quảng cáo', 'Tên quảng cáo', 'Loại chiến dịch',
-    'Quốc gia', 'Ngân sách', 'Loại ngân sách', 'Ngày bắt đầu', 'Giờ bắt đầu',
-    'Ngày kết thúc', 'Giờ kết thúc', 'Trạng thái', 'Ghi chú'
+    'Tên Page', 'Link bài viết', 'Chế độ nội dung', 'Tên chiến dịch', 'Loại chiến dịch',
+    'Tên nhóm quảng cáo', 'Tên quảng cáo', 'Quốc gia', 'Ngân sách', 'Cấp ngân sách',
+    'Loại ngân sách', 'Ngày bắt đầu', 'Giờ bắt đầu', 'Ngày kết thúc', 'Giờ kết thúc',
+    'Trạng thái', 'Nút CTA (tuỳ chọn)', 'Link CTA (tuỳ chọn)', 'URL nguồn', 'Ghi chú'
   ];
   const sample = [
-    '',
-    'https://www.facebook.com/reel/1925057404843374/',
-    'Sử dụng bài viết có sẵn',
-    'Tự động',
-    'https://s.shopee.vn/8fQCw4wl8v',
-    'Mua ngay',
-    'Test Campaign 01',
-    'Adset Việt Nam 18-45',
-    'Ad Reel 01',
-    'Lưu lượng truy cập',
-    'Việt Nam',
+    '123456789',
+    '123456789_987654321',
+    'Bài viết có sẵn',
+    'Traffic Existing Post 01',
+    'Traffic',
+    'Adset VN 01',
+    'Ad Existing Post 01',
+    'VN',
     '200000',
+    'Cấp nhóm',
     'Hàng ngày',
-    '24/06/2026',
+    '01/07/2026',
     '08:00',
-    '30/06/2026',
-    '23:59',
+    '',
+    '',
     'Tạm dừng',
-    'Test trước 1 dòng'
+    'SHOP_NOW',
+    'https://example.com',
+    'https://example.com',
+    'URL nguồn sẽ được gắn vào creative'
   ];
   // Hàng ghi chú các nút CTA hợp lệ (đặt ở sheet thứ 2 cho gọn)
   const ctaGuide = [['Mã CTA', 'Nhãn hiển thị'], ...Object.entries(CTA_LABELS).map(([code, label]) => [code, label])];

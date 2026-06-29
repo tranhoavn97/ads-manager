@@ -72,6 +72,7 @@
       'Trạng thái',
       'Nút CTA (tuỳ chọn)',
       'Link CTA (tuỳ chọn)',
+      'URL nguồn',
       'Ghi chú',
     ];
     const rows = [
@@ -95,6 +96,7 @@
         'Tạm dừng',
         '',
         '',
+        '',
         'Không CTA/link vẫn hợp lệ.',
       ],
       [
@@ -116,6 +118,7 @@
         'Tạm dừng',
         'SHOP_NOW',
         'https://example.com',
+        'https://example.com',
         'CTA/link là tuỳ chọn; nếu Meta bỏ qua app vẫn tạo existing post ad.',
       ],
     ];
@@ -128,11 +131,12 @@
       ['Cấp ngân sách', 'Cấp chiến dịch/campaign/CBO hoặc Cấp nhóm/adset/ABO.'],
       ['Loại ngân sách', 'Hàng ngày/daily hoặc Trọn đời/lifetime. Trọn đời cần ngày kết thúc.'],
       ['Nút CTA / Link CTA', 'Tuỳ chọn. Nếu Meta không nhận CTA/link, app retry bằng object_story_id không CTA.'],
+      ['URL nguồn', 'URL đích hiển thị trong ô URL nguồn của Ads Manager. Nếu trống, app dùng Link CTA.'],
     ];
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    setCols(ws, [18, 42, 20, 34, 22, 30, 30, 14, 14, 18, 18, 16, 14, 16, 14, 14, 18, 36, 58]);
+    setCols(ws, [18, 42, 20, 34, 22, 30, 30, 14, 14, 18, 18, 16, 14, 16, 14, 14, 18, 36, 36, 58]);
     ws['!freeze'] = { xSplit: 0, ySplit: 1 };
     XLSX.utils.book_append_sheet(wb, ws, 'Quảng cáo');
 
