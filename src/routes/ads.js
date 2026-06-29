@@ -411,6 +411,7 @@ router.post('/create', requireAuth, async (req, res) => {
 
   try {
     const ctype = resolveCampaignType(row.campaignType);
+    const resolvedCta = resolveCta(row.cta)?.code || ctype.default_cta || 'LEARN_MORE';
     if (!ctype) throw new RowError('Loại chiến dịch không hợp lệ', ROW_STATUS.CREATE_ERROR);
 
     const { codes: countries } = resolveCountries(row.country);
@@ -545,7 +546,7 @@ router.post('/create', requireAuth, async (req, res) => {
               video_id: videoId,
               message: message,
               call_to_action: {
-                type: 'SHOP_NOW',
+                type: resolvedCta,
                 value: {
                   link: row.ctaLink
                 }
@@ -575,7 +576,7 @@ router.post('/create', requireAuth, async (req, res) => {
                 image_hash: imageHash,
                 message: message,
                 call_to_action: {
-                  type: 'SHOP_NOW',
+                  type: resolvedCta,
                   value: {
                     link: row.ctaLink
                   }
@@ -592,7 +593,7 @@ router.post('/create', requireAuth, async (req, res) => {
                 link: row.ctaLink,
                 message: message,
                 call_to_action: {
-                  type: 'SHOP_NOW',
+                  type: resolvedCta,
                   value: {
                     link: row.ctaLink
                   }
@@ -636,8 +637,8 @@ router.post('/create', requireAuth, async (req, res) => {
       } else {
         const ctaType = creativeInfo.call_to_action?.type;
         const ctaLink = creativeInfo.call_to_action?.value?.link;
-        if (ctaType !== 'SHOP_NOW') {
-          throw new Error(`Nút CTA hiển thị (${ctaType}) không khớp với SHOP_NOW`);
+        if (ctaType !== resolvedCta) {
+          throw new Error(`Nút CTA hiển thị (${ctaType}) không khớp với ${resolvedCta}`);
         }
         if (row.ctaLink && row.ctaLink.toString().trim() && ctaLink) {
           const normCtaLink = normalizeFbUrl(ctaLink);
