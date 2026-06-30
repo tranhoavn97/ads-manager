@@ -109,8 +109,11 @@ export async function getAdAccounts(token) {
   return data.data || [];
 }
 export async function getPages(token) {
-  const data = await call('GET', 'me/accounts', { token, params: { fields: 'id,name,username,link,access_token,tasks', limit: 200 } });
+  const data = await call('GET', 'me/accounts', { token, params: { fields: 'id,name,username,link,access_token,tasks,picture.width(72).height(72)', limit: 200 } });
   return data.data || [];
+}
+export async function graphGet(token, path, params = {}) {
+  return call('GET', path, { token, params });
 }
 export async function resolvePageSlug(token, slug) {
   return call('GET', encodeURIComponent(slug), { token, params: { fields: 'id,name' } });

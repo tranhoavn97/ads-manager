@@ -13,6 +13,7 @@ const State = {
   creativeMode: 'EXISTING_POST_STRICT',
   editing: new Set(),   // các dòng đang ở chế độ nhập (sửa được nhiều dòng cùng lúc)
 };
+window.State = State;
 
 // Ánh xạ class ô input ↔ trường dữ liệu của dòng (dùng để live-bind khi nhập)
 const EDIT_FIELD_MAP = {
@@ -84,6 +85,7 @@ const Logger = {
     if (b) b.classList.add('hidden');
   },
 };
+window.Logger = Logger;
 
 // ============================================================
 //  Thanh loading dưới cùng (đổi đỏ khi có lỗi)
@@ -597,6 +599,7 @@ function populateAccSelect() {
   if (State.selectedAccount) sel.value = State.selectedAccount.id;
   if (window.NiceSelect) NiceSelect.refresh(sel);
   updateAccStatus();
+  if (window.ThruPlay) ThruPlay.updateAccountInfo();
 }
 
 // Chấm xanh/đỏ + nhãn tình trạng tài khoản đang chọn
@@ -617,6 +620,7 @@ function onAccChange(e) {
   if (State.selectedAccount && acc.id === State.selectedAccount.id) return;
   State.selectedAccount = acc;
   updateAccStatus();
+  if (window.ThruPlay) ThruPlay.refreshAccount();
   Logger.info(`Đổi tài khoản: ${acc.name} (${acc.id} · ${acc.currency}).`);
   toast(`Đã chọn ${acc.name}`, 'ok');
   // Đổi tài khoản: xoá dữ liệu cũ, KHÔNG tự tải (tránh rate-limit). Người dùng bấm "Làm mới".
@@ -639,6 +643,10 @@ function switchTab(view) {
   // KHÔNG tự tải tab Quản lý: tài khoản lớn dễ bị Meta rate-limit.
   // Người dùng bấm "Làm mới" để tải khi cần.
   if (view === 'posts' && typeof Posts !== 'undefined') Posts.activate();
+  if (view === 'thruplay' && window.ThruPlay) {
+    ThruPlay.updateAccountInfo();
+    ThruPlay.loadPages();
+  }
 }
 
 // Đăng nhập trực tiếp bằng access token (không qua OAuth)

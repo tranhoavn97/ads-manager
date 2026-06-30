@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="minimal.css?v=2.4.5" />
   <link rel="stylesheet" href="select.css?v=2.4.5" />
   <link rel="stylesheet" href="posts.css?v=2.4.5" />
+  <link rel="stylesheet" href="thruplay.css?v=1.0.0" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -42,6 +43,10 @@
             <button class="sb-item" type="button" data-view="work" title="Tạo quảng cáo hàng loạt">
               <span class="sb-iic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
               <span class="sb-label">Tạo quảng cáo hàng loạt</span>
+            </button>
+            <button class="sb-item" type="button" data-view="thruplay" title="ThruPlay Ads">
+              <span class="sb-iic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg></span>
+              <span class="sb-label">ThruPlay Ads</span>
             </button>
           </div>
         </div>
@@ -166,6 +171,72 @@
       <div class="panel hidden" id="postsResultPanel"><div class="toolbar"><div class="filters" style="align-items:center; gap:12px;"><label class="chk"><input type="checkbox" id="postsSelectAll" /> <span>Chọn tất cả</span></label><span class="muted" id="postsSelCount">Đã chọn 0 / 0</span><label class="switch" title="Hỏi xác nhận từng lần xoá lô"><input type="checkbox" id="postsSafeMode" checked /><span class="track"><span class="thumb"></span></span><span class="switch-label">Chế độ an toàn</span></label></div><div class="toolbar-right"><input type="search" id="postsSearch" class="search" placeholder="Tìm trong nội dung / tên Page…" /><button id="postsDeleteBtn" class="btn btn-danger" disabled>Xoá đã chọn</button></div></div><div class="posts-queuebar hidden" id="postsQueueBar"><div class="pq-progress"><div class="pq-bar" id="postsQueueBarFill"></div></div><div class="pq-meta"><span id="postsQueueStatus">Sẵn sàng</span><span class="pq-actions"><button id="postsPauseBtn" class="btn btn-ghost">Tạm dừng</button><button id="postsStopBtn" class="btn btn-ghost">Dừng hẳn</button></span></div></div><div class="table-scroll"><table class="posts-table" id="postsTable"><thead><tr><th style="width:42px"></th><th style="width:64px">Ảnh</th><th>Nội dung</th><th>Page</th><th>Loại</th><th class="num">Ngày đăng</th><th class="num">👍 / 💬 / ↗</th><th style="width:90px">Trạng thái</th></tr></thead><tbody id="postsBody"></tbody></table></div></div>
     </section>
 
+    <!-- MODULE THRUPLAY ADS -->
+    <section id="view-thruplay" class="view hidden">
+      <div class="panel tp-panel">
+        <div class="panel-head">
+          <div>
+            <h2>ThruPlay Ads</h2>
+            <p class="muted">Chọn Page, chọn video/reel có sẵn và tạo quảng cáo tương tác video tối ưu ThruPlay.</p>
+          </div>
+          <button id="tpRefreshPages" class="btn btn-ghost">Tải lại Page</button>
+        </div>
+        <div class="tp-grid">
+          <section class="tp-block">
+            <div class="tp-block-head"><span>A</span><strong>Tài khoản quảng cáo</strong></div>
+            <div id="tpAccountInfo" class="tp-account">Chọn tài khoản quảng cáo ở thanh bên trái.</div>
+          </section>
+          <section class="tp-block">
+            <div class="tp-block-head"><span>B</span><strong>Chọn Page</strong></div>
+            <input id="tpPageSearch" class="input-inline" type="search" placeholder="Tìm Page..." />
+            <div id="tpPages" class="tp-pages"><div class="loading">Đăng nhập để tải Page...</div></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="panel tp-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Video/Reel trên Page</h2>
+            <p class="muted">Chỉ hiển thị bài có video/reel phù hợp chạy ThruPlay.</p>
+          </div>
+          <div class="head-actions">
+            <span id="tpSelectedCount" class="muted">Đã chọn 0 bài</span>
+            <button id="tpLoadPosts" class="btn btn-secondary">Tải bài video/reel</button>
+          </div>
+        </div>
+        <div id="tpPosts" class="tp-posts"><div class="loading">Chọn Page rồi bấm tải bài.</div></div>
+      </div>
+
+      <div class="panel tp-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Cấu hình quảng cáo</h2>
+            <p class="muted">Không dùng CTA/link, không tạo dark post, chỉ dùng existing post video/reel.</p>
+          </div>
+        </div>
+        <div class="tp-form">
+          <label><span>Quốc gia</span><input id="tpCountry" class="input-inline" value="Việt Nam" /></label>
+          <label><span>Ngân sách</span><input id="tpBudget" class="input-inline" type="number" min="1" value="200000" /></label>
+          <label><span>Cấp ngân sách</span><select id="tpBudgetLevel" class="select-inline"><option value="adset">Adset / ABO</option><option value="campaign">Campaign / CBO</option></select></label>
+          <label><span>Loại ngân sách</span><select id="tpBudgetMode" class="select-inline"><option value="daily">Daily</option><option value="lifetime">Lifetime</option></select></label>
+          <label><span>Ngày bắt đầu</span><input id="tpStartDate" class="input-inline" placeholder="dd/mm/yyyy" /></label>
+          <label><span>Giờ bắt đầu</span><input id="tpStartTime" class="input-inline" value="08:00" placeholder="hh:mm" /></label>
+          <label><span>Ngày kết thúc</span><input id="tpEndDate" class="input-inline" placeholder="dd/mm/yyyy" /></label>
+          <label><span>Giờ kết thúc</span><input id="tpEndTime" class="input-inline" value="10:00" placeholder="hh:mm" /></label>
+          <label><span>Trạng thái</span><select id="tpStatus" class="select-inline"><option value="PAUSED">Tạm dừng</option><option value="ACTIVE">Bật</option></select></label>
+        </div>
+        <div class="panel-foot">
+          <button id="tpCreateBtn" class="btn btn-primary">Tạo ThruPlay Ads</button>
+        </div>
+      </div>
+
+      <div class="panel tp-panel hidden" id="tpResultPanel">
+        <div class="panel-head"><div><h2>Kết quả tạo</h2><p class="muted">Theo dõi thành công/thất bại từng bài.</p></div></div>
+        <div id="tpResults" class="tp-results"></div>
+      </div>
+    </section>
+
     <!-- BƯỚC 3 & 4: TẢI FILE, KIỂM TRA, TẠO -->
     <section id="view-work" class="view hidden">
       <div id="uploadZone" class="panel upload-panel"><div class="panel-head"><div><h2>Nhập dữ liệu quảng cáo</h2><p class="muted">Hai cách: <strong>nhập tay trong bảng</strong> (thêm dòng rồi gõ link/tên) hoặc <strong>tải file</strong> <strong>.xlsx</strong>/<strong>.xls</strong>/<strong>.csv</strong>. Google Sheet: chọn <em>File → Download → Microsoft Excel (.xlsx)</em>.</p></div><div class="head-actions"><button id="manualStartBtn" class="btn btn-primary">Nhập</button><button id="templateBtn" class="btn btn-ghost">Tải file mẫu</button></div></div><label class="dropzone" id="dropzone"><input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden /><div class="dropzone-inner"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg><strong>Kéo thả file vào đây hoặc bấm để chọn</strong><span class="muted">Dòng đầu tiên là tiêu đề cột</span></div></label><div id="fileMeta" class="file-meta hidden"></div></div>
@@ -181,6 +252,7 @@
   <script src="app.js?v=2.4.10"></script>
   <script src="manage.js?v=2.4.5"></script>
   <script src="posts.js?v=2.4.5"></script>
+  <script src="thruplay.js?v=1.0.0"></script>
   <script src="select.js?v=2.4.5"></script>
   <script src="template-generator.js?v=2.4.10"></script>
 </body>

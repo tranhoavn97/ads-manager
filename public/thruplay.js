@@ -1,0 +1,271 @@
+'use strict';
+
+(function () {
+  const $ = (s, root = document) => root.querySelector(s);
+  const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
+  const esc = (s) => (s == null ? '' : String(s).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m])));
+
+  const tp = {
+    pages: [],
+    posts: [],
+    selectedPageId: '',
+    selectedPosts: new Map(),
+    loaded: false,
+  };
+
+  function api(url, opts = {}) {
+    return fetch(url, {
+      method: opts.method || 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    }).then(async (res) => {
+      let data = {};
+      try { data = await res.json(); } catch {}
+      if (!res.ok) throw new Error(data.error || `Lỗi máy chủ (${res.status})`);
+      return data;
+    });
+  }
+
+  function logInfo(message) {
+    if (window.Logger?.info) window.Logger.info(message);
+  }
+  function logOk(message) {
+    if (window.Logger?.ok) window.Logger.ok(message);
+  }
+  function logErr(message) {
+    if (window.Logger?.err) window.Logger.err(message);
+  }
+
+  function selectedAccount() {
+    return window.State?.selectedAccount || null;
+  }
+
+  function accountLabel() {
+    const acc = selectedAccount();
+    if (!acc) return 'Chọn tài khoản quảng cáo ở thanh bên trái.';
+    return `<strong>${esc(acc.name)}</strong><div class="tp-page-id">${esc(acc.id)} · ${esc(acc.currency || '')}</div>`;
+  }
+
+  function updateAccountInfo() {
+    const box = $('#tpAccountInfo');
+    if (box) box.innerHTML = accountLabel();
+  }
+
+  async function loadPages(force = false) {
+    if (tp.loaded && !force) return;
+    const wrap = $('#tpPages');
+    if (!wrap) return;
+    wrap.innerHTML = '<div class="loading">Đang tải Page...</div>';
+    try {
+      const data = await api('/api/thruplay/pages');
+      tp.pages = data.pages || [];
+      tp.loaded = true;
+      renderPages();
+      logOk(`ThruPlay: đã tải ${tp.pages.length} Page.`);
+    } catch (err) {
+      wrap.innerHTML = `<div class="alert alert-error">${esc(err.message)}</div>`;
+      logErr('ThruPlay tải Page lỗi: ' + err.message);
+    }
+  }
+
+  function renderPages() {
+    const wrap = $('#tpPages');
+    if (!wrap) return;
+    const q = ($('#tpPageSearch')?.value || '').toLowerCase().trim();
+    const pages = tp.pages.filter((p) => !q || `${p.name} ${p.id}`.toLowerCase().includes(q));
+    if (!pages.length) {
+      wrap.innerHTML = '<div class="loading">Không có Page phù hợp.</div>';
+      return;
+    }
+    wrap.innerHTML = pages.map((p) => `
+      <button class="tp-page ${String(p.id) === String(tp.selectedPageId) ? 'selected' : ''}" type="button" data-id="${esc(p.id)}">
+        <span class="tp-page-main">
+          <strong>${esc(p.name)}</strong>
+          <span class="tp-badge ${p.canAdvertise ? '' : 'bad'}">${p.canAdvertise ? 'ADVERTISE' : 'Thiếu quyền'}</span>
+        </span>
+        <span class="tp-page-id">${esc(p.id)}</span>
+      </button>
+    `).join('');
+    $$('.tp-page', wrap).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        tp.selectedPageId = btn.dataset.id;
+        tp.posts = [];
+        tp.selectedPosts.clear();
+        renderPages();
+        renderPosts();
+        updateSelectedCount();
+      });
+    });
+  }
+
+  async function loadPosts() {
+    if (!tp.selectedPageId) {
+      $('#tpPosts').innerHTML = '<div class="alert alert-error">Hãy chọn Page trước.</div>';
+      return;
+    }
+    const wrap = $('#tpPosts');
+    wrap.innerHTML = '<div class="loading">Đang tải video/reel...</div>';
+    try {
+      const data = await api(`/api/thruplay/pages/${encodeURIComponent(tp.selectedPageId)}/posts`);
+      tp.posts = data.posts || [];
+      tp.selectedPosts.clear();
+      renderPosts();
+      updateSelectedCount();
+      logOk(`ThruPlay: đã tải ${tp.posts.length} video/reel.`);
+    } catch (err) {
+      wrap.innerHTML = `<div class="alert alert-error">${esc(err.message)}</div>`;
+      logErr('ThruPlay tải bài lỗi: ' + err.message);
+    }
+  }
+
+  function renderPosts() {
+    const wrap = $('#tpPosts');
+    if (!wrap) return;
+    if (!tp.selectedPageId) {
+      wrap.innerHTML = '<div class="loading">Chọn Page rồi bấm tải bài.</div>';
+      return;
+    }
+    if (!tp.posts.length) {
+      wrap.innerHTML = '<div class="loading">Chưa có video/reel hoặc chưa tải bài.</div>';
+      return;
+    }
+    wrap.innerHTML = tp.posts.map((p) => {
+      const checked = tp.selectedPosts.has(p.object_story_id);
+      return `
+        <article class="tp-post ${checked ? 'selected' : ''}" data-id="${esc(p.object_story_id)}">
+          <div class="tp-thumb">${p.thumbnail ? `<img src="${esc(p.thumbnail)}" alt="" />` : '<span>Video/Reel</span>'}</div>
+          <div class="tp-post-body">
+            <div class="tp-post-top">
+              <label class="chk"><input type="checkbox" ${checked ? 'checked' : ''} /> <span>Chọn</span></label>
+              <span class="tp-badge">${esc(p.type || 'Video')}</span>
+            </div>
+            <div class="tp-post-msg">${esc(p.message || 'Không có nội dung')}</div>
+            <div class="tp-post-meta">
+              <span>${esc(formatDate(p.created_time))}</span>
+              ${p.permalink_url ? `<a href="${esc(p.permalink_url)}" target="_blank">Mở bài</a>` : '<span></span>'}
+            </div>
+          </div>
+        </article>
+      `;
+    }).join('');
+    $$('.tp-post', wrap).forEach((card) => {
+      const input = $('input[type="checkbox"]', card);
+      input.addEventListener('change', () => {
+        const post = tp.posts.find((p) => p.object_story_id === card.dataset.id);
+        if (!post) return;
+        if (input.checked) tp.selectedPosts.set(post.object_story_id, post);
+        else tp.selectedPosts.delete(post.object_story_id);
+        card.classList.toggle('selected', input.checked);
+        updateSelectedCount();
+      });
+    });
+  }
+
+  function formatDate(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+  }
+
+  function updateSelectedCount() {
+    const el = $('#tpSelectedCount');
+    if (el) el.textContent = `Đã chọn ${tp.selectedPosts.size} bài`;
+  }
+
+  function bodyConfig() {
+    const acc = selectedAccount();
+    return {
+      adAccountId: acc?.id,
+      currency: acc?.currency,
+      pageId: tp.selectedPageId,
+      posts: Array.from(tp.selectedPosts.values()).map((p) => ({
+        objectStoryId: p.object_story_id,
+        postId: p.id,
+        videoId: p.video_id,
+        permalinkUrl: p.permalink_url,
+        message: p.message,
+      })),
+      country: $('#tpCountry')?.value || 'Việt Nam',
+      budget: $('#tpBudget')?.value || '',
+      budgetMode: $('#tpBudgetMode')?.value || 'daily',
+      budgetLevel: $('#tpBudgetLevel')?.value || 'adset',
+      startDate: $('#tpStartDate')?.value || '',
+      startTime: $('#tpStartTime')?.value || '',
+      endDate: $('#tpEndDate')?.value || '',
+      endTime: $('#tpEndTime')?.value || '',
+      status: $('#tpStatus')?.value || 'PAUSED',
+    };
+  }
+
+  async function createAds() {
+    const btn = $('#tpCreateBtn');
+    const cfg = bodyConfig();
+    if (!cfg.adAccountId) return showResults([{ status: 'failed', errors: ['Hãy chọn tài khoản quảng cáo.'] }]);
+    if (!cfg.pageId) return showResults([{ status: 'failed', errors: ['Hãy chọn Page.'] }]);
+    if (!cfg.posts.length) return showResults([{ status: 'failed', errors: ['Hãy chọn ít nhất 1 video/reel.'] }]);
+
+    btn.disabled = true;
+    btn.textContent = 'Đang tạo...';
+    showResults(cfg.posts.map((p) => ({ objectStoryId: p.objectStoryId, status: 'pending', errors: [], ids: {} })));
+    logInfo(`ThruPlay: bắt đầu tạo ${cfg.posts.length} quảng cáo.`);
+
+    try {
+      const data = await api('/api/thruplay/create', { method: 'POST', body: cfg });
+      showResults(data.results || []);
+      const ok = (data.results || []).filter((r) => r.status === 'created').length;
+      const fail = (data.results || []).length - ok;
+      logOk(`ThruPlay: tạo xong ${ok} thành công, ${fail} lỗi.`);
+    } catch (err) {
+      showResults([{ status: 'failed', errors: [err.message] }]);
+      logErr('ThruPlay tạo lỗi: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Tạo ThruPlay Ads';
+    }
+  }
+
+  function showResults(results) {
+    const panel = $('#tpResultPanel');
+    const wrap = $('#tpResults');
+    if (!panel || !wrap) return;
+    panel.classList.remove('hidden');
+    wrap.innerHTML = (results || []).map((r, i) => `
+      <div class="tp-result ${r.status === 'created' ? 'ok' : r.status === 'failed' ? 'err' : ''}">
+        <strong>${r.status === 'created' ? 'SUCCESS' : r.status === 'failed' ? 'FAILED' : 'Đang chờ'} · Bài ${i + 1}</strong>
+        <div class="tp-result-ids">
+          Object Story: ${esc(r.objectStoryId || '—')}<br>
+          Campaign: ${esc(r.ids?.campaignId || '—')} · AdSet: ${esc(r.ids?.adsetId || '—')} · Creative: ${esc(r.ids?.creativeId || '—')} · Ad: ${esc(r.ids?.adId || '—')}
+        </div>
+        ${(r.errors || []).map((e) => `<div class="alert alert-error">${esc(e)}</div>`).join('')}
+      </div>
+    `).join('');
+  }
+
+  function setDefaultDates() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const today = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    if ($('#tpStartDate') && !$('#tpStartDate').value) $('#tpStartDate').value = today;
+    if ($('#tpEndDate') && !$('#tpEndDate').value) $('#tpEndDate').value = today;
+  }
+
+  function init() {
+    $('#tpRefreshPages')?.addEventListener('click', () => loadPages(true));
+    $('#tpLoadPosts')?.addEventListener('click', loadPosts);
+    $('#tpPageSearch')?.addEventListener('input', renderPages);
+    $('#tpCreateBtn')?.addEventListener('click', createAds);
+    setDefaultDates();
+    updateAccountInfo();
+  }
+
+  window.ThruPlay = {
+    init,
+    loadPages,
+    updateAccountInfo,
+    refreshAccount: updateAccountInfo,
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
