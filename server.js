@@ -10,6 +10,7 @@ import adsRouter from './src/routes/ads.js';
 import manageRouter from './src/routes/manage.js';
 import postsRouter from './src/routes/posts.js';
 import thruplayRouter from './src/routes/thruplay.js';
+import campaignBuilderRouter from './src/routes/campaign-builder.js';
 import webhooksRouter from './src/routes/webhooks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -38,6 +39,7 @@ app.use('/api/ads', adsRouter);
 app.use('/api/manage', manageRouter);
 app.use('/api/posts', postsRouter);
 app.use('/api/thruplay', thruplayRouter);
+app.use('/api', campaignBuilderRouter);
 app.use('/api/webhooks', webhooksRouter);
 
 // Frontend tĩnh (dùng khi chạy server thường; trên Vercel do static routes phục vụ)

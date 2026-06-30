@@ -320,6 +320,9 @@ export async function getInsights(token, adAccountId, level, datePreset) {
 export async function getCampaigns(token, adAccountId) {
   return getAllPages(token, actPath(adAccountId, 'campaigns'), { fields: 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,stop_time,created_time,updated_time', limit: 100 });
 }
+export async function getCampaignAdSets(token, campaignId) {
+  return getAllPages(token, `${campaignId}/adsets`, { fields: 'id,name,status,effective_status,campaign_id,optimization_goal,billing_event,daily_budget,lifetime_budget,budget_remaining,bid_strategy,targeting,start_time,end_time', limit: 100 });
+}
 export async function getAdSets(token, adAccountId) {
   return getAllPages(token, actPath(adAccountId, 'adsets'), { fields: 'id,name,status,effective_status,campaign_id,optimization_goal,billing_event,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,end_time', limit: 100 });
 }

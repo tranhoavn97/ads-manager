@@ -603,6 +603,7 @@ function populateAccSelect() {
   if (window.NiceSelect) NiceSelect.refresh(sel);
   updateAccStatus();
   if (window.ThruPlay) ThruPlay.updateAccountInfo();
+  if (window.CampaignBuilder) CampaignBuilder.refreshAccount();
 }
 
 // Chấm xanh/đỏ + nhãn tình trạng tài khoản đang chọn
@@ -624,6 +625,7 @@ function onAccChange(e) {
   State.selectedAccount = acc;
   updateAccStatus();
   if (window.ThruPlay) ThruPlay.refreshAccount();
+  if (window.CampaignBuilder) CampaignBuilder.refreshAccount();
   Logger.info(`Đổi tài khoản: ${acc.name} (${acc.id} · ${acc.currency}).`);
   toast(`Đã chọn ${acc.name}`, 'ok');
   // Đổi tài khoản: xoá dữ liệu cũ, KHÔNG tự tải (tránh rate-limit). Người dùng bấm "Làm mới".
@@ -649,6 +651,9 @@ function switchTab(view) {
   if (view === 'thruplay' && window.ThruPlay) {
     ThruPlay.updateAccountInfo();
     ThruPlay.loadPages();
+  }
+  if (view === 'builder' && window.CampaignBuilder) {
+    CampaignBuilder.activate();
   }
 }
 
