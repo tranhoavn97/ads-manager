@@ -192,11 +192,32 @@ function shapePost(pageId, post, fallbackType = 'Post') {
   };
 }
 
-async function fetchPagePosts(token, pageId, type = 'all') {
+function dateMs(value) {
+  const ms = new Date(value || 0).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+async function fetchGraphEdgePages(token, path, baseParams, maxItems = 250, maxPages = 4) {
+  const items = [];
+  let after = '';
+  for (let pageNo = 0; pageNo < maxPages && items.length < maxItems; pageNo++) {
+    const params = { ...baseParams };
+    if (after) params.after = after;
+    const res = await graphGet(token, path, params);
+    const batch = Array.isArray(res?.data) ? res.data : [];
+    items.push(...batch);
+    after = res?.paging?.cursors?.after || '';
+    if (!after || !batch.length) break;
+  }
+  return items.slice(0, maxItems);
+}
+
+async function fetchPagePosts(token, pageId, type = 'all', opts = {}) {
   const postFields = 'id,message,story,created_time,permalink_url,status_type,type,object_id,full_picture,attachments{media,type,target,url,subattachments{media,type,target,url}}';
   const videoFields = 'id,title,description,created_time,permalink_url,permalink,picture,post_id,from{id,name}';
   const out = new Map();
   const wanted = String(type || 'all').toLowerCase();
+  const maxItems = Math.max(50, Math.min(Number(opts.limit) || 250, 500));
 
   const add = (item, fallbackType) => {
     const shaped = shapePost(pageId, item, fallbackType);
@@ -208,8 +229,8 @@ async function fetchPagePosts(token, pageId, type = 'all') {
 
   const addEdge = async (edge, fields, fallbackType) => {
     try {
-      const res = await graphGet(token, `${pageId}/${edge}`, { fields, limit: 100 });
-      for (const item of (res.data || [])) {
+      const items = await fetchGraphEdgePages(token, `${pageId}/${edge}`, { fields, limit: 100 }, maxItems);
+      for (const item of items) {
         if (edge === 'videos' || edge === 'video_reels') {
           if (!item.post_id) continue;
           add({ ...item, id: item.post_id, video_id: item.id }, edge === 'video_reels' ? 'Reel' : 'Video');
@@ -224,12 +245,16 @@ async function fetchPagePosts(token, pageId, type = 'all') {
 
   await Promise.all([
     addEdge('posts', postFields, 'Post'),
+    addEdge('published_posts', postFields, 'Post'),
     addEdge('feed', postFields, 'Post'),
+    addEdge('promotable_posts', postFields, 'Post'),
     addEdge('videos', videoFields, 'Video'),
     addEdge('video_reels', videoFields, 'Reel'),
   ]);
 
-  return Array.from(out.values()).sort((a, b) => String(b.created_time).localeCompare(String(a.created_time)));
+  return Array.from(out.values())
+    .sort((a, b) => dateMs(b.created_time) - dateMs(a.created_time))
+    .slice(0, maxItems);
 }
 
 async function assertCampaign(token, campaignId) {
@@ -329,8 +354,10 @@ router.get('/pages/:pageId/posts', requireAuth, async (req, res) => {
   try {
     const pages = await getPages(req.session.fbToken);
     const page = assertPage(pages, req.params.pageId);
-    const posts = await fetchPagePosts(page.access_token || req.session.fbToken, page.id, req.query.type || 'all');
-    res.json({ posts });
+    const posts = await fetchPagePosts(page.access_token || req.session.fbToken, page.id, req.query.type || 'all', {
+      limit: req.query.limit,
+    });
+    res.json({ posts, count: posts.length, sorted: 'newest_first' });
   } catch (err) {
     handle(err, res);
   }

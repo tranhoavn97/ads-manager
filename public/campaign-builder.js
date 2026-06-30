@@ -237,7 +237,7 @@
     const type = $('#cbPostType')?.value || 'all';
     wrap.innerHTML = '<div class="loading">Đang tải bài viết...</div>';
     try {
-      const data = await apiJson(`/api/pages/${encodeURIComponent(state.selectedPageId)}/posts?type=${encodeURIComponent(type)}`);
+      const data = await apiJson(`/api/pages/${encodeURIComponent(state.selectedPageId)}/posts?type=${encodeURIComponent(type)}&limit=300&fresh=${Date.now()}`);
       state.posts = (data.posts || []).slice().sort((a, b) => dateMs(b.created_time) - dateMs(a.created_time));
       state.selectedPosts.clear();
       renderPosts();

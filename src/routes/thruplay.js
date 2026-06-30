@@ -86,6 +86,26 @@ function shapePost(pageId, post, fallbackType = 'Video') {
   };
 }
 
+function dateMs(value) {
+  const ms = new Date(value || 0).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+async function fetchGraphEdgePages(token, path, baseParams, maxItems = 250, maxPages = 4) {
+  const items = [];
+  let after = '';
+  for (let pageNo = 0; pageNo < maxPages && items.length < maxItems; pageNo++) {
+    const params = { ...baseParams };
+    if (after) params.after = after;
+    const res = await graphGet(token, path, params);
+    const batch = Array.isArray(res?.data) ? res.data : [];
+    items.push(...batch);
+    after = res?.paging?.cursors?.after || '';
+    if (!after || !batch.length) break;
+  }
+  return items.slice(0, maxItems);
+}
+
 function pageToken(pages, pageId, userToken) {
   return pages.find((p) => String(p.id) === String(pageId))?.access_token || userToken;
 }
@@ -145,15 +165,16 @@ function parseDateTime(date, time, endOfDay = false, timezone = 'Asia/Ho_Chi_Min
   return `${y}-${pad(mo)}-${pad(d)}T${pad(hh)}:${pad(mi)}:${pad(ss)}${offsetForTimezone(timezone, y, mo, d, hh, mi, ss)}`;
 }
 
-async function fetchPageVideoPosts(token, pageId) {
+async function fetchPageVideoPosts(token, pageId, opts = {}) {
   const postFields = 'id,message,story,created_time,permalink_url,status_type,type,object_id,full_picture,attachments{media,type,target,url,subattachments{media,type,target,url}}';
   const videoFields = 'id,title,description,created_time,permalink_url,permalink,picture,post_id,from{id,name}';
   const out = new Map();
+  const maxItems = Math.max(50, Math.min(Number(opts.limit) || 250, 500));
 
   const addEdge = async (edge, fields, fallbackType) => {
     try {
-      const res = await graphGet(token, `${pageId}/${edge}`, { fields, limit: 100 });
-      for (const item of (res.data || [])) {
+      const items = await fetchGraphEdgePages(token, `${pageId}/${edge}`, { fields, limit: 100 }, maxItems);
+      for (const item of items) {
         if (edge === 'videos' || edge === 'video_reels') {
           if (!item.post_id) continue;
           const id = item.post_id;
@@ -170,12 +191,16 @@ async function fetchPageVideoPosts(token, pageId) {
 
   await Promise.all([
     addEdge('posts', postFields, 'Video'),
+    addEdge('published_posts', postFields, 'Video'),
     addEdge('feed', postFields, 'Video'),
+    addEdge('promotable_posts', postFields, 'Video'),
     addEdge('videos', videoFields, 'Video'),
     addEdge('video_reels', videoFields, 'Reel'),
   ]);
 
-  return Array.from(out.values()).sort((a, b) => String(b.created_time).localeCompare(String(a.created_time)));
+  return Array.from(out.values())
+    .sort((a, b) => dateMs(b.created_time) - dateMs(a.created_time))
+    .slice(0, maxItems);
 }
 
 async function getPostForThruplay(token, objectStoryId) {
@@ -267,8 +292,10 @@ router.get('/pages/:pageId/posts', requireAuth, async (req, res) => {
   try {
     const pages = await getPages(req.session.fbToken);
     const page = assertPageAccess(pages, req.params.pageId);
-    const posts = await fetchPageVideoPosts(page.access_token || req.session.fbToken, page.id);
-    res.json({ posts });
+    const posts = await fetchPageVideoPosts(page.access_token || req.session.fbToken, page.id, {
+      limit: req.query.limit,
+    });
+    res.json({ posts, count: posts.length, sorted: 'newest_first' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message, ...metaDetails(err) });
   }

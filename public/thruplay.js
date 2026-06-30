@@ -123,8 +123,8 @@
     const wrap = $('#tpPosts');
     wrap.innerHTML = '<div class="loading">Đang tải video/reel...</div>';
     try {
-      const data = await api(`/api/thruplay/pages/${encodeURIComponent(tp.selectedPageId)}/posts`);
-      tp.posts = data.posts || [];
+      const data = await api(`/api/thruplay/pages/${encodeURIComponent(tp.selectedPageId)}/posts?limit=300&fresh=${Date.now()}`);
+      tp.posts = (data.posts || []).slice().sort((a, b) => dateMs(b.created_time) - dateMs(a.created_time));
       tp.selectedPosts.clear();
       renderPosts();
       updateSelectedCount();
@@ -203,6 +203,11 @@
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return value;
     return d.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+  }
+
+  function dateMs(value) {
+    const ms = new Date(value || 0).getTime();
+    return Number.isFinite(ms) ? ms : 0;
   }
 
   function updateSelectedCount() {
