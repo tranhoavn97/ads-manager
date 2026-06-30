@@ -237,8 +237,9 @@ async function fetchPagePosts(token, pageId, type = 'all', opts = {}) {
       const items = await fetchGraphEdgePages(token, `${pageId}/${edge}`, { fields, limit: 100 }, maxItems);
       for (const item of items) {
         if (edge === 'videos' || edge === 'video_reels') {
-          if (!item.post_id) continue;
-          add({ ...item, id: item.post_id, video_id: item.id }, edge === 'video_reels' ? 'Reel' : 'Video');
+          const id = item.post_id || item.id;
+          if (!id) continue;
+          add({ ...item, id, video_id: item.id }, edge === 'video_reels' ? 'Reel' : 'Video');
         } else {
           add(item, fallbackType);
         }
@@ -303,6 +304,22 @@ function resolveOptimizationGoal(campaign, requestedGoal, posts = []) {
   if (kind === 'video') return 'THRUPLAY';
   const hasVideo = posts.some((p) => /video|reel/i.test(String(p.type || '')) || p.videoId || p.video_id);
   return hasVideo ? 'THRUPLAY' : 'POST_ENGAGEMENT';
+}
+
+async function resolveObjectStoryIdForCreative(token, pageId, post) {
+  const current = post.objectStoryId || post.object_story_id || '';
+  const videoId = post.videoId || post.video_id || '';
+  if (videoId) {
+    try {
+      const video = await graphGet(token, videoId, { fields: 'id,post_id,permalink_url,permalink,created_time' });
+      if (video?.post_id) return String(video.post_id).includes('_') ? video.post_id : `${pageId}_${video.post_id}`;
+    } catch {
+      // Some fresh reels do not expose post_id immediately. Fall back to the candidate below.
+    }
+  }
+  if (current) return String(current).includes('_') ? current : `${pageId}_${current}`;
+  if (post.postId || post.id) return `${pageId}_${post.postId || post.id}`;
+  return '';
 }
 
 function buildAdsetPayload(body, campaignId, currency, nameOverride = '', campaign = null) {
@@ -402,10 +419,12 @@ router.post('/campaign-builder/create-ads', requireAuth, async (req, res) => {
 
     for (let i = 0; i < body.posts.length; i++) {
       const post = body.posts[i] || {};
-      const objectStoryId = post.objectStoryId || post.object_story_id;
+      let objectStoryId = post.objectStoryId || post.object_story_id;
       const adName = postAdName(post, `Quảng cáo ${i + 1}`);
       const row = { index: i, objectStoryId, status: 'created', ids: { campaignId: body.campaignId }, errors: [] };
       try {
+        objectStoryId = await resolveObjectStoryIdForCreative(page.access_token || token, body.pageId, post);
+        row.objectStoryId = objectStoryId;
         if (!objectStoryId) throw new Error('Bài này không có object_story_id.');
         const adset = await createAdSet(token, body.adAccountId, buildAdsetPayload({ ...body, posts: [post] }, body.campaignId, body.currency || '', adName, campaign));
         row.ids.adsetId = adset.id;

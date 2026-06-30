@@ -176,8 +176,8 @@ async function fetchPageVideoPosts(token, pageId, opts = {}) {
       const items = await fetchGraphEdgePages(token, `${pageId}/${edge}`, { fields, limit: 100 }, maxItems);
       for (const item of items) {
         if (edge === 'videos' || edge === 'video_reels') {
-          if (!item.post_id) continue;
-          const id = item.post_id;
+          const id = item.post_id || item.id;
+          if (!id) continue;
           out.set(id, shapePost(pageId, { ...item, id, video_id: item.id }, edge === 'video_reels' ? 'Reel' : 'Video'));
         } else if (isVideoPost(item)) {
           const shaped = shapePost(pageId, item, fallbackType);
