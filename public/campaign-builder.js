@@ -117,7 +117,7 @@
     if (f === 'paused') return status === 'PAUSED';
     if (f === 'traffic') return kind === 'traffic';
     if (f === 'engagement') return kind === 'engagement';
-    if (f === 'video') return kind === 'video';
+    if (f === 'video') return kind === 'video' || kind === 'engagement';
     return true;
   }
 
@@ -146,6 +146,7 @@
     renderCampaigns();
     renderSummary();
     syncOptimizationForCampaign();
+    syncPostTypeForCampaign();
     renderPreview();
   }
 
@@ -173,6 +174,13 @@
         ? [['THRUPLAY', 'ThruPlay']]
         : [['POST_ENGAGEMENT', 'Tương tác bài viết'], ['THRUPLAY', 'ThruPlay']];
     sel.innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+  }
+
+  function syncPostTypeForCampaign() {
+    const sel = $('#cbPostType');
+    if (!sel) return;
+    const kind = campaignKind(selectedCampaign());
+    if (kind === 'video' || kind === 'engagement') sel.value = 'video';
   }
 
   async function loadPages(force = false) {
