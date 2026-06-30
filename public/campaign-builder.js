@@ -303,15 +303,16 @@
       return;
     }
     const q = ($('#cbPostSearch')?.value || '').toLowerCase().trim();
-    const list = state.posts.filter((p) => !q || `${p.message} ${p.object_story_id} ${p.type}`.toLowerCase().includes(q));
+    const list = state.posts.filter((p) => !q || `${p.message} ${postObjectId(p)} ${p.type}`.toLowerCase().includes(q));
     if (!list.length) {
       wrap.innerHTML = `<div class="loading">${state.posts.length ? 'Không có bài phù hợp.' : 'Chưa tải bài.'}</div>`;
       return;
     }
     wrap.innerHTML = list.map((p) => {
-      const checked = state.selectedPosts.has(p.object_story_id);
+      const oid = postObjectId(p);
+      const checked = state.selectedPosts.has(oid);
       return `
-        <article class="cb-post ${checked ? 'selected' : ''}" data-id="${esc(p.object_story_id)}">
+        <article class="cb-post ${checked ? 'selected' : ''}" data-id="${esc(oid)}">
           <div class="cb-thumb">${p.thumbnail ? `<img src="${esc(p.thumbnail)}" alt="" />` : `<span>${esc(p.type || 'Post')}</span>`}</div>
           <div class="cb-post-body">
             <div class="cb-post-top">
@@ -319,7 +320,7 @@
               <span class="cb-badge">${esc(typeText(p.type))}</span>
             </div>
             <div class="cb-post-msg" title="${esc(p.message || '')}">${esc(p.message || 'Không có nội dung')}</div>
-            <div class="cb-meta">${esc(formatDate(p.created_time))} · ${esc(shortId(p.object_story_id))}</div>
+            <div class="cb-meta">${esc(formatDate(p.created_time))} · ${esc(shortId(oid))}</div>
             ${p.permalink_url ? `<a class="cb-post-link" href="${esc(p.permalink_url)}" target="_blank">Mở bài gốc</a>` : ''}
           </div>
         </article>
@@ -328,11 +329,12 @@
     $$('.cb-post', wrap).forEach((card) => {
       const input = $('input[type="checkbox"]', card);
       const set = (checked) => {
-        const post = state.posts.find((p) => p.object_story_id === card.dataset.id);
+        const post = findPostByObjectId(card.dataset.id);
         if (!post) return;
+        const oid = postObjectId(post);
         input.checked = checked;
-        if (checked) state.selectedPosts.set(post.object_story_id, post);
-        else state.selectedPosts.delete(post.object_story_id);
+        if (checked) state.selectedPosts.set(oid, post);
+        else state.selectedPosts.delete(oid);
         card.classList.toggle('selected', checked);
         updateSelectedCount();
         renderPreview();
@@ -346,6 +348,7 @@
   }
 
   function updateSelectedCount() {
+    syncSelectedPostsFromDom(false);
     const el = $('#cbSelectedCount');
     if (el) el.textContent = `Đã chọn ${state.selectedPosts.size} bài`;
     const btn = $('#cbSelectAllPosts');
@@ -356,10 +359,37 @@
     if (!state.posts.length) return;
     const shouldSelect = state.selectedPosts.size !== state.posts.length;
     state.selectedPosts.clear();
-    if (shouldSelect) state.posts.forEach((p) => state.selectedPosts.set(p.object_story_id, p));
+    if (shouldSelect) state.posts.forEach((p) => {
+      const oid = postObjectId(p);
+      if (oid) state.selectedPosts.set(oid, p);
+    });
     renderPosts();
     updateSelectedCount();
     renderPreview();
+  }
+
+  function postObjectId(post) {
+    return String(post?.object_story_id || post?.objectStoryId || post?.objectStoryID || '').trim();
+  }
+
+  function findPostByObjectId(id) {
+    const key = String(id || '').trim();
+    if (!key) return null;
+    return state.posts.find((p) => postObjectId(p) === key) || null;
+  }
+
+  function syncSelectedPostsFromDom(clearAll = false) {
+    const cards = $$('#cbPosts .cb-post');
+    if (!cards.length) return;
+    if (clearAll) state.selectedPosts.clear();
+    cards.forEach((card) => {
+      const checked = $('input[type="checkbox"]', card)?.checked;
+      const post = findPostByObjectId(card.dataset.id);
+      if (!post) return;
+      const oid = postObjectId(post);
+      if (checked) state.selectedPosts.set(oid, post);
+      else state.selectedPosts.delete(oid);
+    });
   }
 
   function toggleMode() {
@@ -373,6 +403,7 @@
     if (!wrap) return;
     const campaign = selectedCampaign();
     const adset = selectedAdset();
+    syncSelectedPostsFromDom();
     const posts = Array.from(state.selectedPosts.values());
     const mode = adsetMode();
     if (!campaign || (mode === 'existing' && !adset) || !posts.length) {
@@ -382,19 +413,20 @@
     wrap.innerHTML = posts.map((p, i) => `
       <div class="cb-preview-row">
         <strong>Ads ${i + 1}: ${esc(adName(p))}</strong>
-        <div class="cb-meta">${esc(campaign.name)} · ${mode === 'existing' ? esc(adset.name) : 'AdSet mới'} · ${esc(p.object_story_id)}</div>
+        <div class="cb-meta">${esc(campaign.name)} · ${mode === 'existing' ? esc(adset.name) : 'AdSet mới'} · ${esc(postObjectId(p))}</div>
       </div>
     `).join('');
   }
 
   function adName(post) {
-    const raw = String(post.message || post.permalink_url || post.object_story_id || 'Quảng cáo từ bài viết').replace(/\s+/g, ' ').trim();
+    const raw = String(post.message || post.permalink_url || postObjectId(post) || 'Quảng cáo từ bài viết').replace(/\s+/g, ' ').trim();
     return (raw || 'Quảng cáo từ bài viết').slice(0, 80);
   }
 
   function payload() {
     const acc = account();
     const mode = adsetMode();
+    syncSelectedPostsFromDom();
     return {
       adAccountId: acc?.id,
       currency: acc?.currency || '',
@@ -417,12 +449,12 @@
       pageId: state.selectedPageId,
       posts: Array.from(state.selectedPosts.values()).map((p) => ({
         postId: p.post_id || p.id,
-        objectStoryId: p.object_story_id,
+        objectStoryId: postObjectId(p),
         videoId: p.video_id,
         permalinkUrl: p.permalink_url,
         message: p.message,
         adName: adName(p),
-      })),
+      })).filter((p) => p.objectStoryId),
       status: $('#cbStatus')?.value || 'PAUSED',
     };
   }
