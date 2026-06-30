@@ -134,26 +134,28 @@ body {
 
 .sb-foot {
   position: fixed !important;
-  top: 10px !important;
-  left: calc(var(--shell-sidebar) + 18px) !important;
+  top: 12px !important;
+  left: auto !important;
   right: 18px !important;
   z-index: 75 !important;
-  min-height: 58px !important;
+  width: auto !important;
+  max-width: min(620px, calc(100vw - var(--shell-sidebar) - 40px)) !important;
+  min-height: 44px !important;
   margin: 0 !important;
-  padding: 8px 12px !important;
+  padding: 6px 8px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: flex-end !important;
-  gap: 12px !important;
+  gap: 8px !important;
   border: 1px solid var(--shell-border) !important;
-  border-radius: var(--shell-radius) !important;
+  border-radius: 10px !important;
   background: rgba(255, 255, 255, .96) !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, .06) !important;
   backdrop-filter: blur(10px) !important;
 }
 
 .sidebar.collapsed .sb-foot {
-  left: calc(var(--shell-sidebar-collapsed) + 18px) !important;
+  max-width: min(620px, calc(100vw - var(--shell-sidebar-collapsed) - 40px)) !important;
 }
 
 .left-account-picker {
@@ -170,14 +172,25 @@ body {
 
 .sb-foot .acc-select,
 .sb-foot .ns {
-  width: min(320px, 36vw) !important;
-  min-width: 240px !important;
+  width: 300px !important;
+  min-width: 220px !important;
+  max-width: 32vw !important;
+}
+
+.sb-foot .ns-trigger {
+  height: 36px !important;
+  min-height: 36px !important;
+  border-radius: 8px !important;
 }
 
 .sb-foot .acc-status {
-  min-width: 150px !important;
+  min-width: 0 !important;
+  max-width: 160px !important;
   color: var(--shell-muted) !important;
   font-size: 12px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
 .sb-foot .sb-user {
@@ -211,7 +224,7 @@ body {
   min-height: 100vh !important;
   margin: 0 !important;
   margin-left: var(--shell-sidebar) !important;
-  padding: calc(var(--shell-page-y) + 70px) var(--shell-page-x) calc(var(--dock-space) + 24px) !important;
+  padding: var(--shell-page-y) var(--shell-page-x) calc(var(--dock-space) + 24px) !important;
   transition: margin-left .18s ease, padding .18s ease !important;
 }
 
@@ -699,15 +712,15 @@ td {
   }
 
   .sidebar .sb-foot {
-    left: calc(var(--shell-sidebar-collapsed) + 10px) !important;
     right: 10px !important;
+    max-width: min(520px, calc(100vw - var(--shell-sidebar-collapsed) - 22px)) !important;
     gap: 8px !important;
   }
 
   .sidebar .sb-foot .acc-select,
   .sidebar .sb-foot .ns {
-    min-width: 210px !important;
-    width: min(280px, 42vw) !important;
+    min-width: 190px !important;
+    width: min(260px, 36vw) !important;
   }
 
   .container,
@@ -760,17 +773,21 @@ td {
   }
 
   .sidebar .sb-foot {
-    flex-wrap: wrap !important;
-    min-height: 96px !important;
-    align-items: center !important;
+    max-width: calc(100vw - var(--shell-sidebar-collapsed) - 18px) !important;
+    min-height: 40px !important;
+    padding: 5px 6px !important;
+    gap: 6px !important;
   }
 
-  .container {
-    padding-top: 118px !important;
+  .sidebar .sb-foot .acc-status,
+  .sidebar .sb-foot .sb-user-name {
+    display: none !important;
   }
 
-  .sidebar.hidden + .container {
-    padding-top: var(--shell-page-y) !important;
+  .sidebar .sb-foot .acc-select,
+  .sidebar .sb-foot .ns {
+    min-width: 170px !important;
+    width: min(230px, 50vw) !important;
   }
 
   .cb-form,
