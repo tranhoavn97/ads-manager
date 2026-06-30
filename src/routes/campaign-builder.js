@@ -415,6 +415,8 @@ router.post('/campaign-builder/create-ads', requireAuth, async (req, res) => {
     if (!body.adAccountId) throw new Error('Thiếu tài khoản quảng cáo.');
     if (!body.pageId) throw new Error('Chưa chọn Page.');
     if (!Array.isArray(body.posts) || body.posts.length === 0) throw new Error('Chưa chọn bài viết.');
+    const pages = await getPages(token);
+    const page = assertPage(pages, body.pageId);
     const campaign = await assertCampaign(token, body.campaignId);
 
     for (let i = 0; i < body.posts.length; i++) {
