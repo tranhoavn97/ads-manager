@@ -328,6 +328,7 @@ router.post('/create', requireAuth, async (req, res) => {
           billing_event: 'IMPRESSIONS',
           optimization_goal: 'THRUPLAY',
           status: adStatus,
+          promoted_object: { page_id: page.id },
           targeting: { geo_locations: { countries }, age_min: 18, age_max: 65 },
           ...(budgetLevel === 'adset' ? { [budgetField]: budget, bid_strategy: 'LOWEST_COST_WITHOUT_CAP' } : {}),
           ...(start ? { start_time: start.toISOString() } : {}),
