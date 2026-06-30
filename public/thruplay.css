@@ -92,6 +92,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  cursor: pointer;
 }
 .tp-post.selected {
   border-color: var(--primary);
@@ -129,11 +130,18 @@
   color: var(--ink-soft);
 }
 .tp-post-meta {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
+  align-items: center;
   color: var(--muted);
   font-size: 12px;
+}
+.tp-post-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tp-form {
   display: grid;

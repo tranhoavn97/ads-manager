@@ -143,11 +143,12 @@
           <div class="tp-post-body">
             <div class="tp-post-top">
               <label class="chk"><input type="checkbox" ${checked ? 'checked' : ''} /> <span>Chọn</span></label>
-              <span class="tp-badge">${esc(p.type || 'Video')}</span>
+              <span class="tp-badge">Existing Post · ${esc(p.type || 'Video')}</span>
             </div>
             <div class="tp-post-msg">${esc(p.message || 'Không có nội dung')}</div>
             <div class="tp-post-meta">
               <span>${esc(formatDate(p.created_time))}</span>
+              <span title="${esc(p.object_story_id || '')}">${shortId(p.object_story_id)}</span>
               ${p.permalink_url ? `<a href="${esc(p.permalink_url)}" target="_blank">Mở bài</a>` : '<span></span>'}
             </div>
           </div>
@@ -156,14 +157,21 @@
     }).join('');
     $$('.tp-post', wrap).forEach((card) => {
       const input = $('input[type="checkbox"]', card);
-      input.addEventListener('change', () => {
+      const setSelected = (checked) => {
         const post = tp.posts.find((p) => p.object_story_id === card.dataset.id);
         if (!post) return;
-        if (input.checked) tp.selectedPosts.set(post.object_story_id, post);
+        input.checked = checked;
+        if (checked) tp.selectedPosts.set(post.object_story_id, post);
         else tp.selectedPosts.delete(post.object_story_id);
-        card.classList.toggle('selected', input.checked);
+        card.classList.toggle('selected', checked);
         updateSelectedCount();
         syncAutoNames();
+      };
+      input.addEventListener('change', () => setSelected(input.checked));
+      card.addEventListener('click', (ev) => {
+        if (ev.target.closest('a')) return;
+        if (ev.target.closest('.chk')) return;
+        setSelected(!input.checked);
       });
     });
   }
@@ -178,6 +186,18 @@
   function updateSelectedCount() {
     const el = $('#tpSelectedCount');
     if (el) el.textContent = `Đã chọn ${tp.selectedPosts.size} bài`;
+    const btn = $('#tpSelectAllPosts');
+    if (btn) btn.textContent = tp.posts.length && tp.selectedPosts.size === tp.posts.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả';
+  }
+
+  function toggleSelectAllPosts() {
+    if (!tp.posts.length) return;
+    const shouldSelect = tp.selectedPosts.size !== tp.posts.length;
+    tp.selectedPosts.clear();
+    if (shouldSelect) tp.posts.forEach((post) => tp.selectedPosts.set(post.object_story_id, post));
+    renderPosts();
+    updateSelectedCount();
+    syncAutoNames();
   }
 
   function autoPostName(post) {
@@ -291,6 +311,7 @@
   function init() {
     $('#tpRefreshPages')?.addEventListener('click', () => loadPages(true));
     $('#tpLoadPosts')?.addEventListener('click', loadPosts);
+    $('#tpSelectAllPosts')?.addEventListener('click', toggleSelectAllPosts);
     $('#tpPageSearch')?.addEventListener('input', renderPages);
     $('#tpCreateBtn')?.addEventListener('click', createAds);
     setDefaultDates();

@@ -327,6 +327,7 @@ router.post('/create', requireAuth, async (req, res) => {
           campaign_id: campaign.id,
           billing_event: 'IMPRESSIONS',
           optimization_goal: 'THRUPLAY',
+          destination_type: 'ON_VIDEO',
           status: adStatus,
           promoted_object: { page_id: page.id },
           targeting: { geo_locations: { countries }, age_min: 18, age_max: 65 },
