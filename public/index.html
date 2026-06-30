@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="minimal.css?v=2.4.5" />
   <link rel="stylesheet" href="select.css?v=2.4.5" />
   <link rel="stylesheet" href="posts.css?v=2.4.5" />
-  <link rel="stylesheet" href="thruplay.css?v=1.0.1" />
+  <link rel="stylesheet" href="thruplay.css?v=1.0.2" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -219,8 +219,7 @@
           <section class="tp-config-card">
             <div class="tp-field-title"><span class="tp-check">✓</span><strong>Tên chiến dịch</strong></div>
             <div class="tp-name-row">
-              <input id="tpCampaignName" class="input-inline" value="ThruPlay - Video Page Post" />
-              <button id="tpCampaignNameSample" class="btn btn-ghost" type="button">Tạo mẫu</button>
+              <input id="tpCampaignName" class="input-inline" value="" placeholder="Tự nhận theo tên Page" readonly />
             </div>
           </section>
           <section class="tp-config-card tp-live-card">
@@ -240,23 +239,15 @@
           <section class="tp-config-card">
             <div class="tp-field-title"><span class="tp-check">✓</span><strong>Tên nhóm quảng cáo</strong></div>
             <div class="tp-name-row">
-              <input id="tpAdsetName" class="input-inline" value="ThruPlay - Nhóm quảng cáo" />
-              <button id="tpAdsetNameSample" class="btn btn-ghost" type="button">Tạo mẫu</button>
+              <input id="tpAdsetName" class="input-inline" value="" placeholder="Tự nhận 50 ký tự đầu nội dung bài viết" readonly />
             </div>
           </section>
           <section class="tp-config-card">
-            <div class="tp-field-title"><span class="tp-check">✓</span><strong>Lượt chuyển đổi</strong></div>
-            <div class="tp-stacked-fields">
+            <div class="tp-field-title"><span class="tp-check">✓</span><strong>Lượt chuyển đổi, ngân sách & lịch chạy</strong></div>
+            <div class="tp-config-grid">
               <label><span>Vị trí chuyển đổi</span><select class="select-inline" disabled><option>Trên quảng cáo của bạn</option></select></label>
               <label><span>Loại tương tác</span><select class="select-inline" disabled><option>Lượt xem video</option></select></label>
               <label><span>Mục tiêu hiệu quả</span><select class="select-inline" disabled><option>Tối đa hóa số lượt xem ThruPlay</option></select></label>
-              <label><span>Mục tiêu chi phí trên mỗi kết quả · Không bắt buộc</span><div class="tp-money"><input id="tpCostGoal" class="input-inline" inputmode="decimal" placeholder="X,XX đ" /><span>VND</span></div></label>
-              <p class="tp-help">Meta sẽ cố gắng chi tiêu ngân sách để đạt được nhiều ThruPlay nhất với chi phí thấp nhất. Chỉ nhập mục tiêu chi phí nếu bạn muốn giới hạn giá thầu.</p>
-            </div>
-          </section>
-          <section class="tp-config-card">
-            <div class="tp-field-title"><span class="tp-check">✓</span><strong>Ngân sách & lịch chạy</strong></div>
-            <div class="tp-form">
               <label><span>Quốc gia</span><input id="tpCountry" class="input-inline" value="Việt Nam" /></label>
               <label><span>Ngân sách</span><input id="tpBudget" class="input-inline" type="number" min="1" value="200000" /></label>
               <label><span>Cấp ngân sách</span><select id="tpBudgetLevel" class="select-inline"><option value="adset">Adset / ABO</option><option value="campaign">Campaign / CBO</option></select></label>
@@ -295,7 +286,7 @@
   <script src="app.js?v=2.4.10"></script>
   <script src="manage.js?v=2.4.5"></script>
   <script src="posts.js?v=2.4.5"></script>
-  <script src="thruplay.js?v=1.0.1"></script>
+  <script src="thruplay.js?v=1.0.2"></script>
   <script src="select.js?v=2.4.5"></script>
   <script src="template-generator.js?v=2.4.10"></script>
 </body>

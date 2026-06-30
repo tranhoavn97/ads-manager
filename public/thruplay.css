@@ -183,7 +183,7 @@
 }
 .tp-name-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 .tp-name-row .btn {
@@ -248,23 +248,22 @@
   color: #667085;
   opacity: 1;
 }
-.tp-money {
+.tp-config-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  overflow: hidden;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
 }
-.tp-money input {
-  border: 0;
-  border-radius: 0;
+.tp-config-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
 }
-.tp-money span {
-  padding: 0 12px;
-  font-size: 12px;
-  color: var(--ink);
+.tp-config-grid select:disabled,
+.tp-config-card input[readonly] {
+  background: #eef2f6;
+  color: #667085;
+  opacity: 1;
 }
 .tp-config-card .tp-form {
   padding: 0;

@@ -40,6 +40,10 @@
     return window.State?.selectedAccount || null;
   }
 
+  function selectedPage() {
+    return tp.pages.find((p) => String(p.id) === String(tp.selectedPageId)) || null;
+  }
+
   function accountLabel() {
     const acc = selectedAccount();
     if (!acc) return 'Chọn tài khoản quảng cáo ở thanh bên trái.';
@@ -91,6 +95,7 @@
         tp.selectedPageId = btn.dataset.id;
         tp.posts = [];
         tp.selectedPosts.clear();
+        syncAutoNames();
         renderPages();
         renderPosts();
         updateSelectedCount();
@@ -111,6 +116,7 @@
       tp.selectedPosts.clear();
       renderPosts();
       updateSelectedCount();
+      syncAutoNames();
       logOk(`ThruPlay: đã tải ${tp.posts.length} video/reel.`);
     } catch (err) {
       wrap.innerHTML = `<div class="alert alert-error">${esc(err.message)}</div>`;
@@ -157,6 +163,7 @@
         else tp.selectedPosts.delete(post.object_story_id);
         card.classList.toggle('selected', input.checked);
         updateSelectedCount();
+        syncAutoNames();
       });
     });
   }
@@ -173,14 +180,31 @@
     if (el) el.textContent = `Đã chọn ${tp.selectedPosts.size} bài`;
   }
 
+  function autoPostName(post) {
+    const raw = String(post?.message || post?.permalink_url || post?.object_story_id || '').replace(/\s+/g, ' ').trim();
+    return (raw || 'ThruPlay Video').slice(0, 50);
+  }
+
+  function syncAutoNames() {
+    const campaignInput = $('#tpCampaignName');
+    const adsetInput = $('#tpAdsetName');
+    const page = selectedPage();
+    if (campaignInput) campaignInput.value = page?.name || '';
+    if (!adsetInput) return;
+    const posts = Array.from(tp.selectedPosts.values());
+    if (posts.length === 1) adsetInput.value = autoPostName(posts[0]);
+    else if (posts.length > 1) adsetInput.value = 'Tự động theo từng bài đã chọn';
+    else adsetInput.value = '';
+  }
+
   function bodyConfig() {
     const acc = selectedAccount();
+    const page = selectedPage();
     return {
       adAccountId: acc?.id,
       currency: acc?.currency,
-      campaignName: $('#tpCampaignName')?.value || '',
-      adsetName: $('#tpAdsetName')?.value || '',
-      costGoal: $('#tpCostGoal')?.value || '',
+      pageName: page?.name || '',
+      campaignName: page?.name || $('#tpCampaignName')?.value || '',
       pageId: tp.selectedPageId,
       posts: Array.from(tp.selectedPosts.values()).map((p) => ({
         objectStoryId: p.object_story_id,
@@ -188,6 +212,8 @@
         videoId: p.video_id,
         permalinkUrl: p.permalink_url,
         message: p.message,
+        adsetName: autoPostName(p),
+        adName: autoPostName(p),
       })),
       country: $('#tpCountry')?.value || 'Việt Nam',
       budget: $('#tpBudget')?.value || '',
@@ -199,24 +225,6 @@
       endTime: $('#tpEndTime')?.value || '',
       status: $('#tpStatus')?.value || 'PAUSED',
     };
-  }
-
-  function sampleName(prefix) {
-    const page = tp.pages.find((p) => String(p.id) === String(tp.selectedPageId));
-    const d = new Date();
-    const stamp = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-    const pageName = page?.name || 'Page';
-    return `${prefix} - ${pageName} - ${stamp}`;
-  }
-
-  function fillSampleCampaignName() {
-    const input = $('#tpCampaignName');
-    if (input) input.value = sampleName('ThruPlay');
-  }
-
-  function fillSampleAdsetName() {
-    const input = $('#tpAdsetName');
-    if (input) input.value = sampleName('ThruPlay AdSet');
   }
 
   async function createAds() {
@@ -283,10 +291,9 @@
     $('#tpRefreshPages')?.addEventListener('click', () => loadPages(true));
     $('#tpLoadPosts')?.addEventListener('click', loadPosts);
     $('#tpPageSearch')?.addEventListener('input', renderPages);
-    $('#tpCampaignNameSample')?.addEventListener('click', fillSampleCampaignName);
-    $('#tpAdsetNameSample')?.addEventListener('click', fillSampleAdsetName);
     $('#tpCreateBtn')?.addEventListener('click', createAds);
     setDefaultDates();
+    syncAutoNames();
     updateAccountInfo();
   }
 
