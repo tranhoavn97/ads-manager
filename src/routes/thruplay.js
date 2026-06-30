@@ -21,6 +21,18 @@ function budgetToMinor(amount, currency) {
   return Math.round(Number(amount) * factor);
 }
 
+function moneyInputToNumber(value) {
+  if (value == null || value === '') return null;
+  const normalized = String(value).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+  const n = Number(normalized);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function cleanName(value, fallback) {
+  const s = String(value || '').trim();
+  return s || fallback;
+}
+
 function metaDetails(err) {
   return err instanceof MetaApiError
     ? { metaErrorCode: err.code ?? null, metaErrorSubcode: err.subcode ?? null, fbtraceId: err.fbtrace ?? null }
@@ -224,6 +236,8 @@ router.post('/create', requireAuth, async (req, res) => {
     const budgetMode = resolveBudgetMode(body.budgetMode);
     const budgetLevel = resolveBudgetLevel(body.budgetLevel);
     const budgetField = budgetMode === 'lifetime' ? 'lifetime_budget' : 'daily_budget';
+    const costGoal = moneyInputToNumber(body.costGoal);
+    const bidAmount = costGoal ? budgetToMinor(costGoal, body.currency) : null;
     const start = parseDateTime(body.startDate, body.startTime, false);
     const end = parseDateTime(body.endDate, body.endTime, true);
     if (!start) throw new Error('Ngày bắt đầu không hợp lệ.');
@@ -235,28 +249,31 @@ router.post('/create', requireAuth, async (req, res) => {
     for (const post of body.posts) {
       const objectStoryId = post.objectStoryId || post.object_story_id;
       const label = (post.message || post.permalinkUrl || objectStoryId || '').slice(0, 60);
+      const campaignName = cleanName(body.campaignName, `ThruPlay - ${label || objectStoryId}`);
+      const adsetName = cleanName(body.adsetName, `ThruPlay AdSet - ${label || objectStoryId}`);
       const result = { objectStoryId, status: 'created', errors: [], ids: {} };
       try {
         const detail = await getPostForThruplay(pageAccessToken, objectStoryId);
         if (!isVideoPost(detail)) throw new Error(THRUPLAY_VIDEO_ERROR);
 
         const campaign = await createCampaign(req.session.fbToken, accountId, {
-          name: `ThruPlay - ${label || objectStoryId}`,
+          name: campaignName,
           objective: 'OUTCOME_ENGAGEMENT',
           status: 'PAUSED',
           special_ad_categories: [],
-          ...(budgetLevel === 'campaign' ? { [budgetField]: budget, bid_strategy: 'LOWEST_COST_WITHOUT_CAP' } : { is_adset_budget_sharing_enabled: false }),
+          ...(budgetLevel === 'campaign' ? { [budgetField]: budget, bid_strategy: bidAmount ? 'COST_CAP' : 'LOWEST_COST_WITHOUT_CAP' } : { is_adset_budget_sharing_enabled: false }),
         });
         result.ids.campaignId = campaign.id;
 
         const adset = await createAdSet(req.session.fbToken, accountId, {
-          name: `ThruPlay AdSet - ${label || objectStoryId}`,
+          name: adsetName,
           campaign_id: campaign.id,
           billing_event: 'IMPRESSIONS',
           optimization_goal: 'THRUPLAY',
           status: adStatus,
           targeting: { geo_locations: { countries }, age_min: 18, age_max: 65 },
-          ...(budgetLevel === 'adset' ? { [budgetField]: budget, bid_strategy: 'LOWEST_COST_WITHOUT_CAP' } : {}),
+          ...(budgetLevel === 'adset' ? { [budgetField]: budget, bid_strategy: bidAmount ? 'COST_CAP' : 'LOWEST_COST_WITHOUT_CAP' } : {}),
+          ...(bidAmount ? { bid_amount: bidAmount } : {}),
           ...(start ? { start_time: start.toISOString() } : {}),
           ...(end ? { end_time: end.toISOString() } : {}),
         });

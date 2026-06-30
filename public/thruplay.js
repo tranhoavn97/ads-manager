@@ -178,6 +178,9 @@
     return {
       adAccountId: acc?.id,
       currency: acc?.currency,
+      campaignName: $('#tpCampaignName')?.value || '',
+      adsetName: $('#tpAdsetName')?.value || '',
+      costGoal: $('#tpCostGoal')?.value || '',
       pageId: tp.selectedPageId,
       posts: Array.from(tp.selectedPosts.values()).map((p) => ({
         objectStoryId: p.object_story_id,
@@ -196,6 +199,24 @@
       endTime: $('#tpEndTime')?.value || '',
       status: $('#tpStatus')?.value || 'PAUSED',
     };
+  }
+
+  function sampleName(prefix) {
+    const page = tp.pages.find((p) => String(p.id) === String(tp.selectedPageId));
+    const d = new Date();
+    const stamp = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    const pageName = page?.name || 'Page';
+    return `${prefix} - ${pageName} - ${stamp}`;
+  }
+
+  function fillSampleCampaignName() {
+    const input = $('#tpCampaignName');
+    if (input) input.value = sampleName('ThruPlay');
+  }
+
+  function fillSampleAdsetName() {
+    const input = $('#tpAdsetName');
+    if (input) input.value = sampleName('ThruPlay AdSet');
   }
 
   async function createAds() {
@@ -262,6 +283,8 @@
     $('#tpRefreshPages')?.addEventListener('click', () => loadPages(true));
     $('#tpLoadPosts')?.addEventListener('click', loadPosts);
     $('#tpPageSearch')?.addEventListener('input', renderPages);
+    $('#tpCampaignNameSample')?.addEventListener('click', fillSampleCampaignName);
+    $('#tpAdsetNameSample')?.addEventListener('click', fillSampleAdsetName);
     $('#tpCreateBtn')?.addEventListener('click', createAds);
     setDefaultDates();
     updateAccountInfo();
