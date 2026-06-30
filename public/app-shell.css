@@ -133,13 +133,75 @@ body {
 }
 
 .sb-foot {
-  margin-top: auto !important;
-  padding-top: 12px !important;
-  border-top: 1px solid var(--shell-border-soft) !important;
+  position: fixed !important;
+  top: 10px !important;
+  left: calc(var(--shell-sidebar) + 18px) !important;
+  right: 18px !important;
+  z-index: 75 !important;
+  min-height: 58px !important;
+  margin: 0 !important;
+  padding: 8px 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+  border: 1px solid var(--shell-border) !important;
+  border-radius: var(--shell-radius) !important;
+  background: rgba(255, 255, 255, .96) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .06) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.sidebar.collapsed .sb-foot {
+  left: calc(var(--shell-sidebar-collapsed) + 18px) !important;
 }
 
 .left-account-picker {
   display: none !important;
+}
+
+.sb-foot .left-account-picker {
+  display: flex !important;
+}
+
+.sb-foot .sb-foot-label {
+  display: none !important;
+}
+
+.sb-foot .acc-select,
+.sb-foot .ns {
+  width: min(320px, 36vw) !important;
+  min-width: 240px !important;
+}
+
+.sb-foot .acc-status {
+  min-width: 150px !important;
+  color: var(--shell-muted) !important;
+  font-size: 12px !important;
+}
+
+.sb-foot .sb-user {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  max-width: 260px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.sb-foot .sb-user-name {
+  display: inline-block !important;
+  max-width: 180px !important;
+}
+
+.sb-foot .sb-logout {
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  border-radius: var(--shell-radius) !important;
 }
 
 .container {
@@ -149,7 +211,7 @@ body {
   min-height: 100vh !important;
   margin: 0 !important;
   margin-left: var(--shell-sidebar) !important;
-  padding: var(--shell-page-y) var(--shell-page-x) calc(var(--dock-space) + 24px) !important;
+  padding: calc(var(--shell-page-y) + 70px) var(--shell-page-x) calc(var(--dock-space) + 24px) !important;
   transition: margin-left .18s ease, padding .18s ease !important;
 }
 
@@ -159,6 +221,7 @@ body {
 
 .sidebar.hidden + .container {
   margin-left: 0 !important;
+  padding-top: var(--shell-page-y) !important;
 }
 
 .view {
@@ -628,6 +691,25 @@ td {
     display: none !important;
   }
 
+  .sidebar .sb-foot .sb-label,
+  .sidebar .sb-foot .sb-user-name,
+  .sidebar .sb-foot .sb-logout,
+  .sidebar .sb-foot .acc-status {
+    display: inline-flex !important;
+  }
+
+  .sidebar .sb-foot {
+    left: calc(var(--shell-sidebar-collapsed) + 10px) !important;
+    right: 10px !important;
+    gap: 8px !important;
+  }
+
+  .sidebar .sb-foot .acc-select,
+  .sidebar .sb-foot .ns {
+    min-width: 210px !important;
+    width: min(280px, 42vw) !important;
+  }
+
   .container,
   .sidebar.collapsed + .container {
     margin-left: var(--shell-sidebar-collapsed) !important;
@@ -675,6 +757,20 @@ td {
   .dock-tab {
     font-size: 12px !important;
     padding: 6px 8px !important;
+  }
+
+  .sidebar .sb-foot {
+    flex-wrap: wrap !important;
+    min-height: 96px !important;
+    align-items: center !important;
+  }
+
+  .container {
+    padding-top: 118px !important;
+  }
+
+  .sidebar.hidden + .container {
+    padding-top: var(--shell-page-y) !important;
   }
 
   .cb-form,
