@@ -103,15 +103,28 @@
   }
 
   function campaignMatches(c) {
-    const q = ($('#cbCampaignSearch')?.value || '').toLowerCase().trim();
+    const q = norm($('#cbCampaignSearch')?.value || '');
     const f = $('#cbCampaignFilter')?.value || 'all';
-    const text = `${c.name} ${c.objective} ${c.status}`.toLowerCase();
+    const status = String(c.effective_status || c.status || '').toUpperCase();
+    const objective = String(c.objective || '').toUpperCase();
+    const kind = campaignKind(c);
+    const text = norm([
+      c.name,
+      c.id,
+      c.campaign_id,
+      c.objective,
+      objectiveText(c.objective),
+      c.status,
+      c.effective_status,
+      statusText(c.status),
+      kind,
+    ].join(' '));
     if (q && !text.includes(q)) return false;
-    if (f === 'active') return c.status === 'ACTIVE' || c.effective_status === 'ACTIVE';
-    if (f === 'paused') return c.status === 'PAUSED' || c.effective_status === 'PAUSED';
-    if (f === 'traffic') return String(c.objective || '').includes('TRAFFIC');
-    if (f === 'engagement') return String(c.objective || '').includes('ENGAGEMENT');
-    if (f === 'video') return /VIDEO|THRUPLAY|VIEWS|ENGAGEMENT/.test(String(c.objective || ''));
+    if (f === 'active') return status === 'ACTIVE';
+    if (f === 'paused') return status === 'PAUSED';
+    if (f === 'traffic') return kind === 'traffic';
+    if (f === 'engagement') return kind === 'engagement';
+    if (f === 'video') return kind === 'video';
     return true;
   }
 
@@ -120,10 +133,10 @@
     if (!wrap) return;
     const list = state.campaigns.filter(campaignMatches);
     if (!list.length) {
-      wrap.innerHTML = `<div class="loading">${state.campaigns.length ? 'Không có campaign phù hợp.' : 'Chưa có campaign.'}</div>`;
+      wrap.innerHTML = `<div class="loading">${state.campaigns.length ? 'Không có campaign phù hợp với bộ lọc.' : 'Chưa có campaign.'}</div>`;
       return;
     }
-    wrap.innerHTML = list.map((c) => `
+    wrap.innerHTML = `<div class="cb-filter-note">Đang hiển thị ${list.length}/${state.campaigns.length} campaign</div>` + list.map((c) => `
       <button class="cb-item ${String(c.id) === String(state.selectedCampaignId) ? 'selected' : ''}" type="button" data-id="${esc(c.id)}">
         <div class="cb-row-main">
           <strong title="${esc(c.name)}">${esc(c.name || 'Không tên')}</strong>
@@ -469,6 +482,23 @@
   function objectiveText(s) {
     const map = { OUTCOME_TRAFFIC: 'Traffic', TRAFFIC: 'Traffic', OUTCOME_ENGAGEMENT: 'Engagement', POST_ENGAGEMENT: 'Tương tác', VIDEO_VIEWS: 'Video views' };
     return map[s] || s || '—';
+  }
+  function campaignKind(c) {
+    const objective = String(c?.objective || '').toUpperCase();
+    const name = norm(c?.name || '');
+    if (objective.includes('TRAFFIC') || objective.includes('LINK_CLICKS') || /\btraffic\b|luu luong|truy cap|click/.test(name)) return 'traffic';
+    if (objective.includes('VIDEO') || objective.includes('THRUPLAY') || objective.includes('VIEWS') || /video|thruplay|luot xem/.test(name)) return 'video';
+    if (objective.includes('ENGAGEMENT') || objective.includes('POST_ENGAGEMENT') || objective.includes('PAGE_LIKES') || /tuong tac|engagement/.test(name)) return 'engagement';
+    return 'other';
+  }
+  function norm(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase()
+      .trim();
   }
   function goalText(s) {
     const map = { LINK_CLICKS: 'Click liên kết', THRUPLAY: 'ThruPlay', POST_ENGAGEMENT: 'Tương tác bài viết' };
