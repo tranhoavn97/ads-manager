@@ -210,6 +210,7 @@
         objectStoryId: p.object_story_id,
         postId: p.id,
         videoId: p.video_id,
+        type: p.type,
         permalinkUrl: p.permalink_url,
         message: p.message,
         adsetName: autoPostName(p),

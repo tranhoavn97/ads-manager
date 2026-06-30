@@ -179,6 +179,11 @@ function normalizeObjectStoryId(pageId, id) {
   return s.includes('_') ? s : `${pageId}_${s}`;
 }
 
+function isSelectedVideoCandidate(post) {
+  const type = String(post?.type || '').toLowerCase();
+  return !!(post?.videoId || post?.video_id || type.includes('video') || type.includes('reel'));
+}
+
 async function resolveThruplayExistingPost(token, pageId, post) {
   const inputObjectStoryId = post.objectStoryId || post.object_story_id;
   const objectStoryId = normalizeObjectStoryId(pageId, inputObjectStoryId || post.postId || post.id);
@@ -186,19 +191,30 @@ async function resolveThruplayExistingPost(token, pageId, post) {
   let detail = null;
 
   if (objectStoryId) {
-    detail = await getPostForThruplay(token, objectStoryId);
-    if (isVideoPost(detail)) return { objectStoryId, detail, video: null };
+    try {
+      detail = await getPostForThruplay(token, objectStoryId);
+      if (isVideoPost(detail)) return { objectStoryId, detail, video: null };
+    } catch {
+      detail = null;
+    }
   }
 
   const video = await getVideoForThruplay(token, videoId || detail?.object_id);
   if (video?.post_id) {
     const resolvedObjectStoryId = normalizeObjectStoryId(pageId, video.post_id);
-    const resolvedDetail = await getPostForThruplay(token, resolvedObjectStoryId);
+    let resolvedDetail = null;
+    try {
+      resolvedDetail = await getPostForThruplay(token, resolvedObjectStoryId);
+    } catch {}
     return { objectStoryId: resolvedObjectStoryId, detail: resolvedDetail, video };
   }
 
   if (video?.id && String(video.id) === String(videoId)) {
     return { objectStoryId, detail, video };
+  }
+
+  if (objectStoryId && isSelectedVideoCandidate(post)) {
+    return { objectStoryId, detail, video: null, assumed: true };
   }
 
   throw new Error(THRUPLAY_VIDEO_ERROR);
