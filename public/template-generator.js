@@ -5,6 +5,14 @@
     return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/\s+/g, ' ').trim();
   }
 
+  function injectLogLayoutCss() {
+    if (document.querySelector('link[href^="log-layout.css"]')) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'log-layout.css?v=2.4.11';
+    document.head.appendChild(link);
+  }
+
   function adjustLoginUi() {
     const fb = document.querySelector('a[href="/api/auth/login"]');
     if (fb) fb.style.display = 'none';
@@ -147,6 +155,7 @@
     XLSX.writeFile(wb, 'mau_existing_post_traffic.xlsx');
   }
 
+  injectLogLayoutCss();
   adjustLoginUi();
   patchSheetParser();
   document.addEventListener('click', function (e) {
