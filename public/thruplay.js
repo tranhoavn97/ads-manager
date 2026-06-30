@@ -232,14 +232,22 @@
     panel.classList.remove('hidden');
     wrap.innerHTML = (results || []).map((r, i) => `
       <div class="tp-result ${r.status === 'created' ? 'ok' : r.status === 'failed' ? 'err' : ''}">
-        <strong>${r.status === 'created' ? 'SUCCESS' : r.status === 'failed' ? 'FAILED' : 'Đang chờ'} · Bài ${i + 1}</strong>
+        <div class="tp-result-head">
+          <strong>${r.status === 'created' ? 'SUCCESS' : r.status === 'failed' ? 'FAILED' : 'Đang chờ'} · Bài ${i + 1}</strong>
+          <span title="${esc(r.objectStoryId || '')}">${shortId(r.objectStoryId)}</span>
+        </div>
         <div class="tp-result-ids">
-          Object Story: ${esc(r.objectStoryId || '—')}<br>
           Campaign: ${esc(r.ids?.campaignId || '—')} · AdSet: ${esc(r.ids?.adsetId || '—')} · Creative: ${esc(r.ids?.creativeId || '—')} · Ad: ${esc(r.ids?.adId || '—')}
         </div>
-        ${(r.errors || []).map((e) => `<div class="alert alert-error">${esc(e)}</div>`).join('')}
+        ${(r.errors || []).map((e) => `<div class="tp-result-error" title="${esc(e)}">${esc(e)}</div>`).join('')}
       </div>
     `).join('');
+  }
+
+  function shortId(value) {
+    const s = value ? String(value) : '—';
+    if (s.length <= 24) return esc(s);
+    return esc(`${s.slice(0, 12)}...${s.slice(-8)}`);
   }
 
   function setDefaultDates() {

@@ -78,10 +78,12 @@
   color: var(--st-error);
 }
 .tp-posts {
-  padding: 18px 20px;
+  padding: 14px 16px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  max-height: 520px;
+  overflow: auto;
 }
 .tp-post {
   border: 1px solid var(--border);
@@ -96,7 +98,7 @@
   box-shadow: 0 0 0 3px rgba(43, 89, 255, .12);
 }
 .tp-thumb {
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 1.9 / 1;
   background: var(--surface-2);
   display: grid;
   place-items: center;
@@ -109,9 +111,9 @@
   object-fit: cover;
 }
 .tp-post-body {
-  padding: 12px;
+  padding: 10px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 .tp-post-top {
   display: flex;
@@ -120,10 +122,10 @@
   align-items: center;
 }
 .tp-post-msg {
-  min-height: 38px;
-  max-height: 54px;
+  min-height: 34px;
+  max-height: 38px;
   overflow: hidden;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--ink-soft);
 }
 .tp-post-meta {
@@ -147,24 +149,60 @@
   color: var(--ink-soft);
 }
 .tp-results {
-  padding: 18px 20px;
+  padding: 14px 16px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
 }
 .tp-result {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px 12px;
   background: var(--surface);
   display: grid;
-  gap: 6px;
+  gap: 5px;
+  min-width: 0;
 }
 .tp-result.ok { border-color: rgba(21, 128, 61, .35); background: var(--st-created-bg); }
 .tp-result.err { border-color: rgba(220, 38, 38, .35); background: var(--st-error-bg); }
+.tp-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.tp-result-head strong,
+.tp-result-head span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp-result-head span {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
 .tp-result-ids {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp-result-error {
+  border: 1px solid rgba(220, 38, 38, .22);
+  background: rgba(255, 255, 255, .72);
+  color: var(--st-error);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (max-width: 840px) {
   .tp-grid { grid-template-columns: 1fr; }

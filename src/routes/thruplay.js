@@ -14,6 +14,7 @@ import { resolveAdStatus, resolveBudgetLevel, resolveBudgetMode, resolveCountrie
 
 const router = express.Router();
 const ZERO_DECIMAL = new Set(['VND', 'JPY', 'KRW', 'CLP', 'ISK', 'HUF', 'TWD', 'UGX', 'VUV', 'XAF', 'XOF', 'PYG']);
+const THRUPLAY_VIDEO_ERROR = 'Bài này không phù hợp chạy ThruPlay. Meta không xác nhận đây là bài video/reel có thể dùng làm Existing Post; hãy chọn video/reel gốc trên Page.';
 
 function budgetToMinor(amount, currency) {
   const factor = ZERO_DECIMAL.has(String(currency || '').toUpperCase()) ? 1 : 100;
@@ -118,7 +119,8 @@ async function fetchPageVideoPosts(token, pageId) {
       const res = await graphGet(token, `${pageId}/${edge}`, { fields, limit: 100 });
       for (const item of (res.data || [])) {
         if (edge === 'videos' || edge === 'video_reels') {
-          const id = item.post_id || `${pageId}_${item.id}`;
+          if (!item.post_id) continue;
+          const id = item.post_id;
           out.set(id, shapePost(pageId, { ...item, id, video_id: item.id }, edge === 'video_reels' ? 'Reel' : 'Video'));
         } else if (isVideoPost(item)) {
           const shaped = shapePost(pageId, item, fallbackType);
@@ -190,7 +192,7 @@ router.post('/validate', requireAuth, async (req, res) => {
       const row = { objectStoryId, valid: false, errors: [], post };
       try {
         const detail = await getPostForThruplay(token, objectStoryId);
-        if (!isVideoPost(detail)) throw new Error('Bài này không phù hợp chạy ThruPlay.');
+        if (!isVideoPost(detail)) throw new Error(THRUPLAY_VIDEO_ERROR);
         row.valid = true;
       } catch (err) {
         row.errors.push(err.message || 'Không kiểm tra được bài viết.');
@@ -236,7 +238,7 @@ router.post('/create', requireAuth, async (req, res) => {
       const result = { objectStoryId, status: 'created', errors: [], ids: {} };
       try {
         const detail = await getPostForThruplay(pageAccessToken, objectStoryId);
-        if (!isVideoPost(detail)) throw new Error('Bài này không phù hợp chạy ThruPlay.');
+        if (!isVideoPost(detail)) throw new Error(THRUPLAY_VIDEO_ERROR);
 
         const campaign = await createCampaign(req.session.fbToken, accountId, {
           name: `ThruPlay - ${label || objectStoryId}`,
