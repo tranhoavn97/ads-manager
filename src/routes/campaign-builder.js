@@ -30,18 +30,47 @@ function budgetToMinor(amount, currency) {
   return Math.round(value * factor);
 }
 
-function parseDateTime(date, time, endOfDay = false) {
+function offsetForTimezone(timezone, y, m, d, hh, mm, ss) {
+  const tz = String(timezone || '').trim();
+  if (/saigon|ho_chi_minh|bangkok|jakarta|gmt\+?7|utc\+?7/i.test(tz)) return '+0700';
+  if (/gmt|utc/i.test(tz)) {
+    const found = tz.match(/(?:gmt|utc)\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?/i);
+    if (found) return `${found[1]}${String(found[2]).padStart(2, '0')}${String(found[3] || '00').padStart(2, '0')}`;
+  }
+  try {
+    const utc = new Date(Date.UTC(y, m - 1, d, hh, mm, ss));
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz || 'Asia/Ho_Chi_Minh',
+      timeZoneName: 'shortOffset',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).formatToParts(utc);
+    const name = parts.find((p) => p.type === 'timeZoneName')?.value || '';
+    const match = name.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/i);
+    if (match) return `${match[1]}${String(match[2]).padStart(2, '0')}${String(match[3] || '00').padStart(2, '0')}`;
+  } catch {}
+  return '+0700';
+}
+
+function parseDateTime(date, time, endOfDay = false, timezone = 'Asia/Ho_Chi_Minh') {
   if (!date) return null;
   const raw = String(date).trim();
-  let dt = null;
+  let y = 0, mo = 0, d = 0;
   const dmy = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
-  if (dmy) dt = new Date(Date.UTC(+dmy[3], +dmy[2] - 1, +dmy[1], 0, 0, 0));
-  else dt = new Date(raw);
-  if (!dt || Number.isNaN(dt.getTime())) return null;
+  const ymd = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (dmy) { d = +dmy[1]; mo = +dmy[2]; y = +dmy[3]; }
+  else if (ymd) { y = +ymd[1]; mo = +ymd[2]; d = +ymd[3]; }
+  else {
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return null;
+    y = parsed.getFullYear(); mo = parsed.getMonth() + 1; d = parsed.getDate();
+  }
   const m = String(time || '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-  if (m) dt.setUTCHours(+m[1], +m[2], +(m[3] || 0), 0);
-  else if (endOfDay) dt.setUTCHours(23, 59, 0, 0);
-  return dt;
+  let hh = 0, mi = 0, ss = 0;
+  if (m) { hh = +m[1]; mi = +m[2]; ss = +(m[3] || 0); }
+  else if (endOfDay) { hh = 23; mi = 59; ss = 0; }
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${y}-${pad(mo)}-${pad(d)}T${pad(hh)}:${pad(mi)}:${pad(ss)}${offsetForTimezone(timezone, y, mo, d, hh, mi, ss)}`;
 }
 
 function metaDetails(err) {
@@ -232,10 +261,11 @@ function buildAdsetPayload(body, campaignId, currency, nameOverride = '') {
   if (!budget) throw new Error('Ngân sách không hợp lệ.');
   const budgetMode = resolveBudgetMode(cfg.budgetMode || 'daily');
   const budgetField = budgetMode === 'lifetime' ? 'lifetime_budget' : 'daily_budget';
-  const start = parseDateTime(cfg.startDate, cfg.startTime, false);
-  const end = parseDateTime(cfg.endDate, cfg.endTime, true);
+  const timezone = cfg.timezone || body.timezone || 'Asia/Ho_Chi_Minh';
+  const start = parseDateTime(cfg.startDate, cfg.startTime, false, timezone);
+  const end = parseDateTime(cfg.endDate, cfg.endTime, true, timezone);
   if (budgetMode === 'lifetime' && !end) throw new Error('Ngân sách trọn đời cần ngày kết thúc.');
-  if (start && end && end <= start) throw new Error('Ngày kết thúc phải sau ngày bắt đầu.');
+  if (start && end && new Date(end).getTime() <= new Date(start).getTime()) throw new Error('Ngày kết thúc phải sau ngày bắt đầu.');
   const optimizationGoal = VALID_OPTIMIZATION.has(cfg.optimizationGoal) ? cfg.optimizationGoal : 'LINK_CLICKS';
   const status = resolveAdStatus(body.status || cfg.status || 'PAUSED', false);
   return {
@@ -250,8 +280,8 @@ function buildAdsetPayload(body, campaignId, currency, nameOverride = '') {
     ...(optimizationGoal === 'LINK_CLICKS' ? { destination_type: 'WEBSITE' } : {}),
     ...(optimizationGoal === 'THRUPLAY' ? { destination_type: 'ON_VIDEO' } : {}),
     ...((optimizationGoal === 'THRUPLAY' || optimizationGoal === 'POST_ENGAGEMENT') && body.pageId ? { promoted_object: { page_id: body.pageId } } : {}),
-    ...(start ? { start_time: start.toISOString() } : {}),
-    ...(end ? { end_time: end.toISOString() } : {}),
+    ...(start ? { start_time: start } : {}),
+    ...(end ? { end_time: end } : {}),
   };
 }
 

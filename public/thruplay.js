@@ -223,6 +223,7 @@
     return {
       adAccountId: acc?.id,
       currency: acc?.currency,
+      timezone: acc?.timezone || 'Asia/Ho_Chi_Minh',
       pageName: page?.name || '',
       campaignName: page?.name || $('#tpCampaignName')?.value || '',
       pageId: tp.selectedPageId,

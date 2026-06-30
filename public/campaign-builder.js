@@ -358,6 +358,7 @@
     return {
       adAccountId: acc?.id,
       currency: acc?.currency || '',
+      timezone: acc?.timezone || 'Asia/Ho_Chi_Minh',
       campaignId: state.selectedCampaignId,
       adsetMode: 'create_new',
       newAdset: {
