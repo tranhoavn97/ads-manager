@@ -145,6 +145,7 @@
     state.selectedCampaignId = id;
     renderCampaigns();
     renderSummary();
+    syncOptimizationForCampaign();
     renderPreview();
   }
 
@@ -160,6 +161,18 @@
     box.classList.remove('hidden');
     const budget = c.daily_budget ? `Hàng ngày ${formatMoney(c.daily_budget)}` : c.lifetime_budget ? `Trọn đời ${formatMoney(c.lifetime_budget)}` : 'Không có ngân sách ở campaign';
     box.innerHTML = `<strong>${esc(c.name)}</strong><div>${esc(objectiveText(c.objective))} · ${esc(statusText(c.status))} · ${esc(budget)}</div>`;
+  }
+
+  function syncOptimizationForCampaign() {
+    const sel = $('#cbOptimization');
+    if (!sel) return;
+    const kind = campaignKind(selectedCampaign());
+    const options = kind === 'traffic'
+      ? [['LINK_CLICKS', 'Click liên kết']]
+      : kind === 'video'
+        ? [['THRUPLAY', 'ThruPlay']]
+        : [['POST_ENGAGEMENT', 'Tương tác bài viết'], ['THRUPLAY', 'ThruPlay']];
+    sel.innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
   }
 
   async function loadPages(force = false) {
@@ -395,6 +408,7 @@
         postId: p.post_id || p.id,
         objectStoryId: postObjectId(p),
         videoId: p.video_id,
+        type: p.type,
         permalinkUrl: p.permalink_url,
         message: p.message,
         adName: adName(p),

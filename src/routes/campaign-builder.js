@@ -15,6 +15,11 @@ import { resolveAdStatus, resolveBudgetMode, resolveCountries } from '../validat
 const router = express.Router();
 const ZERO_DECIMAL = new Set(['VND', 'JPY', 'KRW', 'CLP', 'ISK', 'HUF', 'TWD', 'UGX', 'VUV', 'XAF', 'XOF', 'PYG']);
 const VALID_OPTIMIZATION = new Set(['LINK_CLICKS', 'THRUPLAY', 'POST_ENGAGEMENT']);
+const CAMPAIGN_OPTIMIZATION = {
+  traffic: new Set(['LINK_CLICKS']),
+  engagement: new Set(['POST_ENGAGEMENT', 'THRUPLAY']),
+  video: new Set(['THRUPLAY']),
+};
 
 function minorToMajor(amount, currency) {
   if (amount === null || amount === undefined || amount === '') return null;
@@ -278,7 +283,29 @@ function postAdName(post, fallback = 'Quảng cáo từ bài viết') {
   return (raw || fallback).slice(0, 100);
 }
 
-function buildAdsetPayload(body, campaignId, currency, nameOverride = '') {
+function campaignKind(campaign) {
+  const objective = String(campaign?.objective || '').toUpperCase();
+  if (objective.includes('TRAFFIC') || objective.includes('LINK_CLICKS')) return 'traffic';
+  if (objective.includes('VIDEO') || objective.includes('VIEWS')) return 'video';
+  if (objective.includes('ENGAGEMENT') || objective.includes('POST_ENGAGEMENT') || objective.includes('PAGE_LIKES')) return 'engagement';
+  return 'unknown';
+}
+
+function resolveOptimizationGoal(campaign, requestedGoal, posts = []) {
+  const kind = campaignKind(campaign);
+  const allowed = CAMPAIGN_OPTIMIZATION[kind];
+  if (!allowed) {
+    throw new Error(`Chiến dịch đang chọn có mục tiêu ${campaign?.objective || 'không xác định'} chưa được hỗ trợ trong module này.`);
+  }
+  const requested = VALID_OPTIMIZATION.has(requestedGoal) ? requestedGoal : '';
+  if (requested && allowed.has(requested)) return requested;
+  if (kind === 'traffic') return 'LINK_CLICKS';
+  if (kind === 'video') return 'THRUPLAY';
+  const hasVideo = posts.some((p) => /video|reel/i.test(String(p.type || '')) || p.videoId || p.video_id);
+  return hasVideo ? 'THRUPLAY' : 'POST_ENGAGEMENT';
+}
+
+function buildAdsetPayload(body, campaignId, currency, nameOverride = '', campaign = null) {
   const cfg = body.newAdset || {};
   const { codes: countries } = resolveCountries(cfg.country || 'VN');
   if (!countries.length) throw new Error('Quốc gia không hợp lệ.');
@@ -291,7 +318,7 @@ function buildAdsetPayload(body, campaignId, currency, nameOverride = '') {
   const end = parseDateTime(cfg.endDate, cfg.endTime, true, timezone);
   if (budgetMode === 'lifetime' && !end) throw new Error('Ngân sách trọn đời cần ngày kết thúc.');
   if (start && end && new Date(end).getTime() <= new Date(start).getTime()) throw new Error('Ngày kết thúc phải sau ngày bắt đầu.');
-  const optimizationGoal = VALID_OPTIMIZATION.has(cfg.optimizationGoal) ? cfg.optimizationGoal : 'LINK_CLICKS';
+  const optimizationGoal = resolveOptimizationGoal(campaign, cfg.optimizationGoal, body.posts || []);
   const status = resolveAdStatus(body.status || cfg.status || 'PAUSED', false);
   return {
     name: String(nameOverride || cfg.name || 'Nhóm quảng cáo mới').trim(),
@@ -371,7 +398,7 @@ router.post('/campaign-builder/create-ads', requireAuth, async (req, res) => {
     if (!body.adAccountId) throw new Error('Thiếu tài khoản quảng cáo.');
     if (!body.pageId) throw new Error('Chưa chọn Page.');
     if (!Array.isArray(body.posts) || body.posts.length === 0) throw new Error('Chưa chọn bài viết.');
-    await assertCampaign(token, body.campaignId);
+    const campaign = await assertCampaign(token, body.campaignId);
 
     for (let i = 0; i < body.posts.length; i++) {
       const post = body.posts[i] || {};
@@ -380,7 +407,7 @@ router.post('/campaign-builder/create-ads', requireAuth, async (req, res) => {
       const row = { index: i, objectStoryId, status: 'created', ids: { campaignId: body.campaignId }, errors: [] };
       try {
         if (!objectStoryId) throw new Error('Bài này không có object_story_id.');
-        const adset = await createAdSet(token, body.adAccountId, buildAdsetPayload(body, body.campaignId, body.currency || '', adName));
+        const adset = await createAdSet(token, body.adAccountId, buildAdsetPayload({ ...body, posts: [post] }, body.campaignId, body.currency || '', adName, campaign));
         row.ids.adsetId = adset.id;
 
         const creative = await createAdCreative(token, body.adAccountId, {
