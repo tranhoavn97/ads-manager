@@ -11,7 +11,6 @@
     pages: [],
     posts: [],
     selectedCampaignId: '',
-    selectedAdsetId: '',
     selectedPageId: '',
     selectedPosts: new Map(),
     loadedPages: false,
@@ -43,10 +42,10 @@
     }
   }
 
-  function logInfo(msg) { window.Logger?.info?.(`Campaign Builder: ${msg}`); }
-  function logOk(msg) { window.Logger?.ok?.(`Campaign Builder: ${msg}`); }
-  function logWarn(msg) { window.Logger?.warn?.(`Campaign Builder: ${msg}`); }
-  function logErr(msg) { window.Logger?.err?.(`Campaign Builder: ${msg}`); }
+  function logInfo(msg) { window.Logger?.info?.(`Tạo từ chiến dịch: ${msg}`); }
+  function logOk(msg) { window.Logger?.ok?.(`Tạo từ chiến dịch: ${msg}`); }
+  function logWarn(msg) { window.Logger?.warn?.(`Tạo từ chiến dịch: ${msg}`); }
+  function logErr(msg) { window.Logger?.err?.(`Tạo từ chiến dịch: ${msg}`); }
 
   function account() {
     return window.State?.selectedAccount || null;
@@ -54,10 +53,6 @@
 
   function selectedCampaign() {
     return state.campaigns.find((c) => String(c.id) === String(state.selectedCampaignId));
-  }
-
-  function selectedAdset() {
-    return state.adsets.find((a) => String(a.id) === String(state.selectedAdsetId));
   }
 
   function selectedPage() {
@@ -85,18 +80,16 @@
       wrap.innerHTML = '<div class="loading">Hãy chọn tài khoản quảng cáo.</div>';
       return;
     }
-    wrap.innerHTML = '<div class="loading">Đang tải campaign...</div>';
+    wrap.innerHTML = '<div class="loading">Đang tải chiến dịch...</div>';
     state.selectedCampaignId = '';
-    state.selectedAdsetId = '';
     state.adsets = [];
     try {
       const data = await apiJson(`/api/campaigns?adAccountId=${encodeURIComponent(acc.id)}&currency=${encodeURIComponent(acc.currency || '')}`);
       state.campaigns = data.campaigns || [];
       renderCampaigns();
-      renderAdsets();
       renderSummary();
       renderPreview();
-      logOk(`đã tải ${state.campaigns.length} campaign.`);
+      logOk(`đã tải ${state.campaigns.length} chiến dịch.`);
     } catch (err) {
       wrap.innerHTML = `<div class="alert alert-error">${esc(err.message)}</div>`;
     }
@@ -133,10 +126,10 @@
     if (!wrap) return;
     const list = state.campaigns.filter(campaignMatches);
     if (!list.length) {
-      wrap.innerHTML = `<div class="loading">${state.campaigns.length ? 'Không có campaign phù hợp với bộ lọc.' : 'Chưa có campaign.'}</div>`;
+      wrap.innerHTML = `<div class="loading">${state.campaigns.length ? 'Không có chiến dịch phù hợp với bộ lọc.' : 'Chưa có chiến dịch.'}</div>`;
       return;
     }
-    wrap.innerHTML = `<div class="cb-filter-note">Đang hiển thị ${list.length}/${state.campaigns.length} campaign</div>` + list.map((c) => `
+    wrap.innerHTML = `<div class="cb-filter-note">Đang hiển thị ${list.length}/${state.campaigns.length} chiến dịch</div>` + list.map((c) => `
       <button class="cb-item ${String(c.id) === String(state.selectedCampaignId) ? 'selected' : ''}" type="button" data-id="${esc(c.id)}">
         <div class="cb-row-main">
           <strong title="${esc(c.name)}">${esc(c.name || 'Không tên')}</strong>
@@ -150,11 +143,9 @@
 
   async function selectCampaign(id) {
     state.selectedCampaignId = id;
-    state.selectedAdsetId = '';
     renderCampaigns();
     renderSummary();
     renderPreview();
-    await loadAdsets();
   }
 
   function renderSummary() {
@@ -169,60 +160,6 @@
     box.classList.remove('hidden');
     const budget = c.daily_budget ? `Hàng ngày ${formatMoney(c.daily_budget)}` : c.lifetime_budget ? `Trọn đời ${formatMoney(c.lifetime_budget)}` : 'Không có ngân sách ở campaign';
     box.innerHTML = `<strong>${esc(c.name)}</strong><div>${esc(objectiveText(c.objective))} · ${esc(statusText(c.status))} · ${esc(budget)}</div>`;
-  }
-
-  async function loadAdsets() {
-    const acc = account();
-    const wrap = $('#cbAdsets');
-    if (!wrap) return;
-    if (!state.selectedCampaignId) {
-      wrap.innerHTML = '<div class="loading">Chọn campaign để tải adset.</div>';
-      return;
-    }
-    wrap.innerHTML = '<div class="loading">Đang tải adset...</div>';
-    try {
-      const data = await apiJson(`/api/campaigns/${encodeURIComponent(state.selectedCampaignId)}/adsets?adAccountId=${encodeURIComponent(acc?.id || '')}&currency=${encodeURIComponent(acc?.currency || '')}`);
-      state.adsets = data.adsets || [];
-      renderAdsets();
-      logOk(`đã tải ${state.adsets.length} adset.`);
-    } catch (err) {
-      wrap.innerHTML = `<div class="alert alert-error">${esc(err.message)}</div>`;
-    }
-  }
-
-  function adsetMode() {
-    return $('input[name="cbAdsetMode"]:checked')?.value || 'existing';
-  }
-
-  function renderAdsets() {
-    const wrap = $('#cbAdsets');
-    if (!wrap) return;
-    if (adsetMode() === 'create_new') {
-      wrap.innerHTML = '<div class="loading">Sẽ tạo AdSet mới trong campaign đã chọn.</div>';
-      return;
-    }
-    if (!state.selectedCampaignId) {
-      wrap.innerHTML = '<div class="loading">Chọn campaign để tải adset.</div>';
-      return;
-    }
-    if (!state.adsets.length) {
-      wrap.innerHTML = '<div class="loading">Campaign này chưa có adset.</div>';
-      return;
-    }
-    wrap.innerHTML = state.adsets.map((a) => `
-      <button class="cb-item ${String(a.id) === String(state.selectedAdsetId) ? 'selected' : ''}" type="button" data-id="${esc(a.id)}">
-        <div class="cb-row-main">
-          <strong title="${esc(a.name)}">${esc(a.name || 'Không tên')}</strong>
-          <span class="cb-badge ${a.status === 'PAUSED' ? 'paused' : ''}">${esc(statusText(a.status))}</span>
-        </div>
-        <div class="cb-meta">${esc(a.id)} · ${esc(goalText(a.optimization_goal))}</div>
-      </button>
-    `).join('');
-    $$('.cb-item', wrap).forEach((btn) => btn.addEventListener('click', () => {
-      state.selectedAdsetId = btn.dataset.id;
-      renderAdsets();
-      renderPreview();
-    }));
   }
 
   async function loadPages(force = false) {
@@ -284,7 +221,7 @@
     wrap.innerHTML = '<div class="loading">Đang tải bài viết...</div>';
     try {
       const data = await apiJson(`/api/pages/${encodeURIComponent(state.selectedPageId)}/posts?type=${encodeURIComponent(type)}`);
-      state.posts = data.posts || [];
+      state.posts = (data.posts || []).slice().sort((a, b) => dateMs(b.created_time) - dateMs(a.created_time));
       state.selectedPosts.clear();
       renderPosts();
       renderPreview();
@@ -392,49 +329,38 @@
     });
   }
 
-  function toggleMode() {
-    $('#cbNewAdsetForm')?.classList.toggle('hidden', adsetMode() !== 'create_new');
-    renderAdsets();
-    renderPreview();
-  }
-
   function renderPreview() {
     const wrap = $('#cbPreview');
     if (!wrap) return;
     const campaign = selectedCampaign();
-    const adset = selectedAdset();
     syncSelectedPostsFromDom();
     const posts = Array.from(state.selectedPosts.values());
-    const mode = adsetMode();
-    if (!campaign || (mode === 'existing' && !adset) || !posts.length) {
-      wrap.innerHTML = '<div class="loading">Chọn campaign, adset/page và bài viết để xem trước.</div>';
+    if (!campaign || !posts.length) {
+      wrap.innerHTML = '<div class="loading">Chọn chiến dịch và bài viết để xem trước.</div>';
       return;
     }
     wrap.innerHTML = posts.map((p, i) => `
       <div class="cb-preview-row">
-        <strong>Ads ${i + 1}: ${esc(adName(p))}</strong>
-        <div class="cb-meta">${esc(campaign.name)} · ${mode === 'existing' ? esc(adset.name) : 'AdSet mới'} · ${esc(postObjectId(p))}</div>
+        <strong>${i + 1}. ${esc(adName(p))}</strong>
+        <div class="cb-meta">Tạo 1 nhóm quảng cáo + 1 quảng cáo trong ${esc(campaign.name)} · ${esc(postObjectId(p))}</div>
       </div>
     `).join('');
   }
 
   function adName(post) {
     const raw = String(post.message || post.permalink_url || postObjectId(post) || 'Quảng cáo từ bài viết').replace(/\s+/g, ' ').trim();
-    return (raw || 'Quảng cáo từ bài viết').slice(0, 80);
+    return (raw || 'Quảng cáo từ bài viết').slice(0, 100);
   }
 
   function payload() {
     const acc = account();
-    const mode = adsetMode();
     syncSelectedPostsFromDom();
     return {
       adAccountId: acc?.id,
       currency: acc?.currency || '',
       campaignId: state.selectedCampaignId,
-      adsetMode: mode,
-      existingAdsetId: state.selectedAdsetId,
+      adsetMode: 'create_new',
       newAdset: {
-        name: $('#cbNewAdsetName')?.value || 'AdSet mới từ Campaign Builder',
         country: $('#cbCountry')?.value || 'VN',
         budget: cleanBudget($('#cbBudget')?.value || ''),
         budgetMode: $('#cbBudgetMode')?.value || 'daily',
@@ -463,8 +389,7 @@
     const cfg = payload();
     const errors = [];
     if (!cfg.adAccountId) errors.push('Hãy chọn tài khoản quảng cáo.');
-    if (!cfg.campaignId) errors.push('Hãy chọn campaign.');
-    if (cfg.adsetMode === 'existing' && !cfg.existingAdsetId) errors.push('Hãy chọn AdSet có sẵn.');
+    if (!cfg.campaignId) errors.push('Hãy chọn chiến dịch.');
     if (!cfg.pageId) errors.push('Hãy chọn Page.');
     if (!cfg.posts.length) errors.push('Hãy chọn ít nhất 1 bài.');
     if (errors.length) {
@@ -476,23 +401,23 @@
     btn.disabled = true;
     btn.textContent = 'Đang tạo...';
     renderResults(cfg.posts.map((p) => ({ status: 'pending', objectStoryId: p.objectStoryId, errors: [], ids: {} })));
-    logInfo(`Creating 1/${cfg.posts.length}`);
+    logInfo(`Đang tạo 1/${cfg.posts.length}`);
     try {
       const data = await apiJson('/api/campaign-builder/create-ads', { method: 'POST', body: cfg, timeoutMs: 90000 });
       renderResults(data.results || []);
       const ok = (data.results || []).filter((r) => r.status === 'created').length;
       const fail = (data.results || []).length - ok;
       (data.results || []).forEach((r, i) => {
-        if (r.status === 'created') logOk(`SUCCESS bài ${i + 1}: ad ${r.ids?.adId || '—'}`);
-        else logErr(`FAILED bài ${i + 1}: ${r.errors?.[0] || 'Không rõ lỗi'}`);
+        if (r.status === 'created') logOk(`THÀNH CÔNG bài ${i + 1}: quảng cáo ${r.ids?.adId || '—'}`);
+        else logErr(`THẤT BẠI bài ${i + 1}: ${r.errors?.[0] || 'Không rõ lỗi'}`);
       });
       if (fail) logWarn(`Hoàn tất: ${ok} thành công, ${fail} lỗi.`);
-      else logOk(`Hoàn tất: ${ok} ads đã tạo.`);
+      else logOk(`Hoàn tất: ${ok} cấu trúc đã tạo.`);
     } catch (err) {
       renderResults([{ status: 'failed', errors: [err.message], ids: {} }]);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Tạo Ads vào Campaign';
+      btn.textContent = 'Tạo cấu trúc quảng cáo';
     }
   }
 
@@ -501,15 +426,15 @@
     if (!wrap) return;
     wrap.innerHTML = (results || []).map((r, i) => `
       <div class="cb-result ${r.status === 'created' ? 'ok' : r.status === 'failed' ? 'err' : ''}">
-        <strong>${r.status === 'created' ? 'SUCCESS' : r.status === 'failed' ? 'FAILED' : 'Đang chờ'} · Bài ${i + 1}</strong>
-        <div class="cb-meta">Campaign: ${esc(r.ids?.campaignId || state.selectedCampaignId || '—')} · AdSet: ${esc(r.ids?.adsetId || '—')} · Creative: ${esc(r.ids?.creativeId || '—')} · Ad: ${esc(r.ids?.adId || '—')}</div>
+        <strong>${r.status === 'created' ? 'THÀNH CÔNG' : r.status === 'failed' ? 'THẤT BẠI' : 'Đang chờ'} · Bài ${i + 1}</strong>
+        <div class="cb-meta">Chiến dịch: ${esc(r.ids?.campaignId || state.selectedCampaignId || '—')} · Nhóm: ${esc(r.ids?.adsetId || '—')} · Nội dung: ${esc(r.ids?.creativeId || '—')} · Quảng cáo: ${esc(r.ids?.adId || '—')}</div>
         ${(r.errors || []).map((e) => `<div class="cb-meta">${esc(e)}</div>`).join('')}
       </div>
     `).join('');
   }
 
   function statusText(s) {
-    return s === 'ACTIVE' ? 'Đang chạy' : s === 'PAUSED' ? 'Tạm dừng' : (s || '—');
+    return s === 'ACTIVE' ? 'Đang chạy' : s === 'PAUSED' ? 'Đang tắt' : (s || '—');
   }
   function objectiveText(s) {
     const map = { OUTCOME_TRAFFIC: 'Traffic', TRAFFIC: 'Traffic', OUTCOME_ENGAGEMENT: 'Engagement', POST_ENGAGEMENT: 'Tương tác', VIDEO_VIEWS: 'Video views' };
@@ -544,6 +469,10 @@
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return value;
     return d.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+  }
+  function dateMs(value) {
+    const n = new Date(value || 0).getTime();
+    return Number.isNaN(n) ? 0 : n;
   }
   function shortId(value) {
     const s = value ? String(value) : '—';
@@ -594,7 +523,6 @@
     $('#cbPostSearch')?.addEventListener('input', renderPosts);
     $('#cbPostType')?.addEventListener('change', loadPosts);
     $('#cbSelectAllPosts')?.addEventListener('click', toggleSelectAll);
-    $$('input[name="cbAdsetMode"]').forEach((el) => el.addEventListener('change', toggleMode));
     $('#cbCreateAds')?.addEventListener('click', createAds);
   }
 
@@ -609,9 +537,7 @@
     state.campaigns = [];
     state.adsets = [];
     state.selectedCampaignId = '';
-    state.selectedAdsetId = '';
     renderCampaigns();
-    renderAdsets();
     renderPreview();
   }
 
@@ -619,7 +545,6 @@
     bind();
     setDefaults();
     accountInfo();
-    toggleMode();
   }
 
   window.CampaignBuilder = { init, activate, refreshAccount, loadAll };

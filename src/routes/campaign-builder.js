@@ -221,10 +221,10 @@ async function assertAdsetBelongs(token, adsetId, campaignId) {
 
 function postAdName(post, fallback = 'Quảng cáo từ bài viết') {
   const raw = String(post.adName || post.message || post.permalinkUrl || post.objectStoryId || fallback).replace(/\s+/g, ' ').trim();
-  return (raw || fallback).slice(0, 80);
+  return (raw || fallback).slice(0, 100);
 }
 
-function buildAdsetPayload(body, campaignId, currency) {
+function buildAdsetPayload(body, campaignId, currency, nameOverride = '') {
   const cfg = body.newAdset || {};
   const { codes: countries } = resolveCountries(cfg.country || 'VN');
   if (!countries.length) throw new Error('Quốc gia không hợp lệ.');
@@ -237,12 +237,13 @@ function buildAdsetPayload(body, campaignId, currency) {
   if (budgetMode === 'lifetime' && !end) throw new Error('Ngân sách trọn đời cần ngày kết thúc.');
   if (start && end && end <= start) throw new Error('Ngày kết thúc phải sau ngày bắt đầu.');
   const optimizationGoal = VALID_OPTIMIZATION.has(cfg.optimizationGoal) ? cfg.optimizationGoal : 'LINK_CLICKS';
+  const status = resolveAdStatus(body.status || cfg.status || 'PAUSED', false);
   return {
-    name: String(cfg.name || 'Nhóm quảng cáo mới').trim(),
+    name: String(nameOverride || cfg.name || 'Nhóm quảng cáo mới').trim(),
     campaign_id: campaignId,
     billing_event: cfg.billingEvent || 'IMPRESSIONS',
     optimization_goal: optimizationGoal,
-    status: resolveAdStatus(cfg.status || body.status || 'PAUSED', false),
+    status,
     targeting: { geo_locations: { countries }, age_min: 18, age_max: 65 },
     [budgetField]: budget,
     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
@@ -315,24 +316,16 @@ router.post('/campaign-builder/create-ads', requireAuth, async (req, res) => {
     if (!Array.isArray(body.posts) || body.posts.length === 0) throw new Error('Chưa chọn bài viết.');
     await assertCampaign(token, body.campaignId);
 
-    let adsetId = body.existingAdsetId;
-    let newAdsetId = null;
-    if (body.adsetMode === 'create_new') {
-      const payload = buildAdsetPayload(body, body.campaignId, body.currency || '');
-      const adset = await createAdSet(token, body.adAccountId, payload);
-      adsetId = adset.id;
-      newAdsetId = adset.id;
-    } else {
-      await assertAdsetBelongs(token, body.existingAdsetId, body.campaignId);
-    }
-
     for (let i = 0; i < body.posts.length; i++) {
       const post = body.posts[i] || {};
       const objectStoryId = post.objectStoryId || post.object_story_id;
       const adName = postAdName(post, `Quảng cáo ${i + 1}`);
-      const row = { index: i, objectStoryId, status: 'created', ids: { campaignId: body.campaignId, adsetId }, errors: [] };
+      const row = { index: i, objectStoryId, status: 'created', ids: { campaignId: body.campaignId }, errors: [] };
       try {
         if (!objectStoryId) throw new Error('Bài này không có object_story_id.');
+        const adset = await createAdSet(token, body.adAccountId, buildAdsetPayload(body, body.campaignId, body.currency || '', adName));
+        row.ids.adsetId = adset.id;
+
         const creative = await createAdCreative(token, body.adAccountId, {
           name: `Creative - ${adName}`,
           object_story_id: objectStoryId,
@@ -340,7 +333,7 @@ router.post('/campaign-builder/create-ads', requireAuth, async (req, res) => {
         row.ids.creativeId = creative.id;
         const ad = await createAd(token, body.adAccountId, {
           name: adName,
-          adset_id: adsetId,
+          adset_id: adset.id,
           creative: { creative_id: creative.id },
           status: resolveAdStatus(body.status || 'PAUSED', false),
         });
@@ -353,7 +346,7 @@ router.post('/campaign-builder/create-ads', requireAuth, async (req, res) => {
       results.push(row);
     }
 
-    res.json({ ok: true, adsetId, newAdsetId, results });
+    res.json({ ok: true, results });
   } catch (err) {
     handle(err, res, 400);
   }

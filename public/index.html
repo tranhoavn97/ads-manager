@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="select.css?v=2.4.5" />
   <link rel="stylesheet" href="posts.css?v=2.4.5" />
   <link rel="stylesheet" href="thruplay.css?v=1.0.5" />
-  <link rel="stylesheet" href="campaign-builder.css?v=1.0.1" />
+  <link rel="stylesheet" href="campaign-builder.css?v=1.0.2" />
   <link rel="stylesheet" href="dock-layout.css?v=2.4.12" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -46,9 +46,9 @@
               <span class="sb-iic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
               <span class="sb-label">Tạo quảng cáo hàng loạt</span>
             </button>
-            <button class="sb-item" type="button" data-view="builder" title="Campaign Builder">
+            <button class="sb-item" type="button" data-view="builder" title="Tạo từ chiến dịch">
               <span class="sb-iic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h10M4 19h7"/><path d="M17 14v6M14 17h6"/></svg></span>
-              <span class="sb-label">Campaign Builder</span>
+              <span class="sb-label">Tạo từ chiến dịch</span>
             </button>
             <button class="sb-item" type="button" data-view="thruplay" title="Quảng cáo ThruPlay">
               <span class="sb-iic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg></span>
@@ -181,39 +181,38 @@
     <section id="view-builder" class="view hidden">
       <div class="cb-head panel">
         <div>
-          <h2>Campaign Builder</h2>
-          <p class="muted">Thêm quảng cáo mới vào campaign/adset có sẵn bằng bài viết, video hoặc reel đã đăng trên Page.</p>
+          <h2>Tạo quảng cáo từ chiến dịch có sẵn</h2>
+          <p class="muted">Chọn chiến dịch có sẵn, chọn bài viết trên Page, hệ thống tạo mỗi bài thành 1 nhóm quảng cáo và 1 quảng cáo riêng.</p>
         </div>
         <button id="cbReloadAll" class="btn btn-secondary" type="button">Tải dữ liệu</button>
       </div>
 
       <div class="cb-layout">
         <section class="panel cb-col">
-          <div class="panel-head compact"><div><h2>Campaign / AdSet</h2><p class="muted">Không tạo campaign mới trong module này.</p></div></div>
+          <div class="panel-head compact"><div><h2>Chiến dịch</h2><p class="muted">Không tạo chiến dịch mới trong module này.</p></div></div>
           <div id="cbAccountInfo" class="cb-account">Chọn tài khoản quảng cáo ở thanh bên trái.</div>
           <div class="cb-toolbar">
-            <input id="cbCampaignSearch" class="input-inline" type="search" placeholder="Tìm campaign..." />
+            <input id="cbCampaignSearch" class="input-inline" type="search" placeholder="Tìm chiến dịch..." />
             <select id="cbCampaignFilter" class="select-inline">
               <option value="all">Tất cả</option>
               <option value="active">Đang chạy</option>
-              <option value="paused">Tạm dừng</option>
-              <option value="traffic">Traffic</option>
-              <option value="engagement">Engagement</option>
+              <option value="paused">Đang tắt</option>
+              <option value="traffic">Lưu lượng</option>
+              <option value="engagement">Tương tác</option>
               <option value="video">Video / ThruPlay</option>
             </select>
           </div>
-          <div id="cbCampaigns" class="cb-list"><div class="loading">Bấm “Tải dữ liệu” để lấy campaign.</div></div>
+          <div id="cbCampaigns" class="cb-list"><div class="loading">Bấm “Tải dữ liệu” để lấy chiến dịch.</div></div>
           <div id="cbCampaignSummary" class="cb-summary hidden"></div>
 
-          <div class="cb-mode">
-            <label class="seg"><input type="radio" name="cbAdsetMode" value="existing" checked /> <span>Dùng AdSet có sẵn</span></label>
-            <label class="seg"><input type="radio" name="cbAdsetMode" value="create_new" /> <span>Tạo AdSet mới</span></label>
+          <div class="cb-structure-note">
+            <strong>Cấu trúc tạo</strong>
+            <span>1 bài viết = 1 nhóm quảng cáo + 1 quảng cáo. Tên nhóm và quảng cáo lấy 100 ký tự đầu từ nội dung bài viết.</span>
           </div>
-          <div id="cbAdsets" class="cb-list small"><div class="loading">Chọn campaign để tải adset.</div></div>
         </section>
 
         <section class="panel cb-col">
-          <div class="panel-head compact"><div><h2>Page Posts</h2><p class="muted">Lấy bài viết có sẵn, không tạo bài mới hoặc dark post.</p></div></div>
+          <div class="panel-head compact"><div><h2>Bài viết trên Page</h2><p class="muted">Bài mới nhất ở trên. Không tạo bài mới hoặc bài ẩn.</p></div></div>
           <div class="cb-toolbar">
             <input id="cbPageSearch" class="input-inline" type="search" placeholder="Tìm Page..." />
             <button id="cbLoadPages" class="btn btn-ghost" type="button">Tải Page</button>
@@ -234,9 +233,8 @@
         </section>
 
         <section class="panel cb-col cb-setup">
-          <div class="panel-head compact"><div><h2>Setup + Preview</h2><p class="muted">Chỉ tạo creative và ad, hoặc thêm adset mới vào campaign cũ.</p></div></div>
-          <div id="cbNewAdsetForm" class="cb-form hidden">
-            <label><span>Tên AdSet mới</span><input id="cbNewAdsetName" class="input-inline" value="AdSet mới từ Campaign Builder" /></label>
+          <div class="panel-head compact"><div><h2>Cấu hình tạo</h2><p class="muted">Áp dụng chung cho nhóm quảng cáo và quảng cáo được tạo từ từng bài.</p></div></div>
+          <div id="cbNewAdsetForm" class="cb-form">
             <label><span>Quốc gia</span><input id="cbCountry" class="input-inline" value="VN" /></label>
             <label><span>Ngân sách</span><input id="cbBudget" class="input-inline" inputmode="numeric" value="200.000" /></label>
             <label><span>Loại ngân sách</span><select id="cbBudgetMode" class="select-inline"><option value="daily">Hàng ngày</option><option value="lifetime">Trọn đời</option></select></label>
@@ -244,16 +242,15 @@
             <label><span>Giờ bắt đầu</span><input id="cbStartTime" class="input-inline" type="time" /></label>
             <label><span>Ngày kết thúc</span><input id="cbEndDate" class="input-inline" type="date" /></label>
             <label><span>Giờ kết thúc</span><input id="cbEndTime" class="input-inline" type="time" /></label>
-            <label><span>Mục tiêu nhóm</span><select id="cbOptimization" class="select-inline"><option value="LINK_CLICKS">Click liên kết</option><option value="THRUPLAY">ThruPlay</option><option value="POST_ENGAGEMENT">Tương tác bài viết</option></select></label>
+            <label><span>Mục tiêu tối ưu</span><select id="cbOptimization" class="select-inline"><option value="LINK_CLICKS">Click liên kết</option><option value="THRUPLAY">ThruPlay</option><option value="POST_ENGAGEMENT">Tương tác bài viết</option></select></label>
           </div>
-          <div class="cb-form">
-            <label><span>Trạng thái Ads</span><select id="cbStatus" class="select-inline"><option value="PAUSED">Tạm dừng</option><option value="ACTIVE">Bật</option></select></label>
+            <label><span>Trạng thái nhóm và quảng cáo</span><select id="cbStatus" class="select-inline"><option value="PAUSED">Tắt</option><option value="ACTIVE">Bật</option></select></label>
           </div>
           <div class="cb-preview">
             <strong>Xem trước</strong>
             <div id="cbPreview" class="cb-preview-list"><div class="loading">Chưa chọn đủ dữ liệu.</div></div>
           </div>
-          <button id="cbCreateAds" class="btn btn-primary" type="button">Tạo Ads vào Campaign</button>
+          <button id="cbCreateAds" class="btn btn-primary" type="button">Tạo cấu trúc quảng cáo</button>
           <div id="cbResults" class="cb-results"></div>
         </section>
       </div>
@@ -362,7 +359,7 @@
   <script src="app.js?v=2.4.12"></script>
   <script src="manage.js?v=2.4.5"></script>
   <script src="posts.js?v=2.4.5"></script>
-  <script src="campaign-builder.js?v=1.0.1"></script>
+  <script src="campaign-builder.js?v=1.0.2"></script>
   <script src="thruplay.js?v=1.0.5"></script>
   <script src="select.js?v=2.4.5"></script>
   <script src="template-generator.js?v=2.4.12"></script>
