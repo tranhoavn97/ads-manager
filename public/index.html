@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="minimal.css?v=2.4.5" />
   <link rel="stylesheet" href="select.css?v=2.4.5" />
   <link rel="stylesheet" href="posts.css?v=2.4.5" />
-  <link rel="stylesheet" href="thruplay.css?v=1.0.4" />
+  <link rel="stylesheet" href="thruplay.css?v=1.0.5" />
   <link rel="stylesheet" href="dock-layout.css?v=2.4.12" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -45,9 +45,9 @@
               <span class="sb-iic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
               <span class="sb-label">Tạo quảng cáo hàng loạt</span>
             </button>
-            <button class="sb-item" type="button" data-view="thruplay" title="ThruPlay Ads">
+            <button class="sb-item" type="button" data-view="thruplay" title="Quảng cáo ThruPlay">
               <span class="sb-iic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg></span>
-              <span class="sb-label">ThruPlay Ads</span>
+              <span class="sb-label">Quảng cáo ThruPlay</span>
             </button>
           </div>
         </div>
@@ -177,8 +177,8 @@
       <div class="panel tp-panel">
         <div class="panel-head">
           <div>
-            <h2>ThruPlay Ads</h2>
-            <p class="muted">Chọn Page, chọn video/reel có sẵn và tạo quảng cáo tương tác video tối ưu ThruPlay.</p>
+            <h2>Quảng cáo ThruPlay</h2>
+            <p class="muted">Chọn Page, chọn video/reel có sẵn và tạo quảng cáo lượt xem video tối ưu ThruPlay.</p>
           </div>
           <button id="tpRefreshPages" class="btn btn-ghost">Tải lại Page</button>
         </div>
@@ -199,12 +199,12 @@
         <div class="panel-head">
           <div>
             <h2>Bài viết có sẵn chạy ThruPlay</h2>
-            <p class="muted">Chọn video/reel đã đăng trên Page. App dùng Existing Post, không tạo dark post.</p>
+            <p class="muted">Chọn video/reel đã đăng trên Page. App dùng bài viết có sẵn, không tạo bài ẩn.</p>
           </div>
           <div class="head-actions">
             <span id="tpSelectedCount" class="muted">Đã chọn 0 bài</span>
             <button id="tpSelectAllPosts" class="btn btn-ghost" type="button">Chọn tất cả</button>
-            <button id="tpLoadPosts" class="btn btn-secondary">Tải Existing Post</button>
+            <button id="tpLoadPosts" class="btn btn-secondary">Tải bài có sẵn</button>
           </div>
         </div>
         <div id="tpPosts" class="tp-posts"><div class="loading">Chọn Page rồi bấm tải bài.</div></div>
@@ -218,42 +218,29 @@
           </div>
         </div>
         <div class="tp-config">
-          <section class="tp-config-card">
-            <div class="tp-field-title"><span class="tp-check">✓</span><strong>Tên chiến dịch</strong></div>
-            <div class="tp-name-row">
-              <input id="tpCampaignName" class="input-inline" value="" placeholder="Tự nhận theo tên Page" readonly />
+          <section class="tp-config-card tp-config-compact">
+            <div class="tp-field-title"><span class="tp-check">✓</span><strong>Thiết lập quảng cáo ThruPlay</strong></div>
+            <div class="tp-config-row tp-config-row-names">
+              <label><span>Tên chiến dịch</span><input id="tpCampaignName" class="input-inline" value="" placeholder="Tự nhận theo tên Page" readonly /></label>
+              <label><span>Tên nhóm quảng cáo</span><input id="tpAdsetName" class="input-inline" value="" placeholder="Tự nhận 50 ký tự đầu nội dung bài viết" readonly /></label>
             </div>
-          </section>
-          <section class="tp-config-card tp-live-card">
-            <div>
-              <strong>Quảng cáo video trực tiếp</strong>
-              <p>Dùng các cài đặt gợi ý cho quảng cáo video trực tiếp. Mặc định tắt để chạy video/reel có sẵn.</p>
-            </div>
-            <label class="tp-toggle"><input id="tpLiveVideo" type="checkbox" disabled /><span></span><em>Tắt</em></label>
-          </section>
-          <section class="tp-config-card">
-            <div class="tp-field-title"><span class="tp-check">✓</span><strong>Chi tiết chiến dịch</strong></div>
-            <div class="tp-stacked-fields">
+
+            <div class="tp-config-row tp-config-row-objective">
               <label><span>Cách mua</span><select class="select-inline" disabled><option>Đấu giá</option></select></label>
               <label><span>Mục tiêu chiến dịch</span><select class="select-inline" disabled><option>Lượt tương tác</option></select></label>
-            </div>
-          </section>
-          <section class="tp-config-card">
-            <div class="tp-field-title"><span class="tp-check">✓</span><strong>Tên nhóm quảng cáo</strong></div>
-            <div class="tp-name-row">
-              <input id="tpAdsetName" class="input-inline" value="" placeholder="Tự nhận 50 ký tự đầu nội dung bài viết" readonly />
-            </div>
-          </section>
-          <section class="tp-config-card">
-            <div class="tp-field-title"><span class="tp-check">✓</span><strong>Lượt chuyển đổi, ngân sách & lịch chạy</strong></div>
-            <div class="tp-config-grid">
               <label><span>Vị trí chuyển đổi</span><select class="select-inline" disabled><option>Trên quảng cáo của bạn</option></select></label>
               <label><span>Loại tương tác</span><select class="select-inline" disabled><option>Lượt xem video</option></select></label>
               <label><span>Mục tiêu hiệu quả</span><select class="select-inline" disabled><option>Tối đa hóa số lượt xem ThruPlay</option></select></label>
+            </div>
+
+            <div class="tp-config-row tp-config-row-budget">
               <label><span>Quốc gia</span><input id="tpCountry" class="input-inline" value="Việt Nam" /></label>
               <label><span>Ngân sách</span><input id="tpBudget" class="input-inline" inputmode="numeric" value="200.000" /></label>
-              <label><span>Cấp ngân sách</span><select id="tpBudgetLevel" class="select-inline"><option value="adset">Adset / ABO</option><option value="campaign">Campaign / CBO</option></select></label>
-              <label><span>Loại ngân sách</span><select id="tpBudgetMode" class="select-inline"><option value="daily">Daily</option><option value="lifetime">Lifetime</option></select></label>
+              <label><span>Cấp ngân sách</span><select id="tpBudgetLevel" class="select-inline"><option value="adset">Cấp nhóm quảng cáo</option><option value="campaign">Cấp chiến dịch</option></select></label>
+              <label><span>Loại ngân sách</span><select id="tpBudgetMode" class="select-inline"><option value="daily">Hàng ngày</option><option value="lifetime">Trọn đời</option></select></label>
+            </div>
+
+            <div class="tp-config-row tp-config-row-schedule">
               <label><span>Ngày bắt đầu</span><input id="tpStartDate" class="input-inline" type="date" /></label>
               <label><span>Giờ bắt đầu</span><input id="tpStartTime" class="input-inline" type="time" /></label>
               <label><span>Ngày kết thúc</span><input id="tpEndDate" class="input-inline" type="date" /></label>
@@ -263,7 +250,7 @@
           </section>
         </div>
         <div class="panel-foot">
-          <button id="tpCreateBtn" class="btn btn-primary">Tạo ThruPlay Ads</button>
+          <button id="tpCreateBtn" class="btn btn-primary">Tạo quảng cáo ThruPlay</button>
         </div>
       </div>
 
@@ -288,7 +275,7 @@
   <script src="app.js?v=2.4.12"></script>
   <script src="manage.js?v=2.4.5"></script>
   <script src="posts.js?v=2.4.5"></script>
-  <script src="thruplay.js?v=1.0.4"></script>
+  <script src="thruplay.js?v=1.0.5"></script>
   <script src="select.js?v=2.4.5"></script>
   <script src="template-generator.js?v=2.4.12"></script>
 </body>

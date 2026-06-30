@@ -143,7 +143,7 @@
           <div class="tp-post-body">
             <div class="tp-post-top">
               <label class="chk"><input type="checkbox" ${checked ? 'checked' : ''} /> <span>Chọn</span></label>
-              <span class="tp-badge">Existing Post · ${esc(p.type || 'Video')}</span>
+              <span class="tp-badge">Bài có sẵn · ${esc(p.type || 'Video')}</span>
             </div>
             <div class="tp-post-msg">${esc(p.message || 'Không có nội dung')}</div>
             <div class="tp-post-meta">
@@ -271,7 +271,7 @@
       logErr('ThruPlay tạo lỗi: ' + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Tạo ThruPlay Ads';
+      btn.textContent = 'Tạo quảng cáo ThruPlay';
     }
   }
 
@@ -283,11 +283,11 @@
     wrap.innerHTML = (results || []).map((r, i) => `
       <div class="tp-result ${r.status === 'created' ? 'ok' : r.status === 'failed' ? 'err' : ''}">
         <div class="tp-result-head">
-          <strong>${r.status === 'created' ? 'SUCCESS' : r.status === 'failed' ? 'FAILED' : 'Đang chờ'} · Bài ${i + 1}</strong>
+          <strong>${r.status === 'created' ? 'THÀNH CÔNG' : r.status === 'failed' ? 'THẤT BẠI' : 'Đang chờ'} · Bài ${i + 1}</strong>
           <span title="${esc(r.objectStoryId || '')}">${shortId(r.objectStoryId)}</span>
         </div>
         <div class="tp-result-ids">
-          Campaign: ${esc(r.ids?.campaignId || '—')} · AdSet: ${esc(r.ids?.adsetId || '—')} · Creative: ${esc(r.ids?.creativeId || '—')} · Ad: ${esc(r.ids?.adId || '—')}
+          Chiến dịch: ${esc(r.ids?.campaignId || '—')} · Nhóm: ${esc(r.ids?.adsetId || '—')} · Nội dung: ${esc(r.ids?.creativeId || '—')} · Quảng cáo: ${esc(r.ids?.adId || '—')}
         </div>
         ${(r.errors || []).map((e) => `<div class="tp-result-error" title="${esc(e)}">${esc(e)}</div>`).join('')}
       </div>
