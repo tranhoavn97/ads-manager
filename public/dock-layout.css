@@ -1,0 +1,134 @@
+/* Layout-safe log dock: prevents the loading bar/log console from covering app content. */
+:root {
+  --dock-h: 52px;
+  --dock-open: 320px;
+}
+
+html,
+body {
+  padding-bottom: var(--dock-h) !important;
+}
+
+.layout {
+  min-height: calc(100vh - var(--dock-h));
+}
+
+.container {
+  padding-bottom: 24px !important;
+}
+
+body:has(.dock:not(.collapsed)) {
+  padding-bottom: var(--dock-open) !important;
+}
+
+body:has(.dock:not(.collapsed)) .layout {
+  min-height: calc(100vh - var(--dock-open));
+}
+
+body:has(.dock:not(.collapsed)) .container {
+  padding-bottom: calc(var(--dock-open) + 24px) !important;
+}
+
+body:has(.dock.collapsed) .container {
+  padding-bottom: calc(var(--dock-h) + 24px) !important;
+}
+
+.sidebar {
+  height: calc(100vh - var(--dock-h)) !important;
+}
+
+body:has(.dock:not(.collapsed)) .sidebar {
+  height: calc(100vh - var(--dock-open)) !important;
+}
+
+.dock {
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 45 !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-top: 1px solid var(--border) !important;
+  box-shadow: 0 -1px 0 rgba(15,23,42,.04), 0 -12px 30px rgba(15,23,42,.06) !important;
+}
+
+.dock-loader {
+  top: 0 !important;
+  height: 4px !important;
+  background: rgba(15,23,42,.04);
+}
+
+.dock-loader .bar {
+  border-radius: 0 999px 999px 0;
+}
+
+.dock-strip {
+  height: var(--dock-h) !important;
+  padding: 0 20px !important;
+}
+
+.dock-status {
+  min-width: 220px;
+  max-width: 50vw;
+}
+
+.dock-status #dockStatus {
+  max-width: 48vw !important;
+}
+
+.dock-tabs {
+  margin-left: auto !important;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.dock-tab {
+  min-height: 32px;
+}
+
+.dock-body {
+  height: calc(var(--dock-open) - var(--dock-h)) !important;
+  max-height: 260px;
+  background: var(--surface) !important;
+}
+
+.dock-panel {
+  padding: 14px 20px !important;
+}
+
+.log-body {
+  line-height: 1.75 !important;
+  font-size: 12px !important;
+}
+
+.log-line {
+  display: grid !important;
+  grid-template-columns: 72px 1fr;
+  align-items: start;
+  gap: 10px !important;
+  padding: 2px 0;
+}
+
+.log-time {
+  text-align: right;
+}
+
+.log-msg {
+  min-width: 0;
+}
+
+.toast {
+  bottom: calc(var(--dock-h) + 16px) !important;
+}
+
+body:has(.dock:not(.collapsed)) .toast {
+  bottom: calc(var(--dock-open) + 16px) !important;
+}
+
+.drawer,
+.scrim,
+.modal,
+.toast {
+  z-index: 80 !important;
+}
