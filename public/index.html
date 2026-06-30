@@ -13,7 +13,8 @@
   <link rel="stylesheet" href="minimal.css?v=2.4.5" />
   <link rel="stylesheet" href="select.css?v=2.4.5" />
   <link rel="stylesheet" href="posts.css?v=2.4.5" />
-  <link rel="stylesheet" href="thruplay.css?v=1.0.3" />
+  <link rel="stylesheet" href="thruplay.css?v=1.0.4" />
+  <link rel="stylesheet" href="dock-layout.css?v=2.4.12" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -250,13 +251,13 @@
               <label><span>Loại tương tác</span><select class="select-inline" disabled><option>Lượt xem video</option></select></label>
               <label><span>Mục tiêu hiệu quả</span><select class="select-inline" disabled><option>Tối đa hóa số lượt xem ThruPlay</option></select></label>
               <label><span>Quốc gia</span><input id="tpCountry" class="input-inline" value="Việt Nam" /></label>
-              <label><span>Ngân sách</span><input id="tpBudget" class="input-inline" type="number" min="1" value="200000" /></label>
+              <label><span>Ngân sách</span><input id="tpBudget" class="input-inline" inputmode="numeric" value="200.000" /></label>
               <label><span>Cấp ngân sách</span><select id="tpBudgetLevel" class="select-inline"><option value="adset">Adset / ABO</option><option value="campaign">Campaign / CBO</option></select></label>
               <label><span>Loại ngân sách</span><select id="tpBudgetMode" class="select-inline"><option value="daily">Daily</option><option value="lifetime">Lifetime</option></select></label>
-              <label><span>Ngày bắt đầu</span><input id="tpStartDate" class="input-inline" placeholder="dd/mm/yyyy" /></label>
-              <label><span>Giờ bắt đầu</span><input id="tpStartTime" class="input-inline" value="08:00" placeholder="hh:mm" /></label>
-              <label><span>Ngày kết thúc</span><input id="tpEndDate" class="input-inline" placeholder="dd/mm/yyyy" /></label>
-              <label><span>Giờ kết thúc</span><input id="tpEndTime" class="input-inline" value="10:00" placeholder="hh:mm" /></label>
+              <label><span>Ngày bắt đầu</span><input id="tpStartDate" class="input-inline" type="date" /></label>
+              <label><span>Giờ bắt đầu</span><input id="tpStartTime" class="input-inline" type="time" /></label>
+              <label><span>Ngày kết thúc</span><input id="tpEndDate" class="input-inline" type="date" /></label>
+              <label><span>Giờ kết thúc</span><input id="tpEndTime" class="input-inline" type="time" /></label>
               <label><span>Trạng thái</span><select id="tpStatus" class="select-inline"><option value="PAUSED">Tạm dừng</option><option value="ACTIVE">Bật</option></select></label>
             </div>
           </section>
@@ -284,11 +285,11 @@
   <div id="modalScrim" class="scrim hidden"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><strong id="modalTitle">Xác nhận tạo quảng cáo</strong></div><div id="modalBody" class="modal-body"></div><div id="modalFoot" class="modal-foot"></div></div></div>
   <div id="toast" class="toast hidden"></div>
   <footer id="dock" class="dock collapsed"><div id="dockLoader" class="dock-loader"><div class="bar"></div></div><div class="dock-strip"><span class="dock-status"><span class="log-dot" id="logDot"></span><span id="dockStatus">Sẵn sàng</span></span><div class="dock-tabs"><button class="dock-tab active" data-tab="log">Nhật ký <span id="logErrBadge" class="log-errbadge hidden">0</span></button><button class="dock-tab" data-tab="history">Lịch sử camp <span id="histCount" class="dock-count">0</span></button></div><div class="dock-actions"><button id="dockClear" class="log-btn" title="Xoá">Xoá</button><button id="dockToggle" class="log-btn" title="Thu gọn/mở rộng">▴</button></div></div><div class="dock-body" id="dockBody"><div id="logBody" class="dock-panel log-body"></div><div id="histBody" class="dock-panel hist-body hidden"></div></div></footer>
-  <script src="app.js?v=2.4.10"></script>
+  <script src="app.js?v=2.4.12"></script>
   <script src="manage.js?v=2.4.5"></script>
   <script src="posts.js?v=2.4.5"></script>
-  <script src="thruplay.js?v=1.0.3"></script>
+  <script src="thruplay.js?v=1.0.4"></script>
   <script src="select.js?v=2.4.5"></script>
-  <script src="template-generator.js?v=2.4.10"></script>
+  <script src="template-generator.js?v=2.4.12"></script>
 </body>
 </html>

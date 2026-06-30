@@ -136,6 +136,8 @@ function setDockStatus(msg) {
   if (el && msg && !/^[→←]/.test(msg)) el.textContent = msg;
 }
 function setDockCollapsed(collapsed) {
+  document.body.classList.toggle('dock-collapsed', collapsed);
+  document.body.classList.toggle('dock-open', !collapsed);
   $('#dock').classList.toggle('collapsed', collapsed);
   $('#dockToggle').textContent = collapsed ? '▴' : '▾';
 }
@@ -527,6 +529,7 @@ function bindEvents() {
   $('#tokenInput')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginWithToken(); });
 
   // Dock dưới cùng: tab, thu gọn, xoá
+  setDockCollapsed($('#dock')?.classList.contains('collapsed') !== false);
   $('#dockToggle').addEventListener('click', () => toggleDock());
   $$('.dock-tab').forEach((btn) => {
     btn.addEventListener('click', () => { showDockTab(btn.dataset.tab); toggleDock(true); });

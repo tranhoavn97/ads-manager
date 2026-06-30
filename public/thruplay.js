@@ -237,7 +237,7 @@
         adName: autoPostName(p),
       })),
       country: $('#tpCountry')?.value || 'Việt Nam',
-      budget: $('#tpBudget')?.value || '',
+      budget: cleanBudgetValue($('#tpBudget')?.value || ''),
       budgetMode: $('#tpBudgetMode')?.value || 'daily',
       budgetLevel: $('#tpBudgetLevel')?.value || 'adset',
       startDate: $('#tpStartDate')?.value || '',
@@ -300,12 +300,42 @@
     return esc(`${s.slice(0, 12)}...${s.slice(-8)}`);
   }
 
-  function setDefaultDates() {
-    const d = new Date();
+  function cleanBudgetValue(value) {
+    return String(value || '').replace(/[^\d]/g, '');
+  }
+
+  function formatBudgetValue(value) {
+    const raw = cleanBudgetValue(value);
+    if (!raw) return '';
+    return raw.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+
+  function setupBudgetInput() {
+    const input = $('#tpBudget');
+    if (!input) return;
+    const apply = () => { input.value = formatBudgetValue(input.value); };
+    input.addEventListener('input', apply);
+    input.addEventListener('blur', apply);
+    apply();
+  }
+
+  function dateValue(d) {
     const pad = (n) => String(n).padStart(2, '0');
-    const today = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-    if ($('#tpStartDate') && !$('#tpStartDate').value) $('#tpStartDate').value = today;
-    if ($('#tpEndDate') && !$('#tpEndDate').value) $('#tpEndDate').value = today;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function timeValue(d) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function setDefaultDates() {
+    const start = new Date();
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    if ($('#tpStartDate') && !$('#tpStartDate').value) $('#tpStartDate').value = dateValue(start);
+    if ($('#tpStartTime') && !$('#tpStartTime').value) $('#tpStartTime').value = timeValue(start);
+    if ($('#tpEndDate') && !$('#tpEndDate').value) $('#tpEndDate').value = dateValue(end);
+    if ($('#tpEndTime') && !$('#tpEndTime').value) $('#tpEndTime').value = timeValue(end);
   }
 
   function init() {
@@ -314,6 +344,7 @@
     $('#tpSelectAllPosts')?.addEventListener('click', toggleSelectAllPosts);
     $('#tpPageSearch')?.addEventListener('input', renderPages);
     $('#tpCreateBtn')?.addEventListener('click', createAds);
+    setupBudgetInput();
     setDefaultDates();
     syncAutoNames();
     updateAccountInfo();

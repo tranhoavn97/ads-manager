@@ -1,134 +1,195 @@
-/* Layout-safe log dock: prevents the loading bar/log console from covering app content. */
+/* Final dock/log/loading layout layer.
+   This file is loaded last so the dock never covers app content. */
 :root {
   --dock-h: 52px;
-  --dock-open: 320px;
+  --dock-open: 300px;
+  --dock-space: var(--dock-h);
 }
+
+body.dock-open { --dock-space: var(--dock-open); }
+body.dock-collapsed { --dock-space: var(--dock-h); }
 
 html,
 body {
-  padding-bottom: var(--dock-h) !important;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  padding-bottom: var(--dock-space) !important;
 }
 
 .layout {
-  min-height: calc(100vh - var(--dock-h));
+  min-height: calc(100vh - var(--dock-space)) !important;
 }
 
 .container {
-  padding-bottom: 24px !important;
-}
-
-body:has(.dock:not(.collapsed)) {
-  padding-bottom: var(--dock-open) !important;
-}
-
-body:has(.dock:not(.collapsed)) .layout {
-  min-height: calc(100vh - var(--dock-open));
-}
-
-body:has(.dock:not(.collapsed)) .container {
-  padding-bottom: calc(var(--dock-open) + 24px) !important;
-}
-
-body:has(.dock.collapsed) .container {
-  padding-bottom: calc(var(--dock-h) + 24px) !important;
+  padding-bottom: calc(var(--dock-space) + 24px) !important;
 }
 
 .sidebar {
-  height: calc(100vh - var(--dock-h)) !important;
-}
-
-body:has(.dock:not(.collapsed)) .sidebar {
-  height: calc(100vh - var(--dock-open)) !important;
+  height: calc(100vh - var(--dock-space)) !important;
 }
 
 .dock {
+  position: fixed !important;
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
   z-index: 45 !important;
-  background: rgba(255, 255, 255, 0.96) !important;
+  height: var(--dock-open) !important;
+  max-height: min(var(--dock-open), 38vh) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: rgba(255, 255, 255, .97) !important;
   border-top: 1px solid var(--border) !important;
-  box-shadow: 0 -1px 0 rgba(15,23,42,.04), 0 -12px 30px rgba(15,23,42,.06) !important;
+  box-shadow: 0 -1px 0 rgba(15, 23, 42, .04), 0 -12px 30px rgba(15, 23, 42, .08) !important;
+}
+
+.dock.collapsed {
+  height: var(--dock-h) !important;
+  max-height: var(--dock-h) !important;
 }
 
 .dock-loader {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
   top: 0 !important;
   height: 4px !important;
-  background: rgba(15,23,42,.04);
+  overflow: hidden !important;
+  pointer-events: none !important;
+  background: rgba(15, 23, 42, .05) !important;
+  opacity: 0;
+}
+
+.dock-loader.active {
+  opacity: 1 !important;
 }
 
 .dock-loader .bar {
+  height: 100% !important;
+  width: 0;
   border-radius: 0 999px 999px 0;
 }
 
 .dock-strip {
   height: var(--dock-h) !important;
-  padding: 0 20px !important;
+  min-height: var(--dock-h) !important;
+  flex: 0 0 var(--dock-h) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 0 18px !important;
 }
 
 .dock-status {
-  min-width: 220px;
-  max-width: 50vw;
+  min-width: 0 !important;
+  max-width: 48vw !important;
 }
 
 .dock-status #dockStatus {
-  max-width: 48vw !important;
+  max-width: 46vw !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .dock-tabs {
   margin-left: auto !important;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 3px !important;
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 999px !important;
 }
 
 .dock-tab {
-  min-height: 32px;
+  min-height: 32px !important;
+  white-space: nowrap !important;
 }
 
 .dock-body {
-  height: calc(var(--dock-open) - var(--dock-h)) !important;
-  max-height: 260px;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow: hidden !important;
   background: var(--surface) !important;
+  border-top: 1px solid var(--border) !important;
+}
+
+.dock.collapsed .dock-body {
+  display: none !important;
 }
 
 .dock-panel {
-  padding: 14px 20px !important;
+  height: 100% !important;
+  overflow: auto !important;
+  padding: 12px 18px !important;
 }
 
 .log-body {
-  line-height: 1.75 !important;
+  font-family: var(--mono) !important;
   font-size: 12px !important;
+  line-height: 1.65 !important;
+  color: var(--ink-soft) !important;
 }
 
 .log-line {
   display: grid !important;
-  grid-template-columns: 72px 1fr;
-  align-items: start;
+  grid-template-columns: 76px minmax(0, 1fr) !important;
+  align-items: start !important;
   gap: 10px !important;
-  padding: 2px 0;
+  padding: 2px 0 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
 }
 
 .log-time {
-  text-align: right;
+  color: var(--muted) !important;
+  text-align: right !important;
+  white-space: nowrap !important;
 }
 
 .log-msg {
-  min-width: 0;
+  min-width: 0 !important;
 }
 
 .toast {
-  bottom: calc(var(--dock-h) + 16px) !important;
-}
-
-body:has(.dock:not(.collapsed)) .toast {
-  bottom: calc(var(--dock-open) + 16px) !important;
-}
-
-.drawer,
-.scrim,
-.modal,
-.toast {
+  position: fixed !important;
+  bottom: calc(var(--dock-space) + 16px) !important;
   z-index: 80 !important;
+}
+
+.scrim,
+.drawer,
+.modal {
+  z-index: 80 !important;
+}
+
+.table-panel,
+.panel,
+.upload-panel {
+  scroll-margin-bottom: calc(var(--dock-space) + 24px) !important;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --dock-open: 240px;
+  }
+
+  .dock-strip {
+    padding: 0 10px !important;
+    gap: 8px !important;
+  }
+
+  .dock-status {
+    max-width: 34vw !important;
+  }
+
+  .dock-tab {
+    padding: 6px 9px !important;
+  }
 }
