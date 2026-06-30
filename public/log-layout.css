@@ -1,0 +1,194 @@
+/* Log & loading layout fix: keep logs in document flow, not over content */
+:root {
+  --dock-h: 44px;
+  --dock-expanded-h: 260px;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.layout {
+  min-height: calc(100vh - var(--dock-h));
+  padding-bottom: 0;
+}
+
+.container {
+  padding-bottom: 24px !important;
+}
+
+.dock {
+  position: sticky !important;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  z-index: 20;
+  height: var(--dock-expanded-h);
+  max-height: 36vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255,255,255,.96) !important;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 22px rgba(15,23,42,.06) !important;
+  backdrop-filter: blur(10px);
+}
+
+.dock.collapsed {
+  height: var(--dock-h);
+  max-height: var(--dock-h);
+}
+
+.dock-strip {
+  min-height: var(--dock-h);
+  height: var(--dock-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.dock-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface) !important;
+}
+
+.dock.collapsed .dock-body {
+  display: none !important;
+}
+
+.dock-panel {
+  height: 100%;
+  overflow: auto;
+  padding: 10px 18px 14px;
+}
+
+.log-body {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  background: #fff;
+}
+
+.log-line {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 10px;
+  padding: 2px 0;
+  border-bottom: 0;
+  word-break: break-word;
+}
+
+.log-time {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.log-msg {
+  min-width: 0;
+}
+
+.log-line.ok .log-msg { color: #059669; }
+.log-line.warn .log-msg { color: #b45309; }
+.log-line.err .log-msg { color: #dc2626; }
+
+.dock-loader {
+  position: absolute !important;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.dock-loader .bar {
+  height: 100%;
+  width: 0;
+  border-radius: 0 999px 999px 0;
+}
+
+.dock-loader.active .bar {
+  min-width: 8%;
+}
+
+.dock-loader.error .bar {
+  background: #dc2626 !important;
+}
+
+.dock-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.dock-tab {
+  border: 0;
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dock-tab.active {
+  background: var(--surface) !important;
+  color: var(--primary) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.dock-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 50vw;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+#dockStatus {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.table-panel,
+.panel {
+  scroll-margin-bottom: calc(var(--dock-expanded-h) + 16px);
+}
+
+@media (max-width: 900px) {
+  :root { --dock-expanded-h: 220px; }
+  .dock-status { max-width: 38vw; }
+  .dock-strip { padding: 0 10px; gap: 8px; }
+  .dock-tab { padding: 6px 9px; }
+}
