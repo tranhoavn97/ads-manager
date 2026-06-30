@@ -111,7 +111,7 @@ function parseNumber(input) {
   return parseFloat(s);
 }
 
-function parseDate(input, timeInput) {
+function parseDate(input, timeInput, opts = {}) {
   if (!input) return null;
   const s = input.toString().trim();
   let dt = null;
@@ -146,6 +146,8 @@ function parseDate(input, timeInput) {
       const secs = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
       dt.setUTCHours(hrs, mins, secs, 0);
     }
+  } else if (opts.defaultEndOfDay) {
+    dt.setUTCHours(23, 59, 0, 0);
   }
 
   return dt;
@@ -272,7 +274,7 @@ export function validateRow(row) {
 
   // Ngày & Giờ bắt đầu/kết thúc
   const start = parseDate(data.startDate, data.startTimeRaw);
-  const end = parseDate(data.endDate, data.endTimeRaw);
+  const end = parseDate(data.endDate, data.endTimeRaw, { defaultEndOfDay: true });
   
   if (data.startDate && !start) errors.push(`Ngày bắt đầu "${data.startDate}" không đọc được (dùng dd/mm/yyyy)`);
   if (data.endDate && !end) errors.push(`Ngày kết thúc "${data.endDate}" không đọc được (dùng dd/mm/yyyy)`);

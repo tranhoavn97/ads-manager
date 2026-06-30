@@ -1050,6 +1050,7 @@ function clientPreCheck(rows) {
     
     r.contentMode = 'Sử dụng bài viết có sẵn';
     r.ctaHandling = 'Giữ CTA hiện tại';
+    if (!r.sourceUrl && r.ctaLink) r.sourceUrl = r.ctaLink;
     if (!r.campaignType) r.campaignType = 'Traffic';
     if (!r.country) r.country = 'Việt Nam';
     if (!r.budgetMode) r.budgetMode = 'daily';
@@ -1368,6 +1369,7 @@ function openDrawer(index) {
       <dt>Quảng cáo</dt><dd>${esc(r.adName || '—')}</dd>
       <dt>Loại</dt><dd>${esc(r.campaignType || '—')}</dd>
       ${ctaHtml}
+      <dt>URL nguồn</dt><dd>${(r.sourceUrl || r.ctaLink) ? `<a href="${esc(r.sourceUrl || r.ctaLink)}" target="_blank">${esc(r.sourceUrl || r.ctaLink)}</a>` : '—'}</dd>
       <dt>Quốc gia</dt><dd>${esc(r.country || '—')}</dd>
       <dt>Ngân sách</dt><dd>${esc(r.budget || '—')} · ${budgetModeLabel(r)} · ${budgetLevelLabel(r)}</dd>
       <dt>Thời gian</dt><dd>${esc(r.startDate || '—')} ${r.startTimeRaw ? esc(r.startTimeRaw) : '00:00'} ${r.endDate ? `→ ${esc(r.endDate)} ${r.endTimeRaw ? esc(r.endTimeRaw) : '23:59'}` : ''}</dd>

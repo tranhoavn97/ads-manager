@@ -126,3 +126,38 @@ test('validateRow accepts minimal existing-post traffic rows', () => {
   assert.strictEqual(res.normalized.countries[0], 'VN');
   assert.strictEqual(res.normalized.budgetMode, 'lifetime');
 });
+
+test('validateRow allows same-day short lifetime schedules when end time is later', () => {
+  const row = {
+    pageLink: '123456789',
+    postLink: '123456789_987654321',
+    budget: '500000',
+    startDate: '24/06/2026',
+    startTimeRaw: '08:00',
+    endDate: '24/06/2026',
+    endTimeRaw: '10:00',
+    budgetMode: 'Trọn đời'
+  };
+
+  const res = validateRow(row);
+  assert.strictEqual(res.status, ROW_STATUS.VALID);
+  assert.deepStrictEqual(res.errors, []);
+  assert.strictEqual(res.normalized.budgetMode, 'lifetime');
+});
+
+test('validateRow defaults same-day lifetime end date to end of day when end time is blank', () => {
+  const row = {
+    pageLink: '123456789',
+    postLink: '123456789_987654321',
+    budget: '500000',
+    startDate: '24/06/2026',
+    startTimeRaw: '08:00',
+    endDate: '24/06/2026',
+    budgetMode: 'Trọn đời'
+  };
+
+  const res = validateRow(row);
+  assert.strictEqual(res.status, ROW_STATUS.VALID);
+  assert.deepStrictEqual(res.errors, []);
+  assert.match(res.normalized.endTime, /T23:59:00\.000Z$/);
+});
