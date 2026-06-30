@@ -162,6 +162,48 @@ async function getPostForThruplay(token, objectStoryId) {
   }
 }
 
+async function getVideoForThruplay(token, videoId) {
+  if (!videoId) return null;
+  try {
+    return await graphGet(token, videoId, {
+      fields: 'id,post_id,from{id,name},title,description,permalink_url,permalink,source,created_time,picture',
+    });
+  } catch {
+    return null;
+  }
+}
+
+function normalizeObjectStoryId(pageId, id) {
+  if (!id) return '';
+  const s = String(id);
+  return s.includes('_') ? s : `${pageId}_${s}`;
+}
+
+async function resolveThruplayExistingPost(token, pageId, post) {
+  const inputObjectStoryId = post.objectStoryId || post.object_story_id;
+  const objectStoryId = normalizeObjectStoryId(pageId, inputObjectStoryId || post.postId || post.id);
+  const videoId = post.videoId || post.video_id || null;
+  let detail = null;
+
+  if (objectStoryId) {
+    detail = await getPostForThruplay(token, objectStoryId);
+    if (isVideoPost(detail)) return { objectStoryId, detail, video: null };
+  }
+
+  const video = await getVideoForThruplay(token, videoId || detail?.object_id);
+  if (video?.post_id) {
+    const resolvedObjectStoryId = normalizeObjectStoryId(pageId, video.post_id);
+    const resolvedDetail = await getPostForThruplay(token, resolvedObjectStoryId);
+    return { objectStoryId: resolvedObjectStoryId, detail: resolvedDetail, video };
+  }
+
+  if (video?.id && String(video.id) === String(videoId)) {
+    return { objectStoryId, detail, video };
+  }
+
+  throw new Error(THRUPLAY_VIDEO_ERROR);
+}
+
 router.get('/pages', requireAuth, async (req, res) => {
   try {
     const pages = await getPages(req.session.fbToken);
@@ -201,8 +243,8 @@ router.post('/validate', requireAuth, async (req, res) => {
       const objectStoryId = post.objectStoryId || post.object_story_id;
       const row = { objectStoryId, valid: false, errors: [], post };
       try {
-        const detail = await getPostForThruplay(token, objectStoryId);
-        if (!isVideoPost(detail)) throw new Error(THRUPLAY_VIDEO_ERROR);
+        const resolved = await resolveThruplayExistingPost(token, page.id, post);
+        row.objectStoryId = resolved.objectStoryId;
         row.valid = true;
       } catch (err) {
         row.errors.push(err.message || 'Không kiểm tra được bài viết.');
@@ -243,7 +285,7 @@ router.post('/create', requireAuth, async (req, res) => {
     const adStatus = resolveAdStatus(body.status, false);
 
     for (const post of body.posts) {
-      const objectStoryId = post.objectStoryId || post.object_story_id;
+      let objectStoryId = post.objectStoryId || post.object_story_id;
       const label = (post.message || post.permalinkUrl || objectStoryId || '').slice(0, 60);
       const autoPostName = postName(post.adsetName || post.adName || post.message || post.permalinkUrl || objectStoryId, objectStoryId);
       const campaignName = cleanName(body.pageName || body.campaignName, `ThruPlay - ${label || objectStoryId}`);
@@ -251,8 +293,9 @@ router.post('/create', requireAuth, async (req, res) => {
       const adName = autoPostName;
       const result = { objectStoryId, status: 'created', errors: [], ids: {} };
       try {
-        const detail = await getPostForThruplay(pageAccessToken, objectStoryId);
-        if (!isVideoPost(detail)) throw new Error(THRUPLAY_VIDEO_ERROR);
+        const resolvedPost = await resolveThruplayExistingPost(pageAccessToken, page.id, post);
+        objectStoryId = resolvedPost.objectStoryId;
+        result.objectStoryId = objectStoryId;
 
         const campaign = await createCampaign(req.session.fbToken, accountId, {
           name: campaignName,
