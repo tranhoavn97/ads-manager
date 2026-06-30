@@ -138,6 +138,10 @@ body {
   border-top: 1px solid var(--shell-border-soft) !important;
 }
 
+.left-account-picker {
+  display: none !important;
+}
+
 .container {
   width: auto !important;
   max-width: none !important;
@@ -262,6 +266,65 @@ select,
 textarea {
   min-height: 36px !important;
   border-radius: var(--shell-radius) !important;
+}
+
+.mp-picker {
+  display: grid !important;
+  gap: 5px !important;
+  min-width: min(320px, 100%) !important;
+  color: var(--shell-text) !important;
+}
+
+.mp-picker > span {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: var(--shell-muted) !important;
+}
+
+.mp-account-select,
+.mp-page-select {
+  width: 100% !important;
+  min-width: min(300px, 100%) !important;
+  max-width: 420px !important;
+  background: #fff !important;
+  border: 1px solid var(--shell-border) !important;
+  color: var(--shell-text) !important;
+  font-weight: 600 !important;
+}
+
+.mp-select-card {
+  display: grid !important;
+  gap: 8px !important;
+  padding: 12px !important;
+}
+
+.mp-picker-note {
+  min-height: 18px !important;
+  color: var(--shell-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+
+.mp-selected-page {
+  display: grid !important;
+  gap: 4px !important;
+  padding: 10px 12px !important;
+  border: 1px solid var(--shell-border-soft) !important;
+  border-radius: var(--shell-radius) !important;
+  background: var(--shell-blue-soft) !important;
+}
+
+.mp-selected-page strong,
+.mp-selected-page span {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.mp-selected-page span {
+  color: var(--shell-muted) !important;
+  font-size: 12px !important;
 }
 
 .table-scroll {

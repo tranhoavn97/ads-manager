@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="thruplay.css?v=1.0.5" />
   <link rel="stylesheet" href="campaign-builder.css?v=1.0.2" />
   <link rel="stylesheet" href="dock-layout.css?v=2.4.12" />
-  <link rel="stylesheet" href="app-shell.css?v=1.0.0" />
+  <link rel="stylesheet" href="app-shell.css?v=1.0.1" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -74,9 +74,9 @@
       </nav>
 
       <div class="sb-foot">
-        <span class="sb-label sb-foot-label">Tài khoản quảng cáo</span>
-        <select id="accSelect" class="acc-select" aria-label="Chọn tài khoản quảng cáo"></select>
-        <div class="acc-status" id="accStatus">
+        <span class="sb-label sb-foot-label left-account-picker">Tài khoản quảng cáo</span>
+        <select id="accSelect" class="acc-select left-account-picker" aria-label="Chọn tài khoản quảng cáo"></select>
+        <div class="acc-status left-account-picker" id="accStatus">
           <span class="acc-dot" id="accDot"></span>
           <span class="sb-label" id="accStatusText">—</span>
         </div>
@@ -150,6 +150,10 @@
         <div class="manage-toolbar">
           <div class="filters" id="manageFilters"></div>
           <div class="manage-right">
+            <label class="mp-picker">
+              <span>Tài khoản quảng cáo</span>
+              <select id="manageAccSelect" class="mp-account-select select-inline" aria-label="Chọn tài khoản quảng cáo"></select>
+            </label>
             <select id="datePreset" class="ctrl-select" title="Khoảng thời gian số liệu">
               <option value="today">Hôm nay</option>
               <option value="yesterday">Hôm qua</option>
@@ -191,7 +195,13 @@
       <div class="cb-layout">
         <section class="panel cb-col">
           <div class="panel-head compact"><div><h2>Chiến dịch</h2><p class="muted">Không tạo chiến dịch mới trong module này.</p></div></div>
-          <div id="cbAccountInfo" class="cb-account">Chọn tài khoản quảng cáo ở thanh bên trái.</div>
+          <div class="cb-account mp-select-card">
+            <label class="mp-picker">
+              <span>Tài khoản quảng cáo</span>
+              <select id="cbAccSelect" class="mp-account-select select-inline" aria-label="Chọn tài khoản quảng cáo"></select>
+            </label>
+            <div id="cbAccountInfo" class="mp-picker-note">Chọn tài khoản quảng cáo.</div>
+          </div>
           <div class="cb-toolbar">
             <input id="cbCampaignSearch" class="input-inline" type="search" placeholder="Tìm chiến dịch..." />
             <select id="cbCampaignFilter" class="select-inline">
@@ -215,7 +225,10 @@
         <section class="panel cb-col">
           <div class="panel-head compact"><div><h2>Bài viết trên Page</h2><p class="muted">Bài mới nhất ở trên. Không tạo bài mới hoặc bài ẩn.</p></div></div>
           <div class="cb-toolbar">
-            <input id="cbPageSearch" class="input-inline" type="search" placeholder="Tìm Page..." />
+            <select id="cbPageSelect" class="select-inline mp-page-select" aria-label="Chọn Page">
+              <option value="">Chọn Page...</option>
+            </select>
+            <input id="cbPageSearch" class="input-inline hidden" type="search" placeholder="Tìm Page..." />
             <button id="cbLoadPages" class="btn btn-ghost" type="button">Tải Page</button>
           </div>
           <div id="cbPages" class="cb-pages"><div class="loading">Đăng nhập để tải Page.</div></div>
@@ -269,11 +282,20 @@
         <div class="tp-grid">
           <section class="tp-block">
             <div class="tp-block-head"><span>A</span><strong>Tài khoản quảng cáo</strong></div>
-            <div id="tpAccountInfo" class="tp-account">Chọn tài khoản quảng cáo ở thanh bên trái.</div>
+            <div class="tp-account mp-select-card">
+              <label class="mp-picker">
+                <span>Tài khoản quảng cáo</span>
+                <select id="tpAccSelect" class="mp-account-select select-inline" aria-label="Chọn tài khoản quảng cáo"></select>
+              </label>
+              <div id="tpAccountInfo" class="mp-picker-note">Chọn tài khoản quảng cáo.</div>
+            </div>
           </section>
           <section class="tp-block">
             <div class="tp-block-head"><span>B</span><strong>Chọn Page</strong></div>
-            <input id="tpPageSearch" class="input-inline" type="search" placeholder="Tìm Page..." />
+            <select id="tpPageSelect" class="select-inline mp-page-select" aria-label="Chọn Page">
+              <option value="">Chọn Page...</option>
+            </select>
+            <input id="tpPageSearch" class="input-inline hidden" type="search" placeholder="Tìm Page..." />
             <div id="tpPages" class="tp-pages"><div class="loading">Đăng nhập để tải Page...</div></div>
           </section>
         </div>
@@ -346,7 +368,7 @@
 
     <!-- BƯỚC 3 & 4: TẢI FILE, KIỂM TRA, TẠO -->
     <section id="view-work" class="view hidden">
-      <div id="uploadZone" class="panel upload-panel"><div class="panel-head"><div><h2>Nhập dữ liệu quảng cáo</h2><p class="muted">Hai cách: <strong>nhập tay trong bảng</strong> (thêm dòng rồi gõ link/tên) hoặc <strong>tải file</strong> <strong>.xlsx</strong>/<strong>.xls</strong>/<strong>.csv</strong>. Google Sheet: chọn <em>File → Download → Microsoft Excel (.xlsx)</em>.</p></div><div class="head-actions"><button id="manualStartBtn" class="btn btn-primary">Nhập</button><button id="templateBtn" class="btn btn-ghost">Tải file mẫu</button></div></div><label class="dropzone" id="dropzone"><input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden /><div class="dropzone-inner"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg><strong>Kéo thả file vào đây hoặc bấm để chọn</strong><span class="muted">Dòng đầu tiên là tiêu đề cột</span></div></label><div id="fileMeta" class="file-meta hidden"></div></div>
+      <div id="uploadZone" class="panel upload-panel"><div class="panel-head"><div><h2>Nhập dữ liệu quảng cáo</h2><p class="muted">Hai cách: <strong>nhập tay trong bảng</strong> (thêm dòng rồi gõ link/tên) hoặc <strong>tải file</strong> <strong>.xlsx</strong>/<strong>.xls</strong>/<strong>.csv</strong>. Google Sheet: chọn <em>File → Download → Microsoft Excel (.xlsx)</em>.</p></div><div class="head-actions"><label class="mp-picker"><span>Tài khoản quảng cáo</span><select id="workAccSelect" class="mp-account-select select-inline" aria-label="Chọn tài khoản quảng cáo"></select></label><button id="manualStartBtn" class="btn btn-primary">Nhập</button><button id="templateBtn" class="btn btn-ghost">Tải file mẫu</button></div></div><label class="dropzone" id="dropzone"><input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden /><div class="dropzone-inner"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg><strong>Kéo thả file vào đây hoặc bấm để chọn</strong><span class="muted">Dòng đầu tiên là tiêu đề cột</span></div></label><div id="fileMeta" class="file-meta hidden"></div></div>
       <div id="tableZone" class="panel table-panel hidden"><div class="toolbar"><div class="filters" id="statusFilters"></div><div class="toolbar-right"><input type="search" id="searchInput" class="search" placeholder="Tìm theo tên chiến dịch, quảng cáo…" /><button id="addRowBtn" class="btn btn-ghost">+ Thêm dòng</button><button id="validateBtn" class="btn btn-secondary">Kiểm tra với Facebook</button></div></div><div class="table-scroll"><table class="data-table upload-data-table" id="dataTable"><thead><tr><th class="col-status">Lỗi</th><th>Tên Page</th><th>Link bài viết</th><th>Chế độ nội dung</th><th>Tên chiến dịch</th><th>Loại chiến dịch</th><th>Tên nhóm quảng cáo</th><th>Tên quảng cáo</th><th>Quốc gia</th><th>Ngân sách</th><th>Cấp ngân sách</th><th>Loại ngân sách</th><th>Ngày bắt đầu</th><th>Giờ bắt đầu</th><th>Ngày kết thúc</th><th>Giờ kết thúc</th><th>Trạng thái</th><th>Nút CTA</th><th>Link CTA</th><th>URL nguồn</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody id="tableBody"></tbody></table></div><div class="action-bar" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;"><div class="action-left" style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap;"><label class="switch"><input type="checkbox" id="draftMode" checked /><span class="track"><span class="thumb"></span></span><span class="switch-label">Chế độ nháp — tạo nhưng <strong>không bật</strong> quảng cáo (PAUSED)</span></label><div class="mode-select" style="display: none;"><label for="creativeMode" style="font-weight: 500; font-size: 14px;">Chế độ bài viết:</label><select id="creativeMode" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); font-family: inherit; font-size: 14px; background-color: var(--bg-card); color: var(--text);"><option value="EXISTING_POST_STRICT" selected>Sử dụng đúng bài viết có sẵn</option></select></div></div><div class="action-right"><span id="readyCount" class="muted">0 dòng sẵn sàng</span><button id="createBtn" class="btn btn-primary" disabled>Tạo hàng loạt</button></div></div></div>
     </section>
   </main>
@@ -356,11 +378,11 @@
   <div id="modalScrim" class="scrim hidden"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><strong id="modalTitle">Xác nhận tạo quảng cáo</strong></div><div id="modalBody" class="modal-body"></div><div id="modalFoot" class="modal-foot"></div></div></div>
   <div id="toast" class="toast hidden"></div>
   <footer id="dock" class="dock collapsed"><div id="dockLoader" class="dock-loader"><div class="bar"></div></div><div class="dock-strip"><span class="dock-status"><span class="log-dot" id="logDot"></span><span id="dockStatus">Sẵn sàng</span></span><div class="dock-tabs"><button class="dock-tab active" data-tab="log">Nhật ký <span id="logErrBadge" class="log-errbadge hidden">0</span></button><button class="dock-tab" data-tab="history">Lịch sử camp <span id="histCount" class="dock-count">0</span></button></div><div class="dock-actions"><button id="dockClear" class="log-btn" title="Xoá">Xoá</button><button id="dockToggle" class="log-btn" title="Thu gọn/mở rộng">▴</button></div></div><div class="dock-body" id="dockBody"><div id="logBody" class="dock-panel log-body"></div><div id="histBody" class="dock-panel hist-body hidden"></div></div></footer>
-  <script src="app.js?v=2.4.12"></script>
+  <script src="app.js?v=2.4.13"></script>
   <script src="manage.js?v=2.4.5"></script>
   <script src="posts.js?v=2.4.5"></script>
-  <script src="campaign-builder.js?v=1.0.3"></script>
-  <script src="thruplay.js?v=1.0.6"></script>
+  <script src="campaign-builder.js?v=1.0.4"></script>
+  <script src="thruplay.js?v=1.0.7"></script>
   <script src="select.js?v=2.4.5"></script>
   <script src="template-generator.js?v=2.4.12"></script>
 </body>

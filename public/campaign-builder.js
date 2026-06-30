@@ -64,8 +64,8 @@
     const box = $('#cbAccountInfo');
     if (!box) return;
     box.innerHTML = acc
-      ? `<strong>${esc(acc.name)}</strong><div class="cb-meta">${esc(acc.id)} · ${esc(acc.currency || '')} · ${esc(acc.statusLabel || '')}</div>`
-      : 'Chọn tài khoản quảng cáo ở thanh bên trái.';
+      ? `${esc(acc.id)} · ${esc(acc.currency || '')} · ${esc(acc.statusLabel || '')}`
+      : 'Chọn tài khoản quảng cáo.';
   }
 
   async function loadAll() {
@@ -164,7 +164,8 @@
 
   async function loadPages(force = false) {
     const wrap = $('#cbPages');
-    if (!wrap) return;
+    const select = $('#cbPageSelect');
+    if (!wrap && !select) return;
     if (state.loadedPages && !force) {
       renderPages();
       return;
@@ -183,11 +184,23 @@
 
   function renderPages() {
     const wrap = $('#cbPages');
-    if (!wrap) return;
+    const select = $('#cbPageSelect');
+    if (!wrap && !select) return;
     const q = ($('#cbPageSearch')?.value || '').toLowerCase().trim();
     const list = state.pages.filter((p) => !q || `${p.name} ${p.id}`.toLowerCase().includes(q));
+    if (select) {
+      select.innerHTML = '<option value="">Chọn Page...</option>' + list.map((p) => `<option value="${esc(p.id)}">${esc(p.name || 'Không tên')} · ${esc(p.id)} · ${p.canAdvertise ? 'Có quyền' : 'Thiếu quyền'}</option>`).join('');
+      select.value = state.selectedPageId || '';
+    }
     if (!list.length) {
-      wrap.innerHTML = '<div class="loading">Không có Page phù hợp.</div>';
+      if (wrap) wrap.innerHTML = '<div class="loading">Không có Page phù hợp.</div>';
+      return;
+    }
+    if (select) {
+      const page = selectedPage();
+      if (wrap) wrap.innerHTML = page
+        ? `<div class="mp-selected-page"><strong>${esc(page.name || 'Không tên')}</strong><span>${esc(page.id)} · ${page.canAdvertise ? 'Có quyền quảng cáo' : 'Thiếu quyền quảng cáo'}</span></div>`
+        : '<div class="loading">Chọn Page trong danh sách phía trên.</div>';
       return;
     }
     wrap.innerHTML = list.map((p) => `
@@ -200,14 +213,18 @@
       </button>
     `).join('');
     $$('.cb-page', wrap).forEach((btn) => btn.addEventListener('click', () => {
-      state.selectedPageId = btn.dataset.id;
-      state.posts = [];
-      state.selectedPosts.clear();
-      renderPages();
-      renderPosts();
-      renderPreview();
-      updateSelectedCount();
+      selectPage(btn.dataset.id);
     }));
+  }
+
+  function selectPage(id) {
+    state.selectedPageId = id || '';
+    state.posts = [];
+    state.selectedPosts.clear();
+    renderPages();
+    renderPosts();
+    renderPreview();
+    updateSelectedCount();
   }
 
   async function loadPosts() {
@@ -520,6 +537,7 @@
     $('#cbCampaignFilter')?.addEventListener('change', renderCampaigns);
     $('#cbLoadPages')?.addEventListener('click', () => loadPages(true));
     $('#cbPageSearch')?.addEventListener('input', renderPages);
+    $('#cbPageSelect')?.addEventListener('change', (e) => selectPage(e.target.value));
     $('#cbLoadPosts')?.addEventListener('click', loadPosts);
     $('#cbPostSearch')?.addEventListener('input', renderPosts);
     $('#cbPostType')?.addEventListener('change', loadPosts);

@@ -496,6 +496,7 @@ function bindEvents() {
 
   // Sidebar trái: điều hướng + accordion nhóm + thu gọn
   $$('.sb-item').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.view)));
+  $$('.mp-account-select').forEach((sel) => sel.addEventListener('change', onAccChange));
   $$('.sb-group-head').forEach((h) => h.addEventListener('click', () => {
     if ($('#sidebar').classList.contains('collapsed')) return; // thu gọn thì không gập nhóm
     h.closest('.sb-group').classList.toggle('expanded');
@@ -595,12 +596,16 @@ function toggleSidebar() {
 // Đổ danh sách tài khoản vào dropdown trên thanh tab + đồng bộ nhãn
 function populateAccSelect() {
   const sel = $('#accSelect');
-  if (!sel) return;
-  sel.innerHTML = State.adAccounts
+  const selects = [sel, ...$$('.mp-account-select')].filter(Boolean);
+  if (!selects.length) return;
+  const options = State.adAccounts
     .map((a) => `<option value="${esc(a.id)}" data-dot="${a.usable ? 'ok' : 'bad'}">${esc(a.name)} · ${esc(a.currency)}</option>`)
     .join('');
-  if (State.selectedAccount) sel.value = State.selectedAccount.id;
-  if (window.NiceSelect) NiceSelect.refresh(sel);
+  selects.forEach((accountSelect) => {
+    accountSelect.innerHTML = options || '<option value="">Chưa có tài khoản quảng cáo</option>';
+    if (State.selectedAccount) accountSelect.value = State.selectedAccount.id;
+  });
+  if (window.NiceSelect && sel) NiceSelect.refresh(sel);
   updateAccStatus();
   if (window.ThruPlay) ThruPlay.updateAccountInfo();
   if (window.CampaignBuilder) CampaignBuilder.refreshAccount();
@@ -614,6 +619,7 @@ function updateAccStatus() {
   if (!a) { dot.className = 'acc-dot'; txt.textContent = '—'; return; }
   dot.className = 'acc-dot ' + (a.usable ? 'ok' : 'bad');
   txt.textContent = a.statusLabel || (a.usable ? 'Đang hoạt động' : 'Không khả dụng');
+  $$('.mp-account-select').forEach((sel) => { sel.value = a.id; });
 }
 
 // Đổi tài khoản ngay từ dropdown (không cần quay lại màn chọn)
@@ -623,6 +629,7 @@ function onAccChange(e) {
   if (!acc) return;
   if (State.selectedAccount && acc.id === State.selectedAccount.id) return;
   State.selectedAccount = acc;
+  populateAccSelect();
   updateAccStatus();
   if (window.ThruPlay) ThruPlay.refreshAccount();
   if (window.CampaignBuilder) CampaignBuilder.refreshAccount();
@@ -716,6 +723,11 @@ function setAccLoadingMsg(msg) {
   const dot = $('#accDot'); const txt = $('#accStatusText');
   if (dot) dot.className = 'acc-dot';
   if (txt) txt.textContent = msg;
+  if (!State.adAccounts.length) {
+    $$('.mp-account-select').forEach((sel) => {
+      sel.innerHTML = `<option value="">${esc(msg || 'Đang tải tài khoản...')}</option>`;
+    });
+  }
 }
 
 function selectAccount(acc, card) {

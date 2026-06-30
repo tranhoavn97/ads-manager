@@ -46,8 +46,8 @@
 
   function accountLabel() {
     const acc = selectedAccount();
-    if (!acc) return 'Chọn tài khoản quảng cáo ở thanh bên trái.';
-    return `<strong>${esc(acc.name)}</strong><div class="tp-page-id">${esc(acc.id)} · ${esc(acc.currency || '')}</div>`;
+    if (!acc) return 'Chọn tài khoản quảng cáo.';
+    return `${esc(acc.id)} · ${esc(acc.currency || '')} · ${esc(acc.statusLabel || '')}`;
   }
 
   function updateAccountInfo() {
@@ -74,11 +74,23 @@
 
   function renderPages() {
     const wrap = $('#tpPages');
-    if (!wrap) return;
+    const select = $('#tpPageSelect');
+    if (!wrap && !select) return;
     const q = ($('#tpPageSearch')?.value || '').toLowerCase().trim();
     const pages = tp.pages.filter((p) => !q || `${p.name} ${p.id}`.toLowerCase().includes(q));
+    if (select) {
+      select.innerHTML = '<option value="">Chọn Page...</option>' + pages.map((p) => `<option value="${esc(p.id)}">${esc(p.name || 'Không tên')} · ${esc(p.id)} · ${p.canAdvertise ? 'Có quyền' : 'Thiếu quyền'}</option>`).join('');
+      select.value = tp.selectedPageId || '';
+    }
     if (!pages.length) {
-      wrap.innerHTML = '<div class="loading">Không có Page phù hợp.</div>';
+      if (wrap) wrap.innerHTML = '<div class="loading">Không có Page phù hợp.</div>';
+      return;
+    }
+    if (select) {
+      const page = selectedPage();
+      if (wrap) wrap.innerHTML = page
+        ? `<div class="mp-selected-page"><strong>${esc(page.name || 'Không tên')}</strong><span>${esc(page.id)} · ${page.canAdvertise ? 'Có quyền quảng cáo' : 'Thiếu quyền quảng cáo'}</span></div>`
+        : '<div class="loading">Chọn Page trong danh sách phía trên.</div>';
       return;
     }
     wrap.innerHTML = pages.map((p) => `
@@ -174,6 +186,16 @@
         setSelected(!input.checked);
       });
     });
+  }
+
+  function selectPage(id) {
+    tp.selectedPageId = id || '';
+    tp.posts = [];
+    tp.selectedPosts.clear();
+    syncAutoNames();
+    renderPages();
+    renderPosts();
+    updateSelectedCount();
   }
 
   function formatDate(value) {
@@ -344,6 +366,7 @@
     $('#tpLoadPosts')?.addEventListener('click', loadPosts);
     $('#tpSelectAllPosts')?.addEventListener('click', toggleSelectAllPosts);
     $('#tpPageSearch')?.addEventListener('input', renderPages);
+    $('#tpPageSelect')?.addEventListener('change', (e) => selectPage(e.target.value));
     $('#tpCreateBtn')?.addEventListener('click', createAds);
     setupBudgetInput();
     setDefaultDates();
