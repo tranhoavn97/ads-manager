@@ -36,22 +36,44 @@ const Posts = {
 
   renderPages() {
     const box = $('#postsPages');
+    const tot = $('#postsTotalCount');
+    if (tot) tot.textContent = ` (${this.pages.length})`;
+
     if (!this.pages.length) { box.innerHTML = '<div class="muted">Không có Page nào bạn quản lý.</div>'; return; }
-    box.innerHTML = this.pages.map((p) => {
+
+    const q = this.pageSearch || '';
+    const filtered = this.pages.filter((p) => !q || (p.name || '').toLowerCase().includes(q) || (p.id || '').includes(q));
+
+    if (!filtered.length) { box.innerHTML = '<div class="muted">Không tìm thấy Page nào khớp.</div>'; return; }
+
+    box.innerHTML = filtered.map((p) => {
       const on = this.selPages.has(p.id);
       const av = p.picture
         ? `<img class="pp-av" src="${esc(p.picture)}" alt="" loading="lazy">`
         : `<span class="pp-av pp-av-ph">${esc((p.name || '?')[0])}</span>`;
       const warn = p.canManage ? '' : '<span class="pp-warn" title="Thiếu quyền MANAGE — có thể không xoá được">!</span>';
-      return `<button type="button" class="pp-chip ${on ? 'on' : ''}" data-id="${esc(p.id)}">
-        ${av}<span class="pp-name">${esc(p.name)}</span>${warn}
-        <span class="pp-check">✓</span>
+      return `<button type="button" class="pp-item-row ${on ? 'on' : ''}" data-id="${esc(p.id)}">
+        <div class="pp-item-left">
+          ${av}
+          <div class="pp-item-info">
+            <span class="pp-item-name">${esc(p.name)}</span>
+            <span class="pp-item-id">ID: ${esc(p.id)}</span>
+          </div>
+        </div>
+        <div class="pp-item-right">
+          ${warn}
+          <span class="pp-item-check-circle"></span>
+        </div>
       </button>`;
     }).join('');
-    box.querySelectorAll('.pp-chip').forEach((el) => {
+
+    box.querySelectorAll('.pp-item-row').forEach((el) => {
       el.addEventListener('click', () => { this.togglePage(el.dataset.id); });
     });
-    $('#postsPagesCount').textContent = `${this.selPages.size}/${this.pages.length} Page được chọn`;
+
+    const badge = $('#postsPagesCount');
+    if (badge) badge.textContent = `${this.selPages.size} / ${this.pages.length} Fanpages`;
+
     const all = $('#postsSelectAllPages');
     if (all) all.checked = this.selPages.size === this.pages.length && this.pages.length > 0;
   },
@@ -274,6 +296,12 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 (function bindPosts() {
   $('#postsRefreshPages')?.addEventListener('click', () => { Posts.loaded = false; Posts.loadPages(); });
   $('#postsSelectAllPages')?.addEventListener('change', (e) => Posts.toggleAllPages(e.target.checked));
+  $('#btnSelectAllPages')?.addEventListener('click', () => Posts.toggleAllPages(true));
+  $('#btnUnselectAllPages')?.addEventListener('click', () => Posts.toggleAllPages(false));
+  $('#postsPageSearch')?.addEventListener('input', (e) => {
+    Posts.pageSearch = e.target.value.trim().toLowerCase();
+    Posts.renderPages();
+  });
   $('#postsScanBtn')?.addEventListener('click', () => Posts.scan());
   $('#postsSearch')?.addEventListener('input', (e) => { Posts.search = e.target.value.trim().toLowerCase(); Posts.renderResults(); });
   $('#postsSelectAll')?.addEventListener('change', (e) => Posts.toggleAll(e.target.checked));

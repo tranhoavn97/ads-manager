@@ -249,14 +249,14 @@
   }
 
   async function loadPosts() {
-    const wrap = $('#cbPosts');
+    const wrap = $('#cbPostsBody');
     if (!wrap) return;
     if (!state.selectedPageId) {
-      wrap.innerHTML = '<div class="alert alert-error">Hãy chọn Page trước.</div>';
+      wrap.innerHTML = '<tr><td colspan="5" class="loading" style="color:var(--error);">Hãy chọn Page trước.</td></tr>';
       return;
     }
     const type = $('#cbPostType')?.value || 'all';
-    wrap.innerHTML = '<div class="loading">Đang tải bài viết...</div>';
+    wrap.innerHTML = '<tr><td colspan="5" class="loading">Đang tải bài viết...</td></tr>';
     try {
       const data = await apiJson(`/api/pages/${encodeURIComponent(state.selectedPageId)}/posts?type=${encodeURIComponent(type)}&limit=300&fresh=${Date.now()}`);
       state.posts = (data.posts || []).slice().sort((a, b) => dateMs(b.created_time) - dateMs(a.created_time));
@@ -266,57 +266,64 @@
       updateSelectedCount();
       logOk(`đã tải ${state.posts.length} bài.`);
     } catch (err) {
-      wrap.innerHTML = `<div class="alert alert-error">${esc(err.message)}</div>`;
+      wrap.innerHTML = `<tr><td colspan="5" class="loading" style="color:var(--error);">${esc(err.message)}</td></tr>`;
     }
   }
 
   function renderPosts() {
-    const wrap = $('#cbPosts');
+    const wrap = $('#cbPostsBody');
     if (!wrap) return;
     if (!state.selectedPageId) {
-      wrap.innerHTML = '<div class="loading">Chọn Page rồi tải bài.</div>';
+      wrap.innerHTML = '<tr><td colspan="5" class="loading">Chọn Page rồi tải bài.</td></tr>';
       return;
     }
     const q = ($('#cbPostSearch')?.value || '').toLowerCase().trim();
     const list = state.posts.filter((p) => !q || `${p.message} ${postObjectId(p)} ${p.type}`.toLowerCase().includes(q));
     if (!list.length) {
-      wrap.innerHTML = `<div class="loading">${state.posts.length ? 'Không có bài phù hợp.' : 'Chưa tải bài.'}</div>`;
+      wrap.innerHTML = `<tr><td colspan="5" class="loading">${state.posts.length ? 'Không có bài phù hợp.' : 'Chưa tải bài.'}</td></tr>`;
       return;
     }
     wrap.innerHTML = list.map((p) => {
       const oid = postObjectId(p);
       const checked = state.selectedPosts.has(oid);
+      const thumb = p.thumbnail
+        ? `<img class="pp-av" src="${esc(p.thumbnail)}" alt="" style="width:40px;height:40px;border-radius:6px;object-fit:cover;" />`
+        : `<span class="pp-av pp-av-ph" style="width:40px;height:40px;border-radius:6px;font-size:11px;display:grid;place-items:center;background:var(--surface-2);color:var(--muted);border:1px solid var(--border);">${esc(p.type || 'Post')}</span>`;
       return `
-        <article class="cb-post ${checked ? 'selected' : ''}" data-id="${esc(oid)}">
-          <div class="cb-thumb">${p.thumbnail ? `<img src="${esc(p.thumbnail)}" alt="" />` : `<span>${esc(p.type || 'Post')}</span>`}</div>
-          <div class="cb-post-body">
-            <div class="cb-post-top">
-              <label class="chk"><input type="checkbox" ${checked ? 'checked' : ''} /> <span>Chọn</span></label>
-              <span class="cb-badge">${esc(typeText(p.type))}</span>
+        <tr class="cb-post-row ${checked ? 'selected' : ''}" data-id="${esc(oid)}">
+          <td><input type="checkbox" ${checked ? 'checked' : ''} style="cursor:pointer;" /></td>
+          <td>${thumb}</td>
+          <td>
+            <div style="font-weight:600;color:var(--ink);margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;" title="${esc(p.message || '')}">
+              ${esc(p.message || 'Không có nội dung')}
             </div>
-            <div class="cb-post-msg" title="${esc(p.message || '')}">${esc(p.message || 'Không có nội dung')}</div>
-            <div class="cb-meta">${esc(formatDate(p.created_time))} · ${esc(shortId(oid))}</div>
-            ${p.permalink_url ? `<a class="cb-post-link" href="${esc(p.permalink_url)}" target="_blank">Mở bài gốc</a>` : ''}
-          </div>
-        </article>
+            <div class="cb-meta" style="font-size:11px;color:var(--muted);">
+              ID: ${esc(shortId(oid))}
+              ${p.permalink_url ? `· <a href="${esc(p.permalink_url)}" target="_blank" style="color:var(--primary);text-decoration:none;">Mở bài gốc</a>` : ''}
+            </div>
+          </td>
+          <td><span class="cb-badge" style="font-size:11px;padding:2px 6px;border-radius:4px;background:var(--surface-2);color:var(--ink-soft);font-weight:600;">${esc(typeText(p.type))}</span></td>
+          <td class="num" style="white-space:nowrap;font-size:12px;color:var(--ink-soft);">${esc(formatDate(p.created_time))}</td>
+        </tr>
       `;
     }).join('');
-    $$('.cb-post', wrap).forEach((card) => {
-      const input = $('input[type="checkbox"]', card);
+
+    wrap.querySelectorAll('.cb-post-row').forEach((row) => {
+      const input = row.querySelector('input[type="checkbox"]');
       const set = (checked) => {
-        const post = findPostByObjectId(card.dataset.id);
+        const post = findPostByObjectId(row.dataset.id);
         if (!post) return;
         const oid = postObjectId(post);
         input.checked = checked;
         if (checked) state.selectedPosts.set(oid, post);
         else state.selectedPosts.delete(oid);
-        card.classList.toggle('selected', checked);
+        row.classList.toggle('selected', checked);
         updateSelectedCount();
         renderPreview();
       };
       input.addEventListener('change', () => set(input.checked));
-      card.addEventListener('click', (ev) => {
-        if (ev.target.closest('a') || ev.target.closest('.chk')) return;
+      row.addEventListener('click', (ev) => {
+        if (ev.target.closest('a') || ev.target.type === 'checkbox') return;
         set(!input.checked);
       });
     });
@@ -354,7 +361,7 @@
   }
 
   function syncSelectedPostsFromDom(clearAll = false) {
-    const cards = $$('#cbPosts .cb-post');
+    const cards = $$('#cbPostsBody .cb-post-row');
     if (!cards.length) return;
     if (clearAll) state.selectedPosts.clear();
     cards.forEach((card) => {

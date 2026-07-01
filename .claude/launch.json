@@ -1,17 +1,14 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    {
-      "name": "app",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["server.js"],
-      "port": 3000
-    },
-    {
-      "name": "demo-ui",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["demo-server.cjs"],
-      "port": 4173
-    }
-  ]
+﻿{
+    "version":  "0.0.1",
+    "configurations":  [
+                           {
+                               "port":  3000,
+                               "runtimeExecutable":  "npm",
+                               "name":  "metapilot-dev",
+                               "runtimeArgs":  [
+                                                   "run",
+                                                   "dev"
+                                               ]
+                           }
+                       ]
 }

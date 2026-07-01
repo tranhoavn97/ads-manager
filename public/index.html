@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="campaign-builder.css?v=1.0.2" />
   <link rel="stylesheet" href="dock-layout.css?v=2.4.12" />
   <link rel="stylesheet" href="app-shell.css?v=1.0.3" />
+  <link rel="stylesheet" href="redesign.css?v=1.0.6" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -174,27 +175,52 @@
 
     <!-- TAB DỌN DẸP BÀI VIẾT -->
     <section id="view-posts" class="view hidden">
-      <div class="panel">
-        <div class="panel-head"><div><h2>Dọn dẹp bài viết Page</h2><p class="muted">Quét bài / video / reel trên nhiều Page rồi <strong>xoá hàng loạt</strong> có kiểm soát (tạm dừng, chế độ an toàn, tự cooldown khi Meta giới hạn).</p></div><button id="postsRefreshPages" class="btn btn-ghost">Tải lại Page</button></div>
-        <div class="posts-pagesbar"><div class="posts-pagesbar-head"><label class="chk"><input type="checkbox" id="postsSelectAllPages" /> <span>Chọn tất cả Page</span></label><span class="muted" id="postsPagesCount">—</span></div><div class="posts-pages" id="postsPages"><div class="loading">Đăng nhập để tải danh sách Page…</div></div></div>
-        <div class="posts-filters"><label class="ff"><span>Loại nội dung</span><select id="pfType"><option value="all">Tất cả</option><option value="post">Bài viết</option><option value="video">Video / Reel</option></select></label><label class="ff"><span>Khoảng thời gian</span><select id="pfPreset"><option value="all">Tất cả</option><option value="today">Hôm nay</option><option value="week">7 ngày</option><option value="month">30 ngày</option><option value="year">1 năm</option><option value="custom">Tuỳ chọn…</option></select></label><label class="ff" id="pfFromWrap" style="display:none"><span>Từ ngày</span><input type="date" id="pfFrom" class="input-inline" /></label><label class="ff" id="pfToWrap" style="display:none"><span>Đến ngày</span><input type="date" id="pfTo" class="input-inline" /></label><label class="ff"><span>Cũ hơn (ngày)</span><input type="number" id="pfOlder" class="input-inline" min="0" placeholder="vd 90" /></label><label class="ff grow"><span>Từ khoá trong nội dung</span><input type="text" id="pfKeyword" class="input-inline" placeholder="vd: giảm giá" /></label><label class="ff"><span>Số bài tối đa / Page</span><input type="number" id="pfMax" class="input-inline" min="1" value="100" /></label><button id="postsScanBtn" class="btn btn-primary">Quét bài viết</button></div><div class="posts-scanprogress hidden" id="postsScanProgress"></div>
+      <div class="posts-split">
+        <div class="panel posts-col-left">
+          <div class="posts-col-left-header">
+            <div class="posts-title-group">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="title-icon"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <strong>DANH SÁCH PAGES<span id="postsTotalCount"></span></strong>
+            </div>
+            <button id="postsRefreshPages" class="posts-refresh-btn" type="button" title="Tải lại danh sách Page">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            </button>
+          </div>
+          <div class="posts-actions-group">
+            <button id="btnSelectAllPages" class="btn-compact" type="button">✓ CHỌN TẤT CẢ</button>
+            <button id="btnUnselectAllPages" class="btn-compact danger" type="button">✗ BỎ CHỌN HẾT</button>
+          </div>
+          <div class="posts-page-search">
+            <input type="search" id="postsPageSearch" class="search" placeholder="Tìm nhanh fanpage..." />
+          </div>
+          <div class="posts-pagesbar-head">
+            <span>Đã chọn:</span>
+            <span id="postsPagesCount" class="badge">0 / 0 Fanpages</span>
+          </div>
+          <input type="checkbox" id="postsSelectAllPages" style="display:none" />
+          <div class="posts-pages" id="postsPages"><div class="loading">Đăng nhập để tải danh sách Page…</div></div>
+        </div>
+      <div class="panel posts-col-right" id="postsResultPanel">
+        <div class="posts-toolbar-merged">
+          <label class="ff"><span>Loại bài</span><select id="pfType"><option value="all">Tất cả</option><option value="post">Bài viết</option><option value="video">Video/Reel</option></select></label><label class="ff"><span>Thời gian</span><select id="pfPreset"><option value="all">Tất cả</option><option value="today">Hôm nay</option><option value="week">7 ngày</option><option value="month">30 ngày</option><option value="year">1 năm</option><option value="custom">Tuỳ chọn…</option></select></label><label class="ff" id="pfFromWrap" style="display:none"><span>Từ</span><input type="date" id="pfFrom" class="input-inline" /></label><label class="ff" id="pfToWrap" style="display:none"><span>Đến</span><input type="date" id="pfTo" class="input-inline" /></label><input type="hidden" id="pfKeyword" value="" /><label class="ff"><span>Số bài</span><select id="pfMax" class="input-inline"><option value="100">100</option><option value="300">300</option><option value="500">500</option><option value="99999">Tất cả</option></select></label><input type="hidden" id="pfOlder" value="0" /><button id="postsScanBtn" class="btn btn-primary">Quét bài viết</button>
+          <div class="divider"></div>
+          <label class="chk"><input type="checkbox" id="postsSelectAll" /> <span>Chọn tất cả</span></label><span class="muted" id="postsSelCount">Đã chọn 0 / 0</span><label class="switch" title="Hỏi xác nhận từng lần xoá lô"><input type="checkbox" id="postsSafeMode" checked /><span class="track"><span class="thumb"></span></span><span class="switch-label">Chế độ an toàn</span></label><input type="search" id="postsSearch" class="search" placeholder="Lọc kết quả..." /><button id="postsDeleteBtn" class="btn btn-danger" disabled>Xoá đã chọn</button>
+        </div>
+        <div class="posts-scanprogress hidden" id="postsScanProgress"></div>
+        <div class="posts-queuebar hidden" id="postsQueueBar"><div class="pq-progress"><div class="pq-bar" id="postsQueueBarFill"></div></div><div class="pq-meta"><span id="postsQueueStatus">Sẵn sàng</span><span class="pq-actions"><button id="postsPauseBtn" class="btn btn-ghost">Tạm dừng</button><button id="postsStopBtn" class="btn btn-ghost">Dừng hẳn</button></span></div></div><div class="table-scroll"><table class="posts-table" id="postsTable"><thead><tr><th style="width:42px"></th><th style="width:64px">Ảnh</th><th>Nội dung</th><th>Page</th><th>Loại</th><th class="num">Ngày đăng</th><th class="num">👍 / 💬 / ↗</th><th style="width:90px">Trạng thái</th></tr></thead><tbody id="postsBody"></tbody></table></div></div>
       </div>
-      <div class="panel hidden" id="postsResultPanel"><div class="toolbar"><div class="filters" style="align-items:center; gap:12px;"><label class="chk"><input type="checkbox" id="postsSelectAll" /> <span>Chọn tất cả</span></label><span class="muted" id="postsSelCount">Đã chọn 0 / 0</span><label class="switch" title="Hỏi xác nhận từng lần xoá lô"><input type="checkbox" id="postsSafeMode" checked /><span class="track"><span class="thumb"></span></span><span class="switch-label">Chế độ an toàn</span></label></div><div class="toolbar-right"><input type="search" id="postsSearch" class="search" placeholder="Tìm trong nội dung / tên Page…" /><button id="postsDeleteBtn" class="btn btn-danger" disabled>Xoá đã chọn</button></div></div><div class="posts-queuebar hidden" id="postsQueueBar"><div class="pq-progress"><div class="pq-bar" id="postsQueueBarFill"></div></div><div class="pq-meta"><span id="postsQueueStatus">Sẵn sàng</span><span class="pq-actions"><button id="postsPauseBtn" class="btn btn-ghost">Tạm dừng</button><button id="postsStopBtn" class="btn btn-ghost">Dừng hẳn</button></span></div></div><div class="table-scroll"><table class="posts-table" id="postsTable"><thead><tr><th style="width:42px"></th><th style="width:64px">Ảnh</th><th>Nội dung</th><th>Page</th><th>Loại</th><th class="num">Ngày đăng</th><th class="num">👍 / 💬 / ↗</th><th style="width:90px">Trạng thái</th></tr></thead><tbody id="postsBody"></tbody></table></div></div>
     </section>
 
     <!-- MODULE CAMPAIGN BUILDER -->
     <section id="view-builder" class="view hidden">
-      <div class="cb-head panel">
-        <div>
-          <h2>Tạo quảng cáo từ chiến dịch có sẵn</h2>
-          <p class="muted">Chọn chiến dịch có sẵn, chọn bài viết trên Page, hệ thống tạo mỗi bài thành 1 nhóm quảng cáo và 1 quảng cáo riêng.</p>
-        </div>
-        <button id="cbReloadAll" class="btn btn-secondary" type="button">Tải dữ liệu</button>
-      </div>
-
       <div class="cb-layout">
         <section class="panel cb-col">
-          <div class="panel-head compact"><div><h2>Chiến dịch</h2><p class="muted">Không tạo chiến dịch mới trong module này.</p></div></div>
+          <div class="panel-head compact">
+            <div>
+              <h2>Chiến dịch</h2>
+            </div>
+            <button id="cbReloadAll" class="btn btn-secondary" type="button">Tải dữ liệu</button>
+          </div>
           <div class="cb-account mp-select-card">
             <label class="mp-picker">
               <span>Tài khoản quảng cáo</span>
@@ -216,23 +242,18 @@
           <div id="cbCampaigns" class="cb-list"><div class="loading">Bấm “Tải dữ liệu” để lấy chiến dịch.</div></div>
           <div id="cbCampaignSummary" class="cb-summary hidden"></div>
 
-          <div class="cb-structure-note">
-            <strong>Cấu trúc tạo</strong>
-            <span>1 bài viết = 1 nhóm quảng cáo + 1 quảng cáo. Tên nhóm và quảng cáo lấy 100 ký tự đầu từ nội dung bài viết.</span>
-          </div>
+
         </section>
 
         <section class="panel cb-col">
           <div class="panel-head compact"><div><h2>Bài viết trên Page</h2><p class="muted">Bài mới nhất ở trên. Không tạo bài mới hoặc bài ẩn.</p></div></div>
-          <div class="cb-toolbar">
+          <div class="cb-toolbar-merged">
             <select id="cbPageSelect" class="select-inline mp-page-select" aria-label="Chọn Page">
               <option value="">Chọn Page...</option>
             </select>
             <input id="cbPageSearch" class="input-inline hidden" type="search" placeholder="Tìm Page..." />
             <button id="cbLoadPages" class="btn btn-ghost" type="button">Tải Page</button>
-          </div>
-          <div id="cbPages" class="cb-pages"><div class="loading">Đăng nhập để tải Page.</div></div>
-          <div class="cb-toolbar">
+            <div class="divider"></div>
             <input id="cbPostSearch" class="input-inline" type="search" placeholder="Tìm bài..." />
             <select id="cbPostType" class="select-inline">
               <option value="all">Tất cả</option>
@@ -242,8 +263,24 @@
             </select>
             <button id="cbLoadPosts" class="btn btn-secondary" type="button">Tải bài</button>
           </div>
+          <div id="cbPages" class="cb-pages hidden"></div>
           <div class="cb-postbar"><span id="cbSelectedCount" class="muted">Đã chọn 0 bài</span><button id="cbSelectAllPosts" class="btn btn-ghost" type="button">Chọn tất cả</button></div>
-          <div id="cbPosts" class="cb-posts"><div class="loading">Chọn Page rồi tải bài.</div></div>
+          <div class="table-scroll" id="cbPosts" style="flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; overflow: auto !important;">
+            <table class="posts-table" id="cbPostsTable">
+              <thead>
+                <tr>
+                  <th style="width:42px"></th>
+                  <th style="width:60px">Ảnh</th>
+                  <th>Nội dung</th>
+                  <th>Loại</th>
+                  <th class="num" style="width:110px">Ngày đăng</th>
+                </tr>
+              </thead>
+              <tbody id="cbPostsBody">
+                <tr><td colspan="5" class="loading">Chọn Page rồi tải bài.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section class="panel cb-col cb-setup">
@@ -385,5 +422,6 @@
   <script src="thruplay.js?v=1.0.9"></script>
   <script src="select.js?v=2.4.5"></script>
   <script src="template-generator.js?v=2.4.12"></script>
+  <script src="header-title.js?v=1.0.1"></script>
 </body>
 </html>

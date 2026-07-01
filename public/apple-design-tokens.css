@@ -1,0 +1,366 @@
+/**
+ * Apple Design System - Design Tokens
+ * Biến định nghĩa toàn bộ nhà thiết kế (màu, kiểu chữ, khoảng cách, v.v.)
+ */
+
+:root {
+  /* ─────────────────────────────────────────────────────────
+     MÀUSẮC - COLOR
+     ───────────────────────────────────────────────────────── */
+
+  /* Màu sắc ngữ cảnh (Semantic) */
+  --color-primary: #0071E3;         /* Xanh lam Apple chính */
+  --color-primary-hover: #0051CC;   /* Hover state */
+  --color-primary-active: #003DA6;  /* Active state */
+
+  --color-secondary: #34C759;       /* Xanh lục (thành công) */
+  --color-secondary-hover: #25A033;
+  --color-secondary-active: #1B7F1F;
+
+  --color-destructive: #FF3B30;     /* Đỏ (lỗi, xoá) */
+  --color-destructive-hover: #E63126;
+  --color-destructive-active: #CC2920;
+
+  --color-warning: #FF9500;         /* Cam (cảnh báo) */
+  --color-warning-hover: #E68600;
+  --color-warning-active: #CC7A00;
+
+  --color-info: #30B0C0;            /* Xanh ngọc (thông tin) */
+  --color-info-hover: #2699A8;
+  --color-info-active: #1D8290;
+
+  /* Thang Xám (Neutral) */
+  --color-gray-1: #F5F5F7;          /* Nền sáng */
+  --color-gray-2: #EBEBF0;          /* Divider, viền nhẹ */
+  --color-gray-3: #D1D1D6;          /* Viền, border */
+  --color-gray-4: #8E8E93;          /* Text mờ */
+  --color-gray-5: #636366;          /* Text thứ cấp */
+  --color-gray-6: #424245;          /* Text chính */
+  --color-gray-7: #1D1D1F;          /* Nền tối */
+
+  /* Nền theo Tầng */
+  --color-background-primary: #FFFFFF;
+  --color-background-secondary: #F5F5F7;
+  --color-background-tertiary: #EBEBF0;
+
+  /* Text */
+  --color-text-primary: #000000;
+  --color-text-secondary: #636366;
+  --color-text-tertiary: #8E8E93;
+  --color-text-inverse: #FFFFFF;
+
+  /* Trạng thái */
+  --color-state-valid: #34C759;
+  --color-state-invalid: #FF3B30;
+  --color-state-warning: #FF9500;
+  --color-state-info: #30B0C0;
+  --color-state-disabled: #8E8E93;
+
+  /* ─────────────────────────────────────────────────────────
+     TYPOGRAPHY - KIỂU CHỮ
+     ───────────────────────────────────────────────────────── */
+
+  /* Font stack */
+  --font-primary: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono: "Menlo", "Monaco", "Courier New", monospace;
+
+  /* Font weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Display Scales */
+  --text-display-large-size: 32px;
+  --text-display-large-weight: 700;
+  --text-display-large-height: 1.2;
+  --text-display-large: var(--text-display-large-size) / var(--text-display-large-height)
+    var(--font-primary);
+
+  --text-display-size: 28px;
+  --text-display-weight: 600;
+  --text-display-height: 1.2;
+  --text-display: var(--text-display-size) / var(--text-display-height)
+    var(--font-primary);
+
+  /* Title Scales */
+  --text-title-1-size: 24px;
+  --text-title-1-weight: 600;
+  --text-title-1-height: 1.25;
+  --text-title-1: var(--text-title-1-size) / var(--text-title-1-height)
+    var(--font-primary);
+
+  --text-title-2-size: 20px;
+  --text-title-2-weight: 600;
+  --text-title-2-height: 1.3;
+  --text-title-2: var(--text-title-2-size) / var(--text-title-2-height)
+    var(--font-primary);
+
+  --text-title-3-size: 18px;
+  --text-title-3-weight: 500;
+  --text-title-3-height: 1.4;
+  --text-title-3: var(--text-title-3-size) / var(--text-title-3-height)
+    var(--font-primary);
+
+  /* Body Scales */
+  --text-body-large-size: 17px;
+  --text-body-large-weight: 400;
+  --text-body-large-height: 1.5;
+  --text-body-large: var(--text-body-large-size) / var(--text-body-large-height)
+    var(--font-primary);
+
+  --text-body-size: 16px;
+  --text-body-weight: 400;
+  --text-body-height: 1.5;
+  --text-body: var(--text-body-size) / var(--text-body-height) var(--font-primary);
+
+  --text-body-small-size: 15px;
+  --text-body-small-weight: 400;
+  --text-body-small-height: 1.45;
+  --text-body-small: var(--text-body-small-size) / var(--text-body-small-height)
+    var(--font-primary);
+
+  /* Caption Scales */
+  --text-caption-1-size: 13px;
+  --text-caption-1-weight: 400;
+  --text-caption-1-height: 1.4;
+  --text-caption-1: var(--text-caption-1-size) / var(--text-caption-1-height)
+    var(--font-primary);
+
+  --text-caption-2-size: 12px;
+  --text-caption-2-weight: 400;
+  --text-caption-2-height: 1.35;
+  --text-caption-2: var(--text-caption-2-size) / var(--text-caption-2-height)
+    var(--font-primary);
+
+  /* ─────────────────────────────────────────────────────────
+     SPACING - KHOẢNG CÁCH
+     ───────────────────────────────────────────────────────── */
+
+  /* Hệ thống lưới 8px */
+  --space-xs: 4px;      /* 0.5 units - phần tử nhỏ */
+  --space-sm: 8px;      /* 1 unit - spacing nhỏ */
+  --space-md: 12px;     /* 1.5 units - spacing vừa */
+  --space-base: 16px;   /* 2 units - spacing chuẩn */
+  --space-lg: 24px;     /* 3 units - spacing lớn */
+  --space-xl: 32px;     /* 4 units - spacing rất lớn */
+  --space-2xl: 48px;    /* 6 units */
+  --space-3xl: 64px;    /* 8 units */
+  --space-4xl: 80px;    /* 10 units */
+
+  /* Padding */
+  --padding-xs: 4px 8px;
+  --padding-sm: 8px 12px;
+  --padding-md: 12px 16px;
+  --padding-base: 16px 24px;
+  --padding-lg: 20px 28px;
+  --padding-xl: 24px 32px;
+
+  /* Gap (cho flexbox/grid) */
+  --gap-xs: 4px;
+  --gap-sm: 8px;
+  --gap-md: 12px;
+  --gap-base: 16px;
+  --gap-lg: 24px;
+  --gap-xl: 32px;
+
+  /* ─────────────────────────────────────────────────────────
+     BORDER RADIUS - GÓC TRÒN
+     ───────────────────────────────────────────────────────── */
+
+  --radius-xs: 4px;     /* Nhỏ (badges, small elements) */
+  --radius-sm: 8px;     /* Vừa nhỏ (buttons, inputs) */
+  --radius-md: 10px;    /* Vừa (cards, panels) */
+  --radius-lg: 12px;    /* Lớn (modals) */
+  --radius-xl: 16px;    /* Rất lớn */
+  --radius-full: 9999px; /* Tròn hoàn toàn */
+
+  /* ─────────────────────────────────────────────────────────
+     SHADOWS - BÓNG ĐỔ
+     ───────────────────────────────────────────────────────── */
+
+  /* Subtle shadow (cards nhẹ) */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+
+  /* Small shadow (buttons, small cards) */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  /* Medium shadow (cards, dropdowns) */
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+
+  /* Large shadow (modals, elevated surfaces) */
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.15);
+
+  /* Extra large shadow (floating actions, popovers) */
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.2);
+
+  /* Inset shadow (depressed surfaces) */
+  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+
+  /* ─────────────────────────────────────────────────────────
+     TRANSITIONS & ANIMATIONS
+     ───────────────────────────────────────────────────────── */
+
+  /* Durations */
+  --duration-micro: 150ms;
+  --duration-short: 200ms;
+  --duration-base: 300ms;
+  --duration-medium: 400ms;
+  --duration-long: 500ms;
+
+  /* Easing functions */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-linear: linear;
+
+  /* ─────────────────────────────────────────────────────────
+     SIZES - KÍCH THƯỚC
+     ───────────────────────────────────────────────────────── */
+
+  /* Touch target minimum (Apple HIG) */
+  --touch-target-min: 44px;
+
+  /* Button sizes */
+  --button-height-sm: 32px;
+  --button-height-base: 40px;
+  --button-height-lg: 44px;
+
+  /* Icon sizes */
+  --icon-xs: 16px;
+  --icon-sm: 18px;
+  --icon-base: 20px;
+  --icon-lg: 24px;
+  --icon-xl: 32px;
+
+  /* Input sizes */
+  --input-height-sm: 32px;
+  --input-height-base: 40px;
+  --input-height-lg: 44px;
+
+  /* ─────────────────────────────────────────────────────────
+     CONTAINERS - KÍCH THƯỚC CONTAINER
+     ───────────────────────────────────────────────────────── */
+
+  --container-sm: 640px;   /* Modals, sidebars */
+  --container-base: 960px; /* Main content */
+  --container-lg: 1280px;  /* Wide layouts */
+  --container-xl: 1400px;  /* Dashboard */
+
+  /* ─────────────────────────────────────────────────────────
+     Z-INDEX - ĐỘ CHỒNG PHỦ
+     ───────────────────────────────────────────────────────── */
+
+  --z-dropdown: 100;
+  --z-sticky: 20;
+  --z-fixed: 40;
+  --z-modal-backdrop: 500;
+  --z-modal: 600;
+  --z-tooltip: 1000;
+  --z-notification: 1200;
+
+  /* ─────────────────────────────────────────────────────────
+     LAYOUT MEASUREMENTS
+     ───────────────────────────────────────────────────────── */
+
+  --header-height: 56px;
+  --header-height-mobile: 48px;
+  --sidebar-width: 240px;
+  --sidebar-width-collapsed: 80px;
+  --dock-height: 60px;
+
+  /* ─────────────────────────────────────────────────────────
+     TRANSITIONS COMPOUND (shortcuts)
+     ───────────────────────────────────────────────────────── */
+
+  --transition-fast: all var(--duration-short) var(--ease-in-out);
+  --transition-base: all var(--duration-base) var(--ease-in-out);
+  --transition-slow: all var(--duration-long) var(--ease-in-out);
+}
+
+/* ─────────────────────────────────────────────────────────
+   DARK MODE - CHẾ ĐỘ TỐI
+   ───────────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Màu sắc chính */
+    --color-primary: #0A84FF;
+    --color-primary-hover: #1B94FF;
+    --color-primary-active: #2BA3FF;
+
+    /* Thang Xám (ngược lại) */
+    --color-gray-1: #1D1D1F;
+    --color-gray-2: #424245;
+    --color-gray-3: #636366;
+    --color-gray-4: #8E8E93;
+    --color-gray-5: #A1A1A6;
+    --color-gray-6: #E5E5EA;
+    --color-gray-7: #F5F5F7;
+
+    /* Nền theo Tầng */
+    --color-background-primary: #000000;
+    --color-background-secondary: #1D1D1F;
+    --color-background-tertiary: #2C2C30;
+
+    /* Text */
+    --color-text-primary: #F5F5F7;
+    --color-text-secondary: #A1A1A6;
+    --color-text-tertiary: #8E8E93;
+
+    /* Shadows (tăng opacity cho dark mode) */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+    --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   RESPONSIVE - ĐIỀU ỨNG RESPONSIVE
+   ───────────────────────────────────────────────────────── */
+
+@media (max-width: 1023px) {
+  :root {
+    --sidebar-width: 240px;
+    --header-height: 56px;
+  }
+}
+
+@media (max-width: 639px) {
+  :root {
+    --sidebar-width: 100%;
+    --header-height: 48px;
+    --space-lg: 16px;
+    --space-xl: 24px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   ACCESSIBILITY - CHẾ ĐỘ TƯƠNG PHẢN CAO
+   ───────────────────────────────────────────────────────── */
+
+@media (prefers-contrast: more) {
+  :root {
+    --shadow-xs: none;
+    --shadow-sm: 0 0 0 1px var(--color-gray-3);
+    --shadow-md: 0 0 0 2px var(--color-gray-3);
+    --shadow-lg: 0 0 0 2px var(--color-gray-3);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   REDUCED MOTION - CHẾ ĐỘ GIẢM CHUYỂN ĐỘNG
+   ───────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-micro: 0ms;
+    --duration-short: 0ms;
+    --duration-base: 0ms;
+    --duration-medium: 0ms;
+    --duration-long: 0ms;
+  }
+}

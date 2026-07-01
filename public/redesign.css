@@ -1,0 +1,989 @@
+/* =====================================================================
+   redesign.css — Lớp thiết kế lại toàn bộ giao diện theo phong cách Apple
+   Nạp SAU CÙNG trong index.html để ghi đè styles.css + theme.css.
+   Gỡ 1 dòng <link> này là quay lại giao diện cũ.
+
+   Nguyên tắc: Clarity · Deference · Depth · Consistency
+   - Bảng màu trung tính, tương phản chuẩn, một accent xanh hệ thống
+   - Nhịp khoảng cách theo lưới 4px, bo góc & bóng đổ nhất quán
+   - Typography SF-style, tỷ lệ rõ ràng
+   - Hỗ trợ Dark Mode tự động
+   ===================================================================== */
+
+/* ---------- 1. Design tokens (ghi đè biến gốc) ---------- */
+:root {
+  /* Text */
+  --ink: #1d1d1f;
+  --ink-soft: #3c3c43;
+  --muted: #86868b;
+  --muted-2: #aeaeb2;
+
+  /* Surfaces */
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #fafafc;
+  --surface-3: #f0f0f3;
+  --border: #e8e8ed;
+  --border-strong: #d2d2d7;
+  --hairline: rgba(0, 0, 0, 0.08);
+
+  /* Accent — xanh hệ thống Apple */
+  --primary: #0071e3;
+  --primary-ink: #0058b9;
+  --primary-wash: #eef5ff;
+  --primary-ring: rgba(0, 113, 227, 0.14);
+
+  /* Semantic */
+  --green: #34c759;
+  --amber: #ff9f0a;
+  --red: #ff3b30;
+  --violet: #af52de;
+  --teal: #30b0c0;
+
+  /* Trạng thái dòng — dịu, đồng bộ */
+  --st-valid: #0071e3;      --st-valid-bg: #eef5ff;
+  --st-missing: #b25e00;    --st-missing-bg: #fff4e5;
+  --st-permission: #8944d6; --st-permission-bg: #f6efff;
+  --st-post: #d70015;       --st-post-bg: #ffeef0;
+  --st-created: #248a3d;    --st-created-bg: #e9f8ee;
+  --st-error: #d70015;      --st-error-bg: #ffeef0;
+  --st-pending: #6e6e73;    --st-pending-bg: #f0f0f3;
+
+  /* Bo góc — thang nhất quán */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 20px;
+  --radius-pill: 980px;
+
+  /* Bóng đổ — mềm, nhiều tầng */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 1px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.18);
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ---------- 2. Base ---------- */
+/* App được xây cho light mode (8 file CSS khác hardcode màu sáng).
+   Ghim color-scheme: light để form controls & toàn bộ giao diện nhất quán. */
+html { color-scheme: light; }
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text",
+    system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: -0.011em;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 { letter-spacing: -0.022em; color: var(--ink); }
+
+::selection { background: var(--primary-ring); }
+
+/* Thanh cuộn mảnh kiểu macOS */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong); border-radius: 980px;
+  border: 2px solid transparent; background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
+
+/* ---------- 3. Sidebar ---------- */
+/* KHÔNG dùng backdrop-filter ở đây: nó biến .sidebar thành containing block
+   cho phần tử position:fixed bên trong (.sb-foot), làm hỏng thanh header. */
+.sidebar {
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+}
+.sb-brand {
+  padding: 18px 16px;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sb-brand strong { font-size: 16px; font-weight: 650; letter-spacing: -0.02em; }
+.sb-brand-text span { color: var(--muted); font-size: 12px; }
+.sb-logo span { background: var(--primary); }
+
+.sb-group-head {
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 14px 16px 6px;
+}
+.sb-group-head .sb-gic { color: var(--muted); }
+
+.sb-item {
+  margin: 2px 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+.sb-item .sb-iic { color: var(--muted); transition: color 0.15s var(--ease); }
+.sb-item:hover { background: rgba(0, 0, 0, 0.04); color: var(--ink); }
+.sb-item:hover .sb-iic { color: var(--ink-soft); }
+.sb-item.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 3px var(--primary-ring);
+}
+.sb-item.active .sb-iic { color: #fff; }
+
+.acc-select {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 13.5px;
+}
+.sb-user-name { color: var(--ink-soft); font-weight: 500; }
+
+/* ---------- 3b. Thanh HEADER trên cùng (tài khoản + trạng thái + user) ----------
+   .sb-foot vốn là phần cuối sidebar; app-shell.css đã ghim fixed top-right.
+   Ở đây nâng cấp thành THANH HEADER ngang full-width trên đầu vùng nội dung. */
+.sb-foot {
+  position: fixed !important;
+  top: 0 !important;
+  left: var(--shell-sidebar, 268px) !important;
+  right: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  height: 56px !important;
+  min-height: 56px !important;
+  margin: 0 !important;
+  padding: 0 24px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+  z-index: 55 !important;
+}
+/* Tiêu đề trang ở BÊN TRÁI; đẩy toàn bộ cụm còn lại (account + user) sang PHẢI */
+.app-header-title {
+  margin: 0 auto 0 0 !important;
+  padding: 0 !important;
+  font-size: 19px !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.2 !important;
+  color: var(--ink) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 42% !important;
+}
+/* Account picker nằm trong cụm bên phải (không còn dạt trái) */
+.sb-foot .ns,
+.sb-foot .acc-select { margin-right: 0 !important; }
+
+/* Bỏ hẳn cụm chữ "Đang hoạt động" trong header — trạng thái nay hiện
+   bằng chấm màu trên avatar (gọn, không mất chữ khi thu gọn). */
+.sb-foot .acc-status { display: none !important; }
+
+/* Avatar + chấm trạng thái ở góc dưới-phải */
+.sb-foot .av-wrap {
+  position: relative !important;
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  line-height: 0 !important;
+}
+.sb-foot .av-status {
+  position: absolute !important;
+  right: -1px !important;
+  bottom: -1px !important;
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  background: var(--green) !important;
+  border: 2px solid var(--surface) !important;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06) !important;
+}
+.sb-foot .sb-user.acc-bad .av-status { background: var(--muted-2) !important; }
+
+/* Ngăn cách trực quan giữa account và cụm user */
+.sb-foot .sb-user {
+  padding-left: 14px !important;
+  border-left: 1px solid var(--border) !important;
+  gap: 10px !important;
+}
+.sb-foot .sb-user-av { width: 28px !important; height: 28px !important; border-radius: 50% !important; }
+.sb-foot .sb-logout:hover { background: rgba(0, 0, 0, 0.06) !important; color: var(--red) !important; }
+
+/* Đẩy nội dung xuống dưới header (56px + khoảng thở) */
+.container { padding-top: 76px !important; }
+.sidebar.hidden + .container { padding-top: 20px !important; }
+
+/* Khi sidebar thu gọn: header dịch mép trái theo bề rộng thu gọn */
+.sidebar.collapsed .sb-foot {
+  left: var(--shell-sidebar-collapsed, 72px) !important;
+  max-width: none !important;
+}
+/* Khi ẩn sidebar hẳn: header trải hết chiều ngang */
+.sidebar.hidden .sb-foot { left: 0 !important; max-width: none !important; }
+
+@media (max-width: 980px) {
+  .sb-foot { left: var(--shell-sidebar-collapsed, 76px) !important; max-width: none !important; }
+}
+
+/* Header LUÔN hiển thị đầy đủ nội dung dù sidebar thu gọn.
+   (app-shell.css + minimal.css ẩn account/user khi .collapsed vì tưởng chúng
+   nằm trong cột sidebar — nhưng nay đã là header ngang riêng.) */
+.sidebar.collapsed .sb-foot .ns { display: block !important; }
+.sidebar.collapsed .sb-foot .sb-user { display: flex !important; }
+.sidebar.collapsed .sb-foot .sb-user-name { display: inline-block !important; }
+.sidebar.collapsed .sb-foot .sb-logout { display: inline-grid !important; }
+
+/* ---------- 4. Top bar (nếu hiển thị) ---------- */
+.topbar {
+  height: 54px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  border-bottom: 1px solid var(--hairline);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+.topbar .brand-text strong { color: var(--ink); }
+.topbar .brand-text span { color: var(--muted); }
+
+/* ---------- 5. Container & panels ---------- */
+.container { padding: 28px 36px; max-width: 1440px; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 20px;
+  overflow: clip;
+}
+.panel-head { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.panel-head.compact { padding: 16px 20px; }
+.panel-head h2 { font-size: 18px; font-weight: 650; margin: 0; }
+.panel-head .muted { font-size: 13.5px; margin-top: 3px; }
+.panel-foot { padding: 18px 24px; border-top: 1px solid var(--border); }
+
+/* ---------- 6. Buttons ---------- */
+.btn {
+  border-radius: var(--radius-pill);
+  font-weight: 550;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  padding: 9px 18px;
+  border: 1px solid transparent;
+  transition: transform 0.1s var(--ease), background 0.15s var(--ease),
+    box-shadow 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.btn:not(:disabled):active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; }
+
+.btn-primary { background: var(--primary); color: #fff; box-shadow: none; }
+.btn-primary:not(:disabled):hover { background: var(--primary-ink); box-shadow: var(--shadow-md); }
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+.btn-secondary:not(:disabled):hover { background: var(--surface-3); border-color: var(--muted-2); }
+
+.btn-ghost { background: rgba(0, 0, 0, 0.045); color: var(--ink-soft); }
+.btn-ghost:hover { background: rgba(0, 0, 0, 0.08); }
+
+.btn-danger { background: var(--red); color: #fff; }
+.btn-danger:not(:disabled):hover { background: #e0271d; box-shadow: var(--shadow-md); }
+
+.btn-lg { padding: 13px 28px; font-size: 15px; }
+
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--primary-ring); }
+
+/* ---------- 7. Inputs, selects, search ---------- */
+input[type="text"], input[type="search"], input[type="number"],
+input[type="password"], input[type="date"], input[type="time"],
+select, textarea,
+.input-inline, .select-inline, .ctrl-select, .search, .token-row input {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+input:focus, select:focus, textarea:focus,
+.input-inline:focus, .select-inline:focus, .ctrl-select:focus,
+.search:focus, .token-row input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-ring);
+}
+input::placeholder, textarea::placeholder { color: var(--muted-2); }
+
+.search { border-radius: var(--radius-pill); padding-left: 16px; }
+
+/* Nhãn field trong các form dạng label>span */
+.cb-form label > span, .tp-config-row label > span, .ff > span,
+.mp-picker > span { color: var(--muted); font-size: 12.5px; font-weight: 500; }
+
+/* ---------- 8. Bảng dữ liệu ---------- */
+.tree-table, .posts-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+}
+.tree-table thead th, .posts-table thead th {
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  padding: 11px 14px;
+  position: sticky; top: 0; z-index: 5;
+}
+.tree-table tbody td, .posts-table tbody td {
+  border-bottom: 1px solid var(--border);
+  padding: 11px 14px;
+}
+.tree-table tbody tr:hover, .posts-table tbody tr:hover { background: var(--surface-2); }
+
+/* Dải tổng hợp */
+.manage-summary {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+/* ---------- 9. Badge trạng thái ---------- */
+.badge {
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 11px;
+  letter-spacing: -0.005em;
+}
+.badge.sm { font-size: 11px; padding: 3px 9px; }
+
+/* ---------- 10. Switch bật/tắt kiểu iOS ---------- */
+.switch .track {
+  background: var(--border-strong);
+  border-radius: 980px;
+  transition: background 0.2s var(--ease);
+}
+.switch input:checked + .track { background: var(--green); }
+.switch .thumb { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+
+/* ---------- 11. Màn hình đăng nhập ---------- */
+.login-hero, .hero-card {
+  border-radius: 28px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.login-title { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; }
+.gradient-text { color: var(--primary); -webkit-text-fill-color: currentColor; background: none; }
+.login-sub { color: var(--muted); font-size: 16px; }
+
+.lf {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 16px;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+.lf:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.lf-ic {
+  background: var(--primary-wash);
+  color: var(--primary);
+  border-radius: 12px;
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+}
+.lf-txt strong { font-size: 15px; font-weight: 600; }
+.lf-txt span { color: var(--muted); font-size: 13px; }
+
+.login-hint { color: var(--ink-soft); font-weight: 600; font-size: 14px; }
+.fineprint { color: var(--muted-2); font-size: 12px; }
+.token-toggle { color: var(--primary); }
+
+/* ---------- 12. Dock dưới cùng ---------- */
+.dock {
+  background: rgba(250, 250, 252, 0.82);
+  border-top: 1px solid var(--hairline);
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.05);
+}
+.dock-tab { border-radius: var(--radius-pill); font-weight: 550; }
+.dock-tab.active { background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); }
+.dock-loader .bar { background: linear-gradient(90deg, var(--primary), var(--teal)); }
+
+/* ---------- 13. Filter chips ---------- */
+.fchip, .chip, .hist-filter {
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-weight: 550;
+  font-size: 13px;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.fchip:hover, .chip:hover, .hist-filter:hover { background: var(--surface-3); }
+.fchip.active, .chip.active, .hist-filter.active {
+  background: var(--ink); color: #fff; border-color: var(--ink);
+}
+
+/* ---------- 14. Modal ---------- */
+.modal { border-radius: 22px; border: 1px solid var(--border); box-shadow: var(--shadow-lg); }
+.scrim {
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ---------- 15. Dropzone ---------- */
+.dropzone {
+  border-radius: var(--radius-lg);
+  border: 2px dashed var(--border-strong);
+  background: var(--surface-2);
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.dropzone:hover, .dropzone.drag {
+  border-color: var(--primary);
+  background: var(--primary-wash);
+}
+
+/* ---------- 16. Dark mode ----------
+   App gốc chỉ hỗ trợ light mode: 8 file CSS còn lại hardcode nền trắng/chữ đậm.
+   Bật dark cục bộ ở đây sẽ tạo giao diện nửa sáng-nửa tối lỗi, nên tạm khoá.
+   Muốn dark thật cần migrate styles.css + app-shell.css + manage.css… sang biến. */
+
+/* ---------- 16b. Gộp về 1 picker tài khoản ở header ----------
+   Ẩn các ô chọn tài khoản trùng lặp trong từng trang. GIỮ trong DOM (display:none
+   không xoá node) để app.js vẫn đồng bộ value qua populateAccSelect/updateAccStatus. */
+.manage-right .mp-picker { display: none !important; }
+#view-builder .cb-account { display: none !important; }
+#view-thruplay .tp-grid .tp-block:first-child { display: none !important; }
+#view-thruplay .tp-grid { grid-template-columns: 1fr !important; }
+
+/* ---------- 16c. Dọn dẹp bài viết: filter full-width + split 30:70 cao bằng nhau ----------
+   Bỏ card tiêu đề; lọc thành thanh full-width trên cùng; dưới là 2 card cao BẰNG NHAU:
+   trái = danh sách Page, phải = danh sách bài viết (kèm thanh công cụ). */
+#view-posts .posts-col-right .posts-toolbar-merged {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  padding: 8px 14px !important;
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  flex: 0 0 auto !important;
+  overflow-x: auto !important;
+  scrollbar-width: none;
+}
+#view-posts .posts-col-right .posts-toolbar-merged::-webkit-scrollbar {
+  display: none;
+}
+#view-posts .posts-col-right .posts-toolbar-merged .ff {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+  flex: 0 0 auto !important;
+}
+#view-posts .posts-col-right .posts-toolbar-merged .divider,
+#view-posts .posts-col-right .posts-toolbar-merged .chk,
+#view-posts .posts-col-right .posts-toolbar-merged .switch,
+#view-posts .posts-col-right .posts-toolbar-merged #postsSelCount,
+#view-posts .posts-col-right .posts-toolbar-merged .search,
+#view-posts .posts-col-right .posts-toolbar-merged .btn {
+  flex: 0 0 auto !important;
+}
+#view-posts .posts-col-right .posts-toolbar-merged .chk span,
+#view-posts .posts-col-right .posts-toolbar-merged .switch-label {
+  white-space: nowrap !important;
+}
+#view-posts .posts-col-right .posts-toolbar-merged .search {
+  width: 130px !important;
+}
+#view-posts .posts-col-right .posts-toolbar-merged .ff > span {
+  font-size: 13px !important;
+  font-weight: 550 !important;
+  color: var(--ink-soft) !important;
+  white-space: nowrap !important;
+}
+#view-posts .posts-col-right .posts-toolbar-merged .input-inline,
+#view-posts .posts-col-right .posts-toolbar-merged .search,
+#view-posts .posts-col-right .posts-toolbar-merged select {
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+  border-radius: 8px !important;
+}
+#view-posts .posts-col-right .posts-toolbar-merged .btn {
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+#view-posts .posts-col-right .posts-toolbar-merged .divider {
+  width: 1px !important;
+  height: 24px !important;
+  background: var(--border) !important;
+  align-self: center !important;
+  margin-left: auto !important;
+}
+#view-posts .posts-col-right .posts-scanprogress {
+  background: var(--surface-2) !important;
+  border-top: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding: 12px 18px !important;
+}
+
+/* Split 20:80 — hai card cùng chiều cao */
+#view-posts .posts-split {
+  display: grid !important;
+  grid-template-columns: 1fr 4fr !important;
+  gap: var(--shell-gap, 14px) !important;
+  align-items: stretch !important;
+  height: calc(100vh - 160px) !important;
+  min-height: 420px !important;
+}
+#view-posts .posts-split > .panel {
+  margin-bottom: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Cột trái: Header, Nút hành động, Ô tìm kiếm, Trạng thái đã chọn, Danh sách Page dọc */
+#view-posts .posts-col-left-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 16px 16px 12px !important;
+  border-bottom: 1px solid var(--border) !important;
+  flex: 0 0 auto !important;
+}
+#view-posts .posts-title-group {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+#view-posts .posts-title-group svg {
+  color: var(--primary) !important;
+  flex-shrink: 0 !important;
+}
+#view-posts .posts-title-group strong {
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: var(--ink) !important;
+}
+#view-posts .posts-refresh-btn {
+  background: transparent !important;
+  border: none !important;
+  color: var(--ink-soft) !important;
+  cursor: pointer !important;
+  padding: 4px !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background 0.15s, color 0.15s !important;
+}
+#view-posts .posts-refresh-btn:hover {
+  background: var(--surface-2) !important;
+  color: var(--ink) !important;
+}
+#view-posts .posts-actions-group {
+  display: flex !important;
+  gap: 8px !important;
+  padding: 10px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  flex: 0 0 auto !important;
+}
+#view-posts .posts-actions-group .btn-compact {
+  flex: 1 !important;
+  height: 34px !important;
+  font-size: 11.5px !important;
+  font-weight: 650 !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  border: 1px solid var(--border) !important;
+  cursor: pointer !important;
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  transition: all 0.15s !important;
+}
+#view-posts .posts-actions-group .btn-compact:hover {
+  background: var(--surface-2) !important;
+  border-color: var(--border-strong) !important;
+}
+#view-posts .posts-actions-group .btn-compact.danger {
+  color: #DC2626 !important;
+  border-color: #FCA5A5 !important;
+}
+#view-posts .posts-actions-group .btn-compact.danger:hover {
+  background: #FEF2F2 !important;
+  border-color: #EF4444 !important;
+}
+#view-posts .posts-col-left .posts-page-search {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  flex: 0 0 auto !important;
+  display: flex !important;
+}
+#view-posts .posts-col-left .posts-page-search .search {
+  width: 100% !important;
+  height: 36px !important;
+  font-size: 13px !important;
+}
+#view-posts .posts-col-left .posts-pagesbar-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 10px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--surface-2) !important;
+  font-size: 12.5px !important;
+  color: var(--ink-soft) !important;
+  font-weight: 550 !important;
+  flex: 0 0 auto !important;
+}
+#view-posts .posts-col-left .badge {
+  background: var(--primary-wash) !important;
+  color: var(--primary-ink) !important;
+  padding: 3px 10px !important;
+  border-radius: 9999px !important;
+  font-size: 11.5px !important;
+  font-weight: 650 !important;
+}
+#view-posts .posts-col-left .posts-pages {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  padding: 12px 16px !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+#view-posts .pp-item-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  padding: 10px 12px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  background: var(--surface) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  box-shadow: none !important;
+  font: inherit !important;
+}
+#view-posts .pp-item-row:hover {
+  border-color: var(--border-strong) !important;
+  background: var(--surface-2) !important;
+}
+#view-posts .pp-item-row.on {
+  border-color: var(--primary) !important;
+  background: var(--primary-wash) !important;
+}
+#view-posts .pp-item-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+  flex: 1 !important;
+}
+#view-posts .pp-item-row .pp-av {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  border: 1px solid var(--border) !important;
+  flex: none !important;
+}
+#view-posts .pp-item-row .pp-av-ph {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 50% !important;
+  display: grid !important;
+  place-items: center !important;
+  background: var(--surface-2) !important;
+  color: var(--muted) !important;
+  font-weight: 700 !important;
+  font-size: 15px !important;
+  border: 1px solid var(--border) !important;
+  flex: none !important;
+}
+#view-posts .pp-item-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+  text-align: left !important;
+}
+#view-posts .pp-item-name {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--ink) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+#view-posts .pp-item-id {
+  font-size: 11px !important;
+  color: var(--muted) !important;
+  font-variant-numeric: tabular-nums !important;
+}
+#view-posts .pp-item-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-shrink: 0 !important;
+}
+#view-posts .pp-item-check-circle {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50% !important;
+  border: 2px solid var(--border-strong) !important;
+  display: inline-block !important;
+  position: relative !important;
+  transition: all 0.15s ease !important;
+}
+#view-posts .pp-item-row.on .pp-item-check-circle {
+  border-color: var(--primary) !important;
+  background: var(--primary) !important;
+}
+#view-posts .pp-item-row.on .pp-item-check-circle::after {
+  content: "" !important;
+  position: absolute !important;
+  left: 6px !important;
+  top: 2px !important;
+  width: 5px !important;
+  height: 9px !important;
+  border: solid white !important;
+  border-width: 0 2px 2px 0 !important;
+  transform: rotate(45deg) !important;
+}
+
+/* Cột phải (card bài viết): toolbar cố định, bảng chiếm phần còn lại và cuộn */
+#view-posts .posts-col-right .posts-toolbar-merged,
+#view-posts .posts-col-right .posts-scanprogress,
+#view-posts .posts-col-right .posts-queuebar { flex: 0 0 auto !important; }
+#view-posts .posts-col-right .table-scroll {
+  flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; overflow: auto !important;
+}
+
+/* Thu hẹp: xếp 1 cột */
+@media (max-width: 980px) {
+  #view-posts .posts-split { grid-template-columns: 1fr !important; height: auto !important; }
+  #view-posts .posts-split > .panel { height: auto !important; overflow: visible !important; }
+  #view-posts .posts-col-left .posts-pages { max-height: 240px !important; }
+  #view-posts .posts-col-right .table-scroll { max-height: 60vh !important; }
+}
+
+/* ---------- 17. Giảm chuyển động ---------- */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ---------- 18. Responsive tinh chỉnh ---------- */
+@media (max-width: 900px) {
+  .container { padding: 18px 16px; }
+  .panel-head { padding: 16px 18px; }
+  .login-title { font-size: 32px; }
+}
+
+/* ---------- 19. Trang Tạo từ chiến dịch (Campaign Builder Redesign) ---------- */
+#view-builder .cb-layout {
+  display: grid !important;
+  grid-template-columns: 15fr 55fr 30fr !important;
+  gap: var(--shell-gap, 14px) !important;
+  align-items: stretch !important;
+  height: calc(100vh - 120px) !important;
+  min-height: 520px !important;
+}
+
+#view-builder .panel-head.compact {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  flex: 0 0 auto !important;
+}
+
+#view-builder .panel-head.compact #cbReloadAll {
+  margin-left: auto !important;
+  flex: 0 0 auto !important;
+  height: 34px !important;
+  font-size: 12.5px !important;
+  border-radius: 8px !important;
+  padding: 0 14px !important;
+}
+
+#view-builder .cb-col {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  margin-bottom: 0 !important;
+}
+
+/* Các toolbar và ghi chú có kích thước cố định */
+#view-builder .cb-account,
+#view-builder .cb-toolbar,
+#view-builder .cb-postbar,
+#view-builder .cb-structure-note,
+#view-builder .cb-setup #cbNewAdsetForm,
+#view-builder .cb-setup #cbCreateAds,
+#view-builder .cb-setup #cbResults {
+  flex: 0 0 auto !important;
+}
+
+/* Tải dữ liệu các danh sách tự động giãn dọc và có thanh cuộn dọc */
+#view-builder #cbCampaigns.cb-list,
+#view-builder #cbPosts {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: auto !important;
+}
+
+#view-builder #cbPages.cb-pages {
+  flex: 0 0 auto !important;
+  max-height: 100px !important;
+  overflow-y: auto !important;
+}
+
+/* Cấu hình xem trước (preview) của cột thiết lập */
+#view-builder .cb-setup {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+#view-builder .cb-setup .cb-preview {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  margin-top: 10px !important;
+  border-top: 1px solid var(--border) !important;
+  padding-top: 10px !important;
+}
+
+#view-builder .cb-setup .cb-preview-list {
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 8px !important;
+  background: var(--surface-2) !important;
+}
+
+/* Sửa khoảng đệm cột thiết lập nút tạo dưới cùng */
+#view-builder .cb-setup #cbCreateAds {
+  margin-top: 12px !important;
+}
+
+/* Gộp thanh công cụ Bài viết trên Page thành 1 dòng */
+#view-builder .cb-toolbar-merged {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  flex: 0 0 auto !important;
+}
+
+#view-builder .cb-toolbar-merged .divider {
+  width: 1px !important;
+  height: 24px !important;
+  background: var(--border) !important;
+  align-self: center !important;
+  flex: 0 0 auto !important;
+}
+
+#view-builder .cb-toolbar-merged select,
+#view-builder .cb-toolbar-merged input,
+#view-builder .cb-toolbar-merged button {
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+  border-radius: 8px !important;
+  flex: 0 0 auto !important;
+}
+
+#view-builder .cb-toolbar-merged #cbPageSelect {
+  width: 180px !important;
+}
+#view-builder .cb-toolbar-merged #cbPostSearch {
+  flex: 1 1 auto !important;
+  min-width: 100px !important;
+}
+#view-builder .cb-toolbar-merged #cbPostType {
+  width: 165px !important;
+}
+
+/* responsive Campaign Builder */
+@media (max-width: 1024px) {
+  #view-builder .cb-layout {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+  }
+  #view-builder .cb-col {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  #view-builder #cbCampaigns.cb-list,
+  #view-builder #cbPosts,
+  #view-builder .cb-setup .cb-preview-list {
+    max-height: 360px !important;
+  }
+}
